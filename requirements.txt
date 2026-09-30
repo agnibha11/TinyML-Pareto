@@ -1,0 +1,17 @@
+# Direct dependencies (Python 3.10 or 3.11). The exact environment is requirements-lock.txt; install from that.
+# Tested together on Python 3.11 / Linux x86_64 by ml/env_smoke_test.py (PTQ + QAT int8 export, emlearn float tree).
+numpy==1.26.4
+scipy==1.13.1
+pandas==2.2.3
+pyarrow==17.0.0
+scikit-learn==1.5.2
+emlearn==0.23.2
+tensorflow==2.18.1
+tf-keras==2.18.0                        # Keras 2 API for QAT; run with TF_USE_LEGACY_KERAS=1
+tensorflow-model-optimization==0.8.0
+matplotlib==3.9.2
+pymoo==0.6.1.3
+pyyaml==6.0.2
+tqdm==4.66.5
+pyserial==3.5                           # tools/dut.py, tools/measure.py
+pytest==8.3.3

@@ -1,0 +1,32 @@
+# --- data (never committed; regenerate with ml/prepare_data.py) ---
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+splits/**/*.npy
+
+# --- python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.ipynb_checkpoints/
+.pytest_cache/
+
+# --- firmware build output ---
+build/
+*.elf
+*.bin
+*.hex
+*.map
+
+# --- scratch / dry runs ---
+results/dryrun/
+*.log
+
+# --- OS / editor ---
+.DS_Store
+.vscode/
+.idea/
+firmware/tests/host_sim/bench_sim

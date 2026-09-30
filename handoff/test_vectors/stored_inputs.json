@@ -1,0 +1,50 @@
+{
+  "source": "P2 fold 0 test set (load 0 HP), non-overlapping windows, middle of each recording",
+  "inputs": [
+    {
+      "j": 0,
+      "window_id": 58,
+      "file_id": 97,
+      "class10": 0,
+      "name": "N",
+      "load_hp": 0,
+      "start_idx": 29696
+    },
+    {
+      "j": 1,
+      "window_id": 942,
+      "file_id": 105,
+      "class10": 1,
+      "name": "IR007",
+      "load_hp": 0,
+      "start_idx": 60416
+    },
+    {
+      "j": 2,
+      "window_id": 2836,
+      "file_id": 130,
+      "class10": 3,
+      "name": "OR007",
+      "load_hp": 0,
+      "start_idx": 60416
+    },
+    {
+      "j": 3,
+      "window_id": 4729,
+      "file_id": 185,
+      "class10": 5,
+      "name": "B014",
+      "load_hp": 0,
+      "start_idx": 60416
+    },
+    {
+      "j": 4,
+      "window_id": 6622,
+      "file_id": 209,
+      "class10": 7,
+      "name": "IR021",
+      "load_hp": 0,
+      "start_idx": 60416
+    }
+  ]
+}

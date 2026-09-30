@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "frozen_at": "M0",
+  "note": "Frozen class order. Firmware, training, plots and every CSV use these integers. Change only at a joint checkpoint, with all three signing CONTRACT.md again.",
+  "class10": [
+    {"id": 0, "name": "N",     "fault_type": "N",  "fault_size_in": 0.0,   "cwru_files": [97, 98, 99, 100]},
+    {"id": 1, "name": "IR007", "fault_type": "IR", "fault_size_in": 0.007, "cwru_files": [105, 106, 107, 108]},
+    {"id": 2, "name": "B007",  "fault_type": "B",  "fault_size_in": 0.007, "cwru_files": [118, 119, 120, 121]},
+    {"id": 3, "name": "OR007", "fault_type": "OR", "fault_size_in": 0.007, "cwru_files": [130, 131, 132, 133]},
+    {"id": 4, "name": "IR014", "fault_type": "IR", "fault_size_in": 0.014, "cwru_files": [169, 170, 171, 172]},
+    {"id": 5, "name": "B014",  "fault_type": "B",  "fault_size_in": 0.014, "cwru_files": [185, 186, 187, 188]},
+    {"id": 6, "name": "OR014", "fault_type": "OR", "fault_size_in": 0.014, "cwru_files": [197, 198, 199, 200]},
+    {"id": 7, "name": "IR021", "fault_type": "IR", "fault_size_in": 0.021, "cwru_files": [209, 210, 211, 212]},
+    {"id": 8, "name": "B021",  "fault_type": "B",  "fault_size_in": 0.021, "cwru_files": [222, 223, 224, 225]},
+    {"id": 9, "name": "OR021", "fault_type": "OR", "fault_size_in": 0.021, "cwru_files": [234, 235, 236, 237]}
+  ],
+  "class4": [
+    {"id": 0, "name": "N"},
+    {"id": 1, "name": "IR"},
+    {"id": 2, "name": "B"},
+    {"id": 3, "name": "OR"}
+  ],
+  "loads": [
+    {"load_hp": 0, "rpm_nominal": 1797},
+    {"load_hp": 1, "rpm_nominal": 1772},
+    {"load_hp": 2, "rpm_nominal": 1750},
+    {"load_hp": 3, "rpm_nominal": 1730}
+  ],
+  "cwru_file_order": "Within each class, cwru_files are listed for load 0, 1, 2, 3 HP in that order.",
+  "outer_race_position": "OR files are the 6:00 (centred, load-zone) set only."
+}
