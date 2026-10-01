@@ -13,8 +13,8 @@ IDE or `arduino-cli` update prompt during the study. Changing any line below mea
 | CPU clock | 64 MHz (default) | never changed |
 | Regulator | default (LDO; nRF52840 DC/DC left off by the Mbed config) | fixed condition, stated in the paper |
 | Optimization | `-Os` (the variant's default) | not changed; stated in the paper |
-| arduino-cli | `<fill in: arduino-cli version>` | |
-| arm-none-eabi-gcc | `<fill in: version the core installed>` | `~/.arduino15/packages/arduino/tools/arm-none-eabi-gcc/*/bin/` |
+| arduino-cli | `<fill in at W1 install: arduino-cli version>` | Abhinav, before M1 |
+| arm-none-eabi-gcc | `<fill in at W1 install: version the core installed>` | `~/.arduino15/packages/arduino/tools/arm-none-eabi-gcc/*/bin/` |
 
 ## Libraries
 
@@ -23,7 +23,7 @@ IDE or `arduino-cli` update prompt during the study. Changing any line below mea
 | Chirale_TensorFlowLite | 2.0.0 | TFLM runtime + CMSIS-NN kernels (main build, runtime `tflm-cmsis`) |
 | Arduino_CMSIS-DSP | 5.7.0 | `arm_rfft_fast_f32` etc. for the R2/R3 front end (default branch has only a build script, so pin 5.7.0) |
 | emlearn (C headers) | 0.23.2 | tree/forest inference (runtime `emlearn`); **same version as Python** (`requirements.txt`) |
-| TFLM reference-kernel tree | commit `<fill in>` of tensorflow/tflite-micro | ablation build, runtime `tflm-ref`, packaged as library `TFLM_REF` |
+| TFLM reference-kernel tree | commit `<fill in by W4 (gate M4)>` of tensorflow/tflite-micro | ablation build, runtime `tflm-ref`, packaged as library `TFLM_REF` |
 
 ## Install (exact commands)
 
@@ -44,6 +44,16 @@ arduino-cli compile --fqbn arduino:mbed_nano:nano33ble firmware/bench
 arduino-cli upload  --fqbn arduino:mbed_nano:nano33ble -p /dev/ttyACM0 firmware/bench
 python tools/dut.py /dev/ttyACM0 PING      # -> OK bench=dev n_models=1
 ```
+
+## Linux host note
+
+ModemManager may probe `/dev/ttyACM*` with AT commands when the Nano enumerates. Those bytes would reach the bench
+firmware as garbage commands. Either stop the service (`sudo systemctl stop ModemManager`) or add a udev rule:
+```
+# /etc/udev/rules.d/99-nano33ble.rules   (Arduino VID 2341)
+ATTRS{idVendor}=="2341", ENV{ID_MM_DEVICE_IGNORE}="1"
+```
+Then run `sudo udevadm control --reload && sudo udevadm trigger`. Also add yourself to the `dialout` group.
 
 ## Facts checked on the host side (1 Oct 2026)
 

@@ -31,16 +31,14 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
+from tools.contract import HW_COLUMNS, MAX_DURATION_MISMATCH, SESSION_COLUMNS, parse_model_id  # noqa: E402
 from tools.dut import DUT, DUTError, ModelEntry  # noqa: E402
 
-HW_COLUMNS = ["model_id", "session", "input_j", "mode", "N", "t_window_us_dut", "t_window_us_logger",
-              "E_window_uJ", "P_mean_uW", "P_std_uW", "V_bus_mV", "n_samples", "ovf", "P_idle_uW",
-              "fw_hash", "logger_hash", "timestamp", "rejected"]
-SESSION_COLUMNS = ["session", "date", "room_temp_C", "usb_port", "cable", "shunt_ohm_measured",
-                   "logger_hash", "fw_hash", "notes"]
 N_INPUTS = 5
-MAX_DURATION_MISMATCH = 0.001   # 0.1 %
-W_LINE = re.compile(r"^W((?: [A-Za-z_]+=[-0-9.eE+]+)+)$")
+# CONTRACT.md 7.4: exact keys in exact order; integers for rise_us, fall_us, n, ovf
+W_LINE = re.compile(r"^W rise_us=(\d+) fall_us=(\d+) n=(\d+) E_uJ=(-?[0-9.]+) Pmean_uW=(-?[0-9.]+) "
+                    r"Pstd_uW=([0-9.]+) Vbus_mV=([0-9.]+) ovf=(\d+)$")
+W_DEADLINE_S = 3.0   # logger must print the W line within this time after the board's reply
 
 
 # ------------------------------------------------------------------------------------------------------------------
@@ -65,13 +63,12 @@ class Window:
 def parse_w_line(line: str) -> Window:
     m = W_LINE.match(line.strip())
     if not m:
-        raise ValueError(f"not a logger window line: {line!r}")
-    kv = dict(t.split("=", 1) for t in m.group(1).split())
+        raise ValueError(f"not a CONTRACT.md 7.4 window line: {line!r}")
+    g = m.groups()
     try:
-        return Window(int(kv["rise_us"]), int(kv["fall_us"]), int(kv["n"]), float(kv["E_uJ"]),
-                      float(kv["Pmean_uW"]), float(kv["Pstd_uW"]), float(kv["Vbus_mV"]), int(kv["ovf"]))
-    except KeyError as e:
-        raise ValueError(f"logger line missing {e}: {line!r}") from None
+        return Window(int(g[0]), int(g[1]), int(g[2]), float(g[3]), float(g[4]), float(g[5]), float(g[6]), int(g[7]))
+    except ValueError as e:
+        raise ValueError(f"bad number in logger line {line!r}: {e}") from None
 
 
 class Logger:
@@ -86,7 +83,7 @@ class Logger:
         """Drop anything older than the window about to be measured."""
         self._ser.reset_input_buffer()
 
-    def next_window(self, timeout_s: float = 3.0) -> Window:
+    def next_window(self, timeout_s: float = W_DEADLINE_S) -> Window:
         deadline = time.monotonic() + timeout_s
         buf = b""
         while time.monotonic() < deadline:
@@ -161,6 +158,8 @@ class FakeLogger:
         pass
 
     def next_window(self, timeout_s=3.0):
+        if self.rng.random() < 0.02:  # ~2 % of windows: no W line, to exercise the timeout-as-rejection path
+            raise TimeoutError("no W line (simulated)")
         us = self.dut.last_us
         # ~5 % of windows get a logger/board duration mismatch, to exercise the reject-and-retry path
         if self.rng.random() < 0.05:
@@ -197,30 +196,43 @@ def now_iso() -> str:
 
 
 def measure_window(dut, logger, out: CsvAppender, base: dict, mode: str, n: int, call, p_idle_uw):
-    """Run one windowed command, pair it with the logger, write the row; retry once if rejected."""
+    """Run one windowed command, pair it with the logger, write the row; retry once if rejected (CONTRACT.md 7.4).
+
+    A missing or malformed W line counts as a rejection (row written with empty logger fields). After a second
+    rejection the window is left rejected and the campaign continues; such windows are re-measured later.
+    """
     for attempt in (1, 2):
         logger.arm()
         reply = call()
-        w = logger.next_window()
         t_dut = reply["us"]
+        row = {**base, "mode": mode, "N": n, "t_window_us_dut": t_dut,
+               "P_idle_uW": "" if p_idle_uw is None else f"{p_idle_uw:.3f}", "timestamp": now_iso()}
+        try:
+            w = logger.next_window()
+        except (TimeoutError, ValueError) as e:
+            out.write({**row, "rejected": 1})
+            print(f"    {mode} rejected (logger: {e}), attempt {attempt}/2")
+            continue
         mismatch = abs(w.duration_us - t_dut) / max(t_dut, 1)
         rejected = int(mismatch > MAX_DURATION_MISMATCH or w.ovf > 0)
-        out.write({**base, "mode": mode, "N": n, "t_window_us_dut": t_dut, "t_window_us_logger": w.duration_us,
-                   "E_window_uJ": f"{w.E_uJ:.3f}", "P_mean_uW": f"{w.Pmean_uW:.3f}", "P_std_uW": f"{w.Pstd_uW:.3f}",
-                   "V_bus_mV": f"{w.Vbus_mV:.1f}", "n_samples": w.n, "ovf": w.ovf,
-                   "P_idle_uW": "" if p_idle_uw is None else f"{p_idle_uw:.3f}",
-                   "timestamp": now_iso(), "rejected": rejected})
+        out.write({**row, "t_window_us_logger": w.duration_us, "E_window_uJ": f"{w.E_uJ:.3f}",
+                   "P_mean_uW": f"{w.Pmean_uW:.3f}", "P_std_uW": f"{w.Pstd_uW:.3f}", "V_bus_mV": f"{w.Vbus_mV:.1f}",
+                   "n_samples": w.n, "ovf": w.ovf, "rejected": rejected})
         if not rejected:
             return w
         print(f"    {mode} rejected (duration mismatch {mismatch:.4%}, ovf={w.ovf}), attempt {attempt}/2")
+    print(f"    {mode} still rejected after 2 attempts: left for re-measurement")
     return None
 
 
 def run_session(dut, logger, out: CsvAppender, session: int, window_s: float, models: list[int] | None,
-                sleep_ms: int) -> None:
+                sleep_ms: int, allow_nonconforming_ids: bool = False) -> None:
     fw = dut.ping()["bench"]
     entries = dut.list()
     todo = [e for e in entries if models is None or e.k in models]
+    if not allow_nonconforming_ids:
+        for e in todo:
+            parse_model_id(e.model_id)   # CONTRACT.md 4: refuse to measure anything that is not a valid model ID
     print(f"session {session}: firmware {fw}, {len(todo)} of {len(entries)} models, window >= {window_s} s")
     window_ms = int(math.ceil(window_s * 1000))
 
@@ -255,8 +267,10 @@ def main() -> int:
     p.add_argument("--dry-run", action="store_true", help="fake board and logger; writes to results/dryrun/")
     p.add_argument("--port", help="Nano serial port, e.g. /dev/ttyACM0")
     p.add_argument("--logger", help="ESP32 logger serial port, e.g. /dev/ttyUSB0")
-    p.add_argument("--logger-hash", default="unknown", help="git hash of the flashed ESP32 logger firmware")
-    p.add_argument("--session", type=int, default=1)
+    p.add_argument("--logger-hash", help="git hash of the flashed ESP32 logger firmware (required for real runs)")
+    p.add_argument("--session", type=int, help="session number (required for real runs; must be new)")
+    p.add_argument("--allow-nonconforming-ids", action="store_true",
+                   help="bring-up only: also measure models whose IDs break CONTRACT.md 4 (e.g. stub-noop)")
     p.add_argument("--window-s", type=float, default=10.0, help="minimum energy window (contract: >= 10 s)")
     p.add_argument("--models", help="comma-separated model indices (default: all in the bundle)")
     p.add_argument("--sleep-ms", type=int, default=0, help="also measure one SLEEP window of this length")
@@ -273,32 +287,39 @@ def main() -> int:
         rng = random.Random(0)
         dut = FakeDUT(rng)
         logger = FakeLogger(dut, rng)
-        out_dir = REPO / "results" / "dryrun"
+        out_path = a.out or REPO / "results" / "dryrun" / "hw_measurements.csv"
         window_s = min(a.window_s, 10.0)
+        session = a.session or 1
     else:
         if not a.port or not a.logger:
             p.error("--port and --logger are required (or use --dry-run)")
+        if a.session is None or not a.logger_hash:
+            p.error("--session and --logger-hash are required for real runs")
         if a.window_s < 10.0:
             p.error("the contract requires windows >= 10 s")
+        out_path = a.out or REPO / "results" / "hw_measurements.csv"
+        session = a.session
+        log_path = out_path.parent / "session_log.csv"
+        if log_path.exists() and any(r["session"] == str(session) for r in csv.DictReader(open(log_path))):
+            p.error(f"session {session} already exists in {log_path}; use a new session number")
         dut = DUT(a.port)
         logger = Logger(a.logger, a.logger_hash)
-        out_dir = REPO / "results"
         window_s = a.window_s
 
-    out = CsvAppender(a.out or out_dir / "hw_measurements.csv", HW_COLUMNS)
-    log = CsvAppender(out_dir / "session_log.csv", SESSION_COLUMNS)
-    log.write({"session": a.session, "date": now_iso(), "room_temp_C": a.room_temp, "usb_port": a.usb_port,
+    out = CsvAppender(out_path, HW_COLUMNS)
+    log = CsvAppender(out_path.parent / "session_log.csv", SESSION_COLUMNS)
+    log.write({"session": session, "date": now_iso(), "room_temp_C": a.room_temp, "usb_port": a.usb_port,
                "cable": a.cable, "shunt_ohm_measured": a.shunt_ohm, "logger_hash": logger.hash,
                "fw_hash": dut.ping()["bench"], "notes": ("DRY RUN - fake data. " if a.dry_run else "") + a.notes})
     try:
-        run_session(dut, logger, out, a.session, window_s, models, a.sleep_ms)
-    except (DUTError, TimeoutError) as e:
+        run_session(dut, logger, out, session, window_s, models, a.sleep_ms, a.allow_nonconforming_ids)
+    except (DUTError, ValueError) as e:
         print(f"ABORTED: {e}", file=sys.stderr)
         return 1
     finally:
         out.close()
         log.close()
-    print(f"wrote {out_dir}")
+    print(f"wrote {out_path}")
     return 0
 
 

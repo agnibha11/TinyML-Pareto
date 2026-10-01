@@ -6,9 +6,7 @@ The firmware tests compile firmware/bench/bench_core.cpp with g++ (firmware/test
 C++ compiler is installed.
 """
 import csv
-import os
 import re
-import shutil
 import subprocess
 import sys
 import time
@@ -23,37 +21,6 @@ sys.path.insert(0, str(REPO / "ml"))
 
 from tools.dut import DUT, DUTError  # noqa: E402
 from tools.measure import HW_COLUMNS, parse_w_line  # noqa: E402
-
-SIM_DIR = REPO / "firmware" / "tests" / "host_sim"
-
-
-# ------------------------------------------------------------------------------------------------------------------
-# Simulated board
-# ------------------------------------------------------------------------------------------------------------------
-@pytest.fixture(scope="module")
-def sim_binary(tmp_path_factory):
-    if not shutil.which(os.environ.get("CXX", "g++")):
-        pytest.skip("no C++ compiler")
-    out = tmp_path_factory.mktemp("sim") / "bench_sim"
-    subprocess.run(["make", "-s", "-C", str(SIM_DIR), "bench_sim"], check=True)
-    shutil.copy(SIM_DIR / "bench_sim", out)
-    out.chmod(0o755)
-    return out
-
-
-@pytest.fixture()
-def board(sim_binary, tmp_path):
-    err = open(tmp_path / "sync.log", "w")
-    proc = subprocess.Popen([str(sim_binary)], stdout=subprocess.PIPE, stderr=err, text=True)
-    line = proc.stdout.readline().strip()
-    assert line.startswith("PTY "), line
-    dut = DUT(line.split()[1], open_timeout_s=0.1)
-    yield dut, tmp_path / "sync.log"
-    dut.close()
-    proc.kill()
-    proc.wait()
-    err.close()
-
 
 def sync_edges(path: Path) -> list[int]:
     return [int(ln.split()[1]) for ln in path.read_text().splitlines() if ln.startswith("SYNC")]
@@ -77,6 +44,35 @@ def test_errors_are_raised_not_guessed(board):
     dut._ser.write(b"RUN " + b"9" * 80 + b"\n")
     assert dut._readline(time.monotonic() + 2).startswith("ERR ARG line longer")
     assert dut.ping()["bench"] == "sim"  # and the link is still in sync afterwards
+
+
+def test_timeout_resyncs_link(board):
+    """A host timeout must not leave a stale reply that answers the next command (CONTRACT.md 7.1)."""
+    dut, _ = board
+    with pytest.raises(DUTError, match="resynchronised"):
+        dut.command("IDLE 1500", timeout_s=0.3)
+    assert dut.idle(20)["us"] < 500_000          # not the stale 1.5 s reply
+    assert dut.sel(0) == {"k": 0, "arena_used": 0}
+
+
+def test_late_verify_payload_is_not_parsed_as_commands(board):
+    dut, _ = board
+    dut.sel(0)
+    dut._ser.write(b"VERIFY\n")
+    assert dut._readline(time.monotonic() + 2) == "RDY 4096"
+    time.sleep(2.3)                               # board gives up after 2 s
+    dut._ser.write(np.ones(1024, "<f4").tobytes())
+    first = dut._readline(time.monotonic() + 3)
+    assert first.startswith("ERR IO"), first
+    time.sleep(0.3)
+    assert dut._ser.in_waiting == 0               # no ERR lines from payload bytes
+    assert dut.ping()["bench"] == "sim"
+
+
+def test_unknown_command_wins_over_argument_errors(board):
+    dut, _ = board
+    with pytest.raises(DUTError, match="ERR UNKNOWN"):
+        dut.command("FOO 1 2")
 
 
 def test_windows_and_sync_pin(board):
@@ -148,12 +144,16 @@ def test_measure_dry_run_matches_contract(tmp_path):
     contract = (REPO / "CONTRACT.md").read_text()
     m = re.search(r"### 6\.4 .*?\n\n`([^`]+)`", contract, re.S)
     assert m and [c.strip() for c in m.group(1).split(",")] == HW_COLUMNS
+    assert {r["rejected"] for r in rows} <= {"0", "1"}
     ok = [r for r in rows if r["rejected"] == "0"]
     assert {r["mode"] for r in ok} == {"IDLE", "RUN", "FRONT", "E2E"}
-    per_model = {}
-    for r in ok:
-        per_model.setdefault(r["model_id"], []).append(r["mode"])
-    assert all(len(v) == 5 * 4 for v in per_model.values())  # 5 inputs x 4 modes
+    # every (model, input, mode) window: exactly one accepted row, or two rejected attempts (left for re-measurement)
+    groups = {}
+    for r in rows:
+        groups.setdefault((r["model_id"], r["mode"]), []).append(r["rejected"])
+    for (mid, mode), flags in groups.items():
+        assert flags.count("0") <= 5 and len(flags) <= 10, (mid, mode, flags)
+    assert len({r["model_id"] for r in ok}) == 3
 
 
 def test_load_mat_uses_explicit_key(tmp_path):

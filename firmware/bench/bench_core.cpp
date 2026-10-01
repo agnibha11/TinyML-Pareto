@@ -20,6 +20,10 @@
 #define LINE_MAX_CHARS 63u
 #define VERIFY_BYTES   (BENCH_WIN * 4u)
 #define MAX_WINDOW_MS  600000u
+#define VERIFY_TIMEOUT_MS 2000u   // board waits this long for the 4096-byte payload after RDY
+#define DRAIN_MIN_US      1000000u  // after a VERIFY timeout: discard input for at least 1 s ...
+#define DRAIN_SILENCE_US  50000u    // ... and until 50 ms of silence
+#define VERIFY_LINE_MAX   (16 + BENCH_MAX_OUT * 20)
 
 static char     s_line[LINE_MAX_CHARS + 1];
 static size_t   s_len = 0;
@@ -45,9 +49,12 @@ static void reply(const char *fmt, ...) {
 }
 
 // Float formatting without printf("%f") (newlib-nano may be built without float printf).
-// Writes e.g. "-0.012345" (6 decimals). Values beyond +/-2e9 are clamped.
+// CONTRACT.md 7.2: fixed 6 decimals ("-0.012345"); "nan", "inf", "-inf" for non-finite values;
+// finite values beyond +/-2e9 are clamped to +/-2000000000.000000.
 static int fmt_float(char *dst, size_t cap, float v) {
   if (v != v) return snprintf(dst, cap, "nan");
+  if (v > 3.4e38f) return snprintf(dst, cap, "inf");
+  if (v < -3.4e38f) return snprintf(dst, cap, "-inf");
   const char *sign = "";
   if (v < 0) { sign = "-"; v = -v; }
   if (v > 2.0e9f) v = 2.0e9f;
@@ -70,6 +77,18 @@ static int parse_u32(const char *s, uint32_t *out) {
   }
   *out = (uint32_t)v;
   return 1;
+}
+
+// Discard incoming bytes for at least DRAIN_MIN_US and until the line has been silent for DRAIN_SILENCE_US,
+// so a VERIFY payload that arrives late is swallowed instead of being parsed as commands.
+static void drain_input(void) {
+  const uint32_t t0 = bhal_micros();
+  uint32_t last = t0;
+  while ((uint32_t)(bhal_micros() - t0) < DRAIN_MIN_US || (uint32_t)(bhal_micros() - last) < DRAIN_SILENCE_US) {
+    if (bhal_read_byte() >= 0) last = bhal_micros();
+  }
+  s_len = 0;
+  s_overflow = 0;
 }
 
 static void sort_u32(uint32_t *a, int n) {  // insertion sort; n <= 101
@@ -168,11 +187,13 @@ static void cmd_lat(void) {
     const float *x = g_stored_inputs[j];
     m->frontend(x, s_feat);  // warm-up + features for the inference timing
     if (m->infer(s_feat, &cls) != 0) { reply("ERR INVOKE warm-up failed on input %d", j); return; }
+    int err = 0;
     for (int r = 0; r < BENCH_LAT_REPS; ++r) {
       const uint32_t c0 = bhal_cycles();
-      m->infer(s_feat, &cls);
+      err |= m->infer(s_feat, &cls);
       s_reps[r] = bhal_cycles() - c0;
     }
+    if (err) { reply("ERR INVOKE inference failed during LAT on input %d", j); return; }
     med_inf[j] = median_u32(s_reps, BENCH_LAT_REPS);
     for (int r = 0; r < BENCH_LAT_REPS; ++r) {
       const uint32_t c0 = bhal_cycles();
@@ -193,37 +214,53 @@ static void cmd_verify(void) {
   const bench_model_t *m = selected();
   if (!m) return;
   reply("RDY %u", (unsigned)VERIFY_BYTES);
-  const size_t got = bhal_read_bytes((uint8_t *)s_window, VERIFY_BYTES, 2000u);
-  if (got != VERIFY_BYTES) { reply("ERR IO expected %u bytes, got %lu", (unsigned)VERIFY_BYTES, (unsigned long)got); return; }
+  const size_t got = bhal_read_bytes((uint8_t *)s_window, VERIFY_BYTES, VERIFY_TIMEOUT_MS);
+  if (got != VERIFY_BYTES) {
+    drain_input();  // late payload bytes must not be parsed as commands
+    reply("ERR IO expected %u bytes, got %lu", (unsigned)VERIFY_BYTES, (unsigned long)got);
+    return;
+  }
   int cls = -1;
   m->frontend(s_window, s_feat);
   if (m->infer(s_feat, &cls) != 0) { reply("ERR INVOKE inference failed"); return; }
   const int n = m->outputs(s_out, BENCH_MAX_OUT);
-  char buf[240];
-  size_t pos = (size_t)snprintf(buf, sizeof buf, "OK cls=%d out=", cls);
-  for (int i = 0; i < n && pos < sizeof buf - 16; ++i) {
+  char buf[VERIFY_LINE_MAX];
+  int w = snprintf(buf, sizeof buf, "OK cls=%d out=", cls);
+  size_t pos = (size_t)w;
+  for (int i = 0; i < n; ++i) {
+    char num[32];
+    const int len = fmt_float(num, sizeof num, s_out[i]);
+    if (len < 0 || pos + (size_t)len + 2 >= sizeof buf) { reply("ERR IO output line too long (%d values)", n); return; }
     if (i) buf[pos++] = ',';
-    pos += (size_t)fmt_float(buf + pos, sizeof buf - pos, s_out[i]);
+    memcpy(buf + pos, num, (size_t)len);
+    pos += (size_t)len;
   }
   buf[pos] = '\0';
-  reply("%s", buf);
+  bhal_write(buf);
+  bhal_write("\r\n");
 }
 
 // ---------------------------------------------------------------------------------------------------------------
 // Dispatcher
 // ---------------------------------------------------------------------------------------------------------------
 static void dispatch(char *line) {
-  char *argv[3] = {0, 0, 0};
+  char *argv[2] = {0, 0};
   int argc = 0;
+  int too_many = 0;
   for (char *tok = strtok(line, " "); tok; tok = strtok(0, " ")) {
-    if (argc == 3) { reply("ERR ARG too many arguments"); return; }
+    if (argc == 2) { too_many = 1; break; }
     argv[argc++] = tok;
   }
   if (argc == 0) { reply("ERR UNKNOWN empty line"); return; }
   const char *cmd = argv[0];
+  static const char *const known[] = {"PING", "LIST", "SEL", "INPUT", "IDLE", "SLEEP",
+                                      "RUN", "FRONT", "E2E", "LAT", "VERIFY"};
+  int is_known = 0;
+  for (unsigned i = 0; i < sizeof known / sizeof known[0]; ++i) is_known |= !strcmp(cmd, known[i]);
+  if (!is_known) { reply("ERR UNKNOWN %s", cmd); return; }  // unknown wins over argument errors
   uint32_t a = 0;
   const int has_arg = argc >= 2;
-  if (argc > 2) { reply("ERR ARG too many arguments"); return; }
+  if (too_many) { reply("ERR ARG too many arguments"); return; }
   if (has_arg && !parse_u32(argv[1], &a)) { reply("ERR ARG not an unsigned integer: %s", argv[1]); return; }
 
   // Commands without an argument.

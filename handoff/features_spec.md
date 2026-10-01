@@ -65,8 +65,9 @@ fold 0**, the fold whose models are deployed. Exported as `handoff/norm_constant
 ## Test vectors for the parity test (M2)
 
 - 100 fixed test windows, 10 per class, from the P2 fold-0 test set: `handoff/test_vectors/ids.npy`.
-- Exported as `.npy` and as C arrays: raw windows, R1/R2/R3 before and after normalization, and host TFLite outputs
-  (logits, dequantized) for every NN model.
+- Exported as `.npy` and as C arrays: raw windows, R1/R2/R3 before and after normalization, and host outputs
+  for every model in exactly the form VERIFY returns (dequantized softmax probabilities for NNs, one-hot for trees;
+  `handoff/test_vectors/outputs/<model_id>.npy`, CONTRACT.md 7.2).
 - Pass condition: max |C − Python| < 1e-3 on every **normalized** feature of every window.
 - Usual culprits when it fails: ddof, excess vs non-excess kurtosis, FFT packing, log of zero, float32 accumulation
   order.

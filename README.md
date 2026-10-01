@@ -45,6 +45,8 @@ and rerun the script. Another option is the `srigas/cwru_bearing_numpy` repackag
 `python ml/prepare_data.py --source npz --npz-dir <clone>/Data`. Both give 9,346 stride-512 windows (4,683
 non-overlapping, 401 s of signal).
 
+CI (`.github/workflows/tests.yml`) runs the same tests on every push and PR; `main` requires it to pass.
+
 The firmware tests compile `firmware/bench/bench_core.cpp` for the PC (`firmware/tests/host_sim`, needs `g++` and
 `make`) and drive it through `tools/dut.py` over a pseudo-terminal. This way the serial protocol is tested before any
 board exists.

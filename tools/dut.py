@@ -10,13 +10,15 @@ Hridayesh's measure.py imports this; nobody else writes to the board's serial po
         d.sel(0)                  # {'k': 0, 'arena_used': 0}
         d.input(2)
         lat = d.lat()             # {'inf_med_cyc': ..., 'inf_med_us': ..., ...}
-        d.run(d.n_for(10.0))      # {'n': ..., 'us': ..., 'cls': ...}
+        d.run(d.n_for(10.0, lat["inf_med_us"]))   # {'n': ..., 'us': ..., 'cls': ...}
 
 Command line (manual bring-up):
     python tools/dut.py /dev/ttyACM0 PING
     python tools/dut.py /dev/ttyACM0 "SEL 0" LAT "RUN 1000"
 
-Parsing is strict. Any ERR reply, a timeout or a malformed line raises DUTError; nothing is guessed.
+Parsing is strict. Any ERR reply, a timeout, a malformed line, an unexpected extra line, or an echoed k/j/n that
+differs from what was sent raises DUTError; nothing is guessed. After a timeout the link is resynchronised
+(CONTRACT.md 7.1) before the error is raised, so the next command never receives a stale reply.
 """
 from __future__ import annotations
 
@@ -35,8 +37,13 @@ except ImportError:  # pragma: no cover - only hit when pyserial is missing
 
 CPU_HZ = 64_000_000
 BAUD = 115_200
-CMD_TIMEOUT_S = 2.0      # commands without a measured window
-WINDOW_MARGIN_S = 5.0    # windowed commands: expected length + this
+# Host timeouts (CONTRACT.md 7.2)
+CMD_TIMEOUT_S = 2.0          # PING, LIST, SEL, INPUT
+LAT_TIMEOUT_S = 600.0        # LAT: 5 x 101 x (inference + front end) can reach minutes for large CNNs
+VERIFY_TIMEOUT_S = 10.0      # VERIFY, host side (the board waits 2 s for the payload after RDY)
+WINDOW_MARGIN_S = 5.0        # windowed commands: 1.5 x expected length + 5 s
+MAX_WINDOW_S = 600.0         # longest window the firmware accepts; used when latency is not known yet
+RESYNC_SILENCE_S = 0.2
 VERIFY_BYTES = 1024 * 4
 _KV = re.compile(r"^[a-z_]+=[^\s=]+$")
 
@@ -106,9 +113,29 @@ class DUT:
             buf += b
         raise DUTError(f"timeout waiting for a reply line on {self.port} (partial: {bytes(buf)!r})")
 
-    def command(self, cmd: str, timeout_s: float = CMD_TIMEOUT_S, payload: bytes | None = None
-                ) -> tuple[dict[str, str], list[str]]:
-        """Send one command; return (final OK fields, preceding lines). Raise DUTError on ERR/timeout."""
+    def resync(self, max_wait_s: float = MAX_WINDOW_S + WINDOW_MARGIN_S) -> None:
+        """CONTRACT.md 7.1: after a host timeout, wait for 200 ms of silence, then PING and discard every line
+        until 'OK bench=' arrives. A board still busy with a long window answers the PING when it is done."""
+        deadline = time.monotonic() + max_wait_s
+        quiet_since = time.monotonic()
+        while time.monotonic() - quiet_since < RESYNC_SILENCE_S and time.monotonic() < deadline:
+            if self._ser.read(256):
+                quiet_since = time.monotonic()
+        self._ser.reset_input_buffer()
+        self._ser.write(b"PING\n")
+        self._ser.flush()
+        while True:
+            line = self._readline(deadline)   # raises DUTError if the board never answers
+            if line.startswith("OK bench="):
+                return
+
+    def command(self, cmd: str, timeout_s: float = CMD_TIMEOUT_S, payload: bytes | None = None,
+                allow_extra: bool = False) -> tuple[dict[str, str], list[str]]:
+        """Send one command; return (final OK fields, preceding lines). Raise DUTError on ERR/timeout.
+
+        Only LIST may send lines before its final line (allow_extra=True); for every other command an extra line
+        means the board printed something unasked, which breaks CONTRACT.md 7.1.
+        """
         if "\n" in cmd or len(cmd) > 63:
             raise ValueError(f"invalid command {cmd!r}")
         self._ser.reset_input_buffer()  # a stale line from an earlier failure must never answer this command
@@ -117,11 +144,18 @@ class DUT:
         deadline = time.monotonic() + timeout_s
         extra: list[str] = []
         while True:
-            line = self._readline(deadline)
+            try:
+                line = self._readline(deadline)
+            except DUTError as e:
+                try:
+                    self.resync()
+                except DUTError:
+                    raise DUTError(f"{cmd!r}: {e}; resync also failed - power-cycle the board") from None
+                raise DUTError(f"{cmd!r}: {e} (link resynchronised)") from None
             if line.startswith("RDY ") and payload is not None:
-                want = int(line.split()[1])
-                if want != len(payload):
-                    raise DUTError(f"board wants {want} bytes, payload has {len(payload)}")
+                parts = line.split()
+                if len(parts) != 2 or not parts[1].isdigit() or int(parts[1]) != len(payload):
+                    raise DUTError(f"bad handshake {line!r} for a {len(payload)}-byte payload")
                 self._ser.write(payload)
                 self._ser.flush()
                 payload = None
@@ -130,6 +164,8 @@ class DUT:
                 raise DUTError(f"{cmd!r} -> {line}")
             if line == "OK" or line.startswith("OK "):
                 return _parse_kv(line.split()[1:], line), extra
+            if not allow_extra:
+                raise DUTError(f"{cmd!r}: unexpected line {line!r} before the final OK/ERR")
             extra.append(line)
 
     # -- commands (CONTRACT.md 7.2) -------------------------------------------------------------------------------
@@ -140,7 +176,7 @@ class DUT:
         return {"bench": kv["bench"], **_ints(kv, "n_models", line="PING")}
 
     def list(self) -> list[ModelEntry]:
-        kv, lines = self.command("LIST")
+        kv, lines = self.command("LIST", allow_extra=True)
         n = _ints(kv, "n", line="LIST")["n"]
         models = []
         for ln in lines:
@@ -162,36 +198,43 @@ class DUT:
 
     def input(self, j: int) -> dict:
         kv, _ = self.command(f"INPUT {int(j)}")
-        return _ints(kv, "j", line="INPUT")
+        out = _ints(kv, "j", line="INPUT")
+        if out["j"] != j:
+            raise DUTError(f"INPUT {j} answered for j={out['j']}")
+        return out
 
     def idle(self, ms: int) -> dict:
-        kv, _ = self.command(f"IDLE {int(ms)}", timeout_s=ms / 1000 + WINDOW_MARGIN_S)
+        kv, _ = self.command(f"IDLE {int(ms)}", timeout_s=1.5 * ms / 1000 + WINDOW_MARGIN_S)
         return _ints(kv, "us", line="IDLE")
 
     def sleep(self, ms: int) -> dict:
-        kv, _ = self.command(f"SLEEP {int(ms)}", timeout_s=ms / 1000 + WINDOW_MARGIN_S)
+        kv, _ = self.command(f"SLEEP {int(ms)}", timeout_s=1.5 * ms / 1000 + WINDOW_MARGIN_S)
         return _ints(kv, "us", line="SLEEP")
 
     def _window_timeout(self, n: int, per_call_us: float | None) -> float:
         if per_call_us is None:
-            return 120.0 + WINDOW_MARGIN_S  # unknown latency: generous but finite
+            return MAX_WINDOW_S + WINDOW_MARGIN_S  # latency unknown (no LAT yet)
         return n * per_call_us / 1e6 * 1.5 + WINDOW_MARGIN_S
 
+    def _windowed(self, cmd: str, n: int, per_call_us: float | None, keys: tuple[str, ...]) -> dict:
+        kv, _ = self.command(f"{cmd} {int(n)}", timeout_s=self._window_timeout(n, per_call_us))
+        out = _ints(kv, *keys, line=cmd)
+        if out["n"] != n:
+            raise DUTError(f"{cmd} {n} answered with n={out['n']}")
+        return out
+
     def run(self, n: int) -> dict:
-        kv, _ = self.command(f"RUN {int(n)}", timeout_s=self._window_timeout(n, self.lat_us))
-        return _ints(kv, "n", "us", "cls", line="RUN")
+        return self._windowed("RUN", n, self.lat_us, ("n", "us", "cls"))
 
     def front(self, n: int) -> dict:
-        kv, _ = self.command(f"FRONT {int(n)}", timeout_s=self._window_timeout(n, self.fe_us))
-        return _ints(kv, "n", "us", line="FRONT")
+        return self._windowed("FRONT", n, self.fe_us, ("n", "us"))
 
     def e2e(self, n: int) -> dict:
         per = None if self.lat_us is None or self.fe_us is None else self.lat_us + self.fe_us
-        kv, _ = self.command(f"E2E {int(n)}", timeout_s=self._window_timeout(n, per))
-        return _ints(kv, "n", "us", "cls", line="E2E")
+        return self._windowed("E2E", n, per, ("n", "us", "cls"))
 
     def lat(self) -> dict:
-        kv, _ = self.command("LAT", timeout_s=60.0)
+        kv, _ = self.command("LAT", timeout_s=LAT_TIMEOUT_S)
         out = _ints(kv, "inf_med_cyc", "inf_min_cyc", "inf_max_cyc", "fe_med_cyc", "fe_min_cyc", "fe_max_cyc",
                     line="LAT")
         for k in list(out):
@@ -203,7 +246,7 @@ class DUT:
         w = np.ascontiguousarray(window, dtype="<f4").ravel()
         if w.size != 1024:
             raise ValueError(f"window must have 1024 samples, got {w.size}")
-        kv, _ = self.command("VERIFY", timeout_s=10.0, payload=w.tobytes())
+        kv, _ = self.command("VERIFY", timeout_s=VERIFY_TIMEOUT_S, payload=w.tobytes())
         try:
             cls = int(kv["cls"])
             out = np.array([float(v) for v in kv["out"].split(",")], dtype=np.float32)
@@ -227,7 +270,7 @@ def _cli(argv: list[str]) -> int:
     with DUT(argv[1]) as d:
         for cmd in argv[2:]:
             try:
-                kv, lines = d.command(cmd, timeout_s=120.0)
+                kv, lines = d.command(cmd, timeout_s=MAX_WINDOW_S + WINDOW_MARGIN_S, allow_extra=True)
                 for ln in lines:
                     print(ln)
                 print("OK", " ".join(f"{k}={v}" for k, v in kv.items()))

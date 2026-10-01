@@ -1,1 +1,1 @@
-model_id,family,input_rep,precision,runtime,n_classes,input_scale,input_zero_point,output_scale,output_zero_point,params,macs,ops,protocol_trained,fold,seed,artifact,feasible
+model_id,family,input_rep,config,precision,runtime,n_classes,input_scale,input_zero_point,output_scale,output_zero_point,params,macs,ops,protocol_trained,fold,seed,artifact,feasible
