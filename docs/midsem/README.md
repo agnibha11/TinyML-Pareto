@@ -7,7 +7,7 @@ from a script-written file in `results/`; the working paper is `paper/main.pdf` 
 
 | Area | Files | What it does |
 |---|---|---|
-| Splits | `ml/splits.py`, `splits/README.md` | P1/P2/P3 from the manifest, with leakage assertions (file- and bearing-disjoint tests, non-overlapping test windows). 98.1 % of P1 test windows share samples with a training window; 0 % for P2/P3 |
+| Splits | `ml/splits.py`, `splits/README.md` | P1/P2/P3 from the manifest, with leakage assertions (file- and bearing-disjoint tests, non-overlapping test windows). 98.1 % of P1 test windows share samples with a training or validation window; 0 % for P2/P3 |
 | Features | `ml/features.py`, `handoff/features_spec.md` v1.1 | Python reference for R0–R3. **R2 is now 24 features** (bands above 5.25 kHz removed; see "Pitfalls") |
 | Training sweep | `ml/models.py`, `ml/train.py`, `results/host/` | 36 architectures → 68 model IDs, all protocols and folds, FP32/PTQ/QAT, noise robustness at 20/10/5/0 dB. Scores come from the exported `.tflite`, never from Keras |
 | Export / handoff | `ml/export.py`, `models/`, `configs/`, `handoff/` | `.tflite` + 16-byte-aligned C arrays, emlearn float headers, `meta.json`, `registry.csv`, norm constants (`.npz`/`.h`), the 100 parity test vectors with host outputs, `ops_union.txt` |

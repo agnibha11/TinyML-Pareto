@@ -120,7 +120,7 @@ stride 512: \NumWindows{} windows, \NumWindowsNO{} of them non-overlapping (\Num
 \subsection{Split protocols}
 All splits are generated from the window manifest and checked by assertions (Table~\ref{tab:splits}).
 \textbf{P1 (leaky)} draws a stratified random 70/15/15 split of all overlapping windows, as most papers do;
-\NumPOneLeakPct{} of its test windows share samples with a training window. \textbf{P2 (recording-wise)} holds out one
+\NumPOneLeakPct{} of its test windows share samples with a training or validation window. \textbf{P2 (recording-wise)} holds out one
 load (4 folds, 10 classes): no window leaks, but every test bearing was seen at other loads. \textbf{P3
 (bearing-disjoint)} holds out one fault size (3 folds) and predicts the fault type (4 classes), so every fault test
 bearing is unseen; the single normal bearing is split by load (train 0--2~HP, test 3~HP). P2 and P3 test windows are

@@ -12,7 +12,7 @@ Checks (`python ml/splits.py --check`): no window in two sets; P2/P3 test window
 
 ## Sizes
 
-| split | train | val | test | test windows sharing samples with train |
+| split | train | val | test | test windows sharing samples with a train or val window |
 |---|---|---|---|---|
 | P1/0 | 6542 | 1402 | 1402 | 98.1% |
 | P2/0 | 6033 | 1065 | 1126 | 0.0% |

@@ -165,7 +165,7 @@ def check(m: pd.DataFrame, splits) -> pd.DataFrame:
     df = pd.DataFrame(rows)
     for (p, k), f in leak.items():
         print(f"  {p} fold {k}: train {len(splits[(p, k)]['train']):5d}  val {len(splits[(p, k)]['val']):4d}  "
-              f"test {len(splits[(p, k)]['test']):5d}   test windows sharing samples with train: {f:6.1%}")
+              f"test {len(splits[(p, k)]['test']):5d}   test windows sharing samples with train or val: {f:6.1%}")
     df.attrs["leak"] = leak
     print(f"SPLIT CHECK OK: {len(splits)} splits; P2/P3 test sets are non-overlapping and file-/bearing-disjoint.")
     return df
@@ -188,7 +188,7 @@ def write_readme(df: pd.DataFrame, splits, root: Path) -> None:
         "Checks (`python ml/splits.py --check`): no window in two sets; P2/P3 test windows non-overlapping; "
         "no CWRU file in both train and test (P2, P3); no (fault type, fault size) bearing in both train and test (P3); "
         "every class present in every train and test set; P2/P3 test windows share no samples with training windows.",
-        "", "## Sizes", "", "| split | train | val | test | test windows sharing samples with train |",
+        "", "## Sizes", "", "| split | train | val | test | test windows sharing samples with a train or val window |",
         "|---|---|---|---|---|"]
     for (p, k), s in splits.items():
         lines.append(f"| {p}/{k} | {len(s['train'])} | {len(s['val'])} | {len(s['test'])} | "
