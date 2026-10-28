@@ -37,3 +37,12 @@ firmware/bench/models/
 firmware/bench/hann_1024.h
 firmware/bench/norm_constants.h
 logs/
+
+# --- LaTeX build by-products (paper/main.pdf itself is committed) ---
+paper/*.aux
+paper/*.bbl
+paper/*.blg
+paper/*.fdb_latexmk
+paper/*.fls
+paper/*.out
+paper/*.log

@@ -225,6 +225,8 @@ def main() -> None:
     figs.mkdir(exist_ok=True)
     for f in (RES / "figs").glob("*.pdf"):
         shutil.copy(f, figs / f.name)
+    for f in (RES / "demo").glob("*.png"):          # terminal captures of the two demos (Fig. demo)
+        shutil.copy(f, figs / f.name)
     print(f"{len(m)} macros -> paper/numbers.tex; figures copied to paper/figs/")
 
 

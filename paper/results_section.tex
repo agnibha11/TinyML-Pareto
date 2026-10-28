@@ -35,7 +35,7 @@ agree on \NumRefAgreeMin{} or more of windows (\NumRefMlpAgree{} for MLPs); macr
 \centering
 \includegraphics[width=\columnwidth]{fig_protocol_drop}
 \caption{Host macro-F1 per family under the three protocols (bars: median configuration; ticks: best
-configuration). Mean over folds and seeds; the CNN sweep is partial at this version.}
+configuration). Mean over all folds and the seeds run so far (\NumSeedsMin{}--\NumSeedsMax{} per configuration).}
 \label{fig:protocols}
 \end{figure}
 
@@ -181,11 +181,14 @@ evaluation makes every family look interchangeable; bearing-disjoint evaluation 
 the front end, not the classifier, sets the energy cost. The hardware campaign now has to confirm these effects with
 measured energy.
 
-\begin{figure*}[t]
+\begin{figure*}[p]
 \centering
-\includegraphics[width=0.49\textwidth]{demo_sim}\hfill
-\includegraphics[width=0.49\textwidth]{vmcu_run}
-\caption{Left: the bench firmware (PC build, real models, C front end) driven over the serial protocol by the
-harness: SEL and VERIFY on the 100 test vectors for every model. Right: the virtual Cortex-M4 run (excerpt).}
+\includegraphics[width=\textwidth]{vmcu_run}\\[2pt]
+{\footnotesize (a) Virtual Cortex-M4: the deployable code of every model runs as Cortex-M4F machine code in QEMU
+(largest configuration of each group shown; all 68 in \texttt{results/vmcu/vmcu\_metrics.csv}).}\\[10pt]
+\includegraphics[width=0.82\textwidth]{demo_sim}\\[2pt]
+{\footnotesize (b) Simulated board: the team's bench firmware, built for the PC with real models and the C front end,
+driven over the serial protocol by \texttt{tools/dut.py} (SEL, VERIFY on the 100 test vectors, RUN).}
+\caption{The two pre-hardware demonstrations. Both use the exact artefacts that will be flashed to the Nano~33~BLE.}
 \label{fig:demo}
 \end{figure*}
