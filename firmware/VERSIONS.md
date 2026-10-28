@@ -13,8 +13,9 @@ IDE or `arduino-cli` update prompt during the study. Changing any line below mea
 | CPU clock | 64 MHz (default) | never changed |
 | Regulator | default (LDO; nRF52840 DC/DC left off by the Mbed config) | fixed condition, stated in the paper |
 | Optimization | `-Os` (the variant's default) | not changed; stated in the paper |
-| arduino-cli | `<fill in at W1 install: arduino-cli version>` | Abhinav, before M1 |
-| arm-none-eabi-gcc | `<fill in at W1 install: version the core installed>` | `~/.arduino15/packages/arduino/tools/arm-none-eabi-gcc/*/bin/` |
+| Float ABI | `-mfloat-abi=softfp -mfpu=fpv4-sp-d16` (variant `cflags.txt`) | FPU instructions, integer-register calling convention; `tools/vmcu` builds with the same ABI |
+| arduino-cli | `1.1.1` (used for the `tools/build_flash.py --compile-only` link checks, 29 Oct 2026) | Abhinav: confirm on the bench PC before M1 |
+| arm-none-eabi-gcc | `7-2017q4` (7.2.1 20170904, installed by `arduino:mbed_nano@4.6.0`) | `~/.arduino15/packages/arduino/tools/arm-none-eabi-gcc/*/bin/` |
 
 ## Libraries
 
@@ -75,3 +76,4 @@ every row (`fw_hash`).
 | Date | Change | Who | Re-measured? |
 |---|---|---|---|
 | 2026-10-01 | Initial pins | | n/a |
+| 2026-10-29 | arduino-cli and core gcc versions recorded from the first bundle link checks; `frontend.c`, `tflm_glue.cpp` and the generated `bundle_gen.cpp` added to the sketch | Agnibha (for Abhinav's review) | n/a (no board yet) |
