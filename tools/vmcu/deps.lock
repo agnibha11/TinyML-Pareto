@@ -1,0 +1,6 @@
+# Pinned third-party sources for the virtual MCU (tools/vmcu). name  url  ref  resolved-commit
+tflite-micro  https://github.com/tensorflow/tflite-micro.git  main@2026-10-28  0f3f6012ff12a55109ac687f0360a62c046faed0
+flatbuffers   https://github.com/google/flatbuffers.git       v25.9.23         187240970746d00bbd26b0f5873ed54d2477f9f3
+CMSIS_6       https://github.com/ARM-software/CMSIS_6.git     5782d6f8057906d360f4b95ec08a2354afe5c9b9  5782d6f8057906d360f4b95ec08a2354afe5c9b9
+CMSIS-NN      https://github.com/ARM-software/CMSIS-NN.git    18bb0fd4ecea4b17a5a3c444c8d3a8cf28b1e68f  18bb0fd4ecea4b17a5a3c444c8d3a8cf28b1e68f
+CMSIS-DSP     https://github.com/ARM-software/CMSIS-DSP.git   v1.16.2          d5717e454fec0337bef114a21f1d2d01d74f2701
