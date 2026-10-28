@@ -265,7 +265,13 @@ def main() -> None:
     ap.add_argument("--plugin", type=Path, required=True)
     ap.add_argument("--images", nargs="+", default=["trees", "cmsis", "ref"])
     ap.add_argument("--timeout", type=int, default=7000)
+    ap.add_argument("--report-only", action="store_true",
+                    help="re-print the terminal summary (and results/demo/vmcu_run.svg) from the existing CSVs")
     a = ap.parse_args()
+    if a.report_only:
+        console_report(pd.read_csv(OUT / "vmcu_metrics.csv"),
+                       pd.read_csv(OUT / "vmcu_parity.csv").to_dict("records"), a.images)
+        return
     reg = pd.read_csv(REPO / "models" / "registry.csv", keep_default_na=False)
     OUT.mkdir(parents=True, exist_ok=True)
     sel = {"trees": reg[reg.runtime == "emlearn"], "cmsis": reg[reg.runtime == "tflm-cmsis"],
@@ -312,13 +318,14 @@ def console_report(M: pd.DataFrame, parity: list, images: list) -> None:
     """Terminal summary, also saved as results/demo/vmcu_run.svg (used on the midsem demo slide)."""
     from rich.console import Console
     from rich.table import Table
-    con = Console(record=True, width=124)
+    con = Console(record=True, width=132)
     con.print(f"[bold]$ python tools/vmcu/run_vmcu.py --images {' '.join(images)}[/]   "
               "QEMU mps2-an386 (Cortex-M4F) + vmcount plugin, arm-none-eabi-gcc 13.2 -Os, softfp ABI (as the Nano core)")
     t = Table(header_style="bold", title="Deployable models running as Cortex-M4F code (median of 5 stored windows)")
     for c in ("model_id", "runtime", "flash B", "arena B", "stack B", "front end cyc", "inference cyc",
               "latency ms @64MHz", "VERIFY agree"):
-        t.add_column(c, justify="left" if c in ("model_id", "runtime") else "right")
+        t.add_column(c, justify="left" if c in ("model_id", "runtime") else "right",
+                     no_wrap=c == "model_id", min_width=22 if c == "model_id" else None)
     show = M.sort_values(["runtime", "model_id"]).copy()
     # one row per (family, input, precision) group keeps the capture readable; every model is in the CSV
     show["grp"] = show.model_id.str.split("-").str[0] + show.model_id.str.split("-").str[1] + show.model_id.str.split("-").str[3]
@@ -330,6 +337,9 @@ def console_report(M: pd.DataFrame, parity: list, images: list) -> None:
     con.print(t)
     con.print(f"(largest configuration of each family/input/precision group shown; all {len(M)} models in "
               "results/vmcu/vmcu_metrics.csv; VERIFY = class agreement with the host on the 100 test vectors)")
+    n_ok = int(((M.verify_class_agree >= 0.99) & (M.verify_within_tol >= 1.0)).sum())
+    con.print(f"VERIFY replay: [bold]{n_ok}/{len(M)}[/] models agree with the host on >= 99 % of the vectors, "
+              "outputs within one int8 step / 1e-4")
     for p in parity:
         if p.get("vector", -1) == -1:
             con.print(f"M2 parity {p['rep']}: max |C - Python| = {p['max_abs_err']:.2e} on 100 vectors "
