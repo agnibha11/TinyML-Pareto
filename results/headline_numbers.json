@@ -1,0 +1,414 @@
+{
+  "n_runs": 1296,
+  "n_models_with_host": 68,
+  "n_models_with_costs": 68,
+  "energy_model": {
+    "P_active_mW": 9.984,
+    "f_cpu_MHz": 64.0,
+    "P_sleep_chip_uW": 9.479999999999999,
+    "P_sleep_board_mW": 2.9699999999999998,
+    "battery_J": 2430.0
+  },
+  "f1_by_family": {
+    "P1": {
+      "CNN": {
+        "best": 1.0,
+        "median": 0.9996,
+        "best_model": "cnn-r0-w200d4-int8qat"
+      },
+      "DT": {
+        "best": 0.9887,
+        "median": 0.9586,
+        "best_model": "dt-r2-d12-fp32"
+      },
+      "MLP": {
+        "best": 1.0,
+        "median": 1.0,
+        "best_model": "mlp-r3-h64-int8"
+      },
+      "RF": {
+        "best": 0.997,
+        "median": 0.9653,
+        "best_model": "rf-r2-t25d10-fp32"
+      }
+    },
+    "P2": {
+      "CNN": {
+        "best": 0.9721,
+        "median": 0.9158,
+        "best_model": "cnn-r0-w200d4-int8qat"
+      },
+      "DT": {
+        "best": 0.9018,
+        "median": 0.8001,
+        "best_model": "dt-r1-d8-fp32"
+      },
+      "MLP": {
+        "best": 0.9365,
+        "median": 0.8668,
+        "best_model": "mlp-r3-h128-int8"
+      },
+      "RF": {
+        "best": 0.9621,
+        "median": 0.8972,
+        "best_model": "rf-r2-t25d10-fp32"
+      }
+    },
+    "P3": {
+      "CNN": {
+        "best": 0.5907,
+        "median": 0.5557,
+        "best_model": "cnn-r0-w200d2-int8"
+      },
+      "DT": {
+        "best": 0.5842,
+        "median": 0.5573,
+        "best_model": "dt-r2-d6-fp32"
+      },
+      "MLP": {
+        "best": 0.6987,
+        "median": 0.6569,
+        "best_model": "mlp-r2-h64-fp32"
+      },
+      "RF": {
+        "best": 0.6234,
+        "median": 0.516,
+        "best_model": "rf-r2-t25d6-fp32"
+      }
+    }
+  },
+  "seeds_per_model": {
+    "min": 1,
+    "max": 5
+  },
+  "pareto": {
+    "P1_inf": {
+      "frontier": [
+        "dt-r2-d12-fp32",
+        "dt-r1-d4-fp32",
+        "dt-r1-d12-fp32",
+        "rf-r2-t5d10-fp32",
+        "rf-r2-t10d10-fp32",
+        "rf-r2-t25d10-fp32",
+        "mlp-r2-h16-fp32",
+        "mlp-r2-h32-int8",
+        "mlp-r2-h32-fp32"
+      ],
+      "robust_frontier": [
+        "dt-r1-d8-fp32",
+        "dt-r1-d12-fp32",
+        "dt-r2-d8-fp32",
+        "dt-r2-d12-fp32",
+        "rf-r2-t5d10-fp32",
+        "rf-r2-t10d10-fp32",
+        "rf-r2-t25d10-fp32",
+        "mlp-r2-h16-fp32",
+        "mlp-r2-h32-fp32"
+      ]
+    },
+    "P1_e2e": {
+      "frontier": [
+        "dt-r1-d4-fp32",
+        "dt-r1-d12-fp32",
+        "dt-r2-d12-fp32",
+        "rf-r2-t5d10-fp32",
+        "rf-r2-t10d10-fp32",
+        "rf-r2-t25d10-fp32",
+        "mlp-r2-h16-fp32",
+        "mlp-r2-h32-int8",
+        "mlp-r2-h32-fp32"
+      ],
+      "robust_frontier": [
+        "dt-r1-d12-fp32",
+        "rf-r2-t10d10-fp32",
+        "rf-r2-t25d10-fp32",
+        "mlp-r2-h16-fp32",
+        "mlp-r2-h32-fp32"
+      ]
+    },
+    "P2_inf": {
+      "frontier": [
+        "dt-r2-d6-fp32",
+        "dt-r1-d4-fp32",
+        "dt-r1-d8-fp32",
+        "rf-r1-t10d10-fp32",
+        "rf-r2-t10d10-fp32",
+        "rf-r2-t25d6-fp32",
+        "rf-r2-t25d10-fp32",
+        "rf-r1-t25d10-fp32",
+        "cnn-r0-w100d4-int8qat",
+        "cnn-r0-w200d4-int8qat"
+      ],
+      "robust_frontier": [
+        "dt-r1-d8-fp32",
+        "dt-r1-d12-fp32",
+        "rf-r1-t10d10-fp32",
+        "rf-r1-t25d10-fp32",
+        "rf-r2-t10d10-fp32",
+        "rf-r2-t25d6-fp32",
+        "rf-r2-t25d10-fp32",
+        "cnn-r0-w100d4-int8qat",
+        "cnn-r0-w200d4-int8qat"
+      ]
+    },
+    "P2_e2e": {
+      "frontier": [
+        "dt-r1-d4-fp32",
+        "dt-r1-d8-fp32",
+        "rf-r1-t10d10-fp32",
+        "rf-r1-t25d10-fp32",
+        "rf-r2-t10d10-fp32",
+        "rf-r2-t25d6-fp32",
+        "rf-r2-t25d10-fp32",
+        "cnn-r0-w100d4-int8qat",
+        "cnn-r0-w200d4-int8qat"
+      ],
+      "robust_frontier": [
+        "rf-r1-t10d10-fp32",
+        "rf-r1-t25d10-fp32",
+        "rf-r2-t25d6-fp32",
+        "rf-r2-t25d10-fp32",
+        "cnn-r0-w100d4-int8qat",
+        "cnn-r0-w200d4-int8qat"
+      ]
+    },
+    "P3_inf": {
+      "frontier": [
+        "dt-r2-d6-fp32",
+        "dt-r1-d4-fp32",
+        "rf-r2-t10d10-fp32",
+        "rf-r2-t25d6-fp32",
+        "mlp-r2-h16-fp32",
+        "mlp-r2-h32-int8",
+        "mlp-r2-h32-fp32",
+        "mlp-r2-h64-int8",
+        "mlp-r2-h64-fp32"
+      ],
+      "robust_frontier": [
+        "dt-r1-d4-fp32",
+        "dt-r2-d4-fp32",
+        "dt-r2-d6-fp32",
+        "rf-r2-t10d10-fp32",
+        "rf-r2-t25d6-fp32",
+        "mlp-r2-h16-fp32",
+        "mlp-r2-h32-fp32",
+        "mlp-r2-h64-fp32",
+        "mlp-r2-h64-int8"
+      ]
+    },
+    "P3_e2e": {
+      "frontier": [
+        "dt-r1-d4-fp32",
+        "dt-r2-d6-fp32",
+        "rf-r2-t10d10-fp32",
+        "rf-r2-t25d6-fp32",
+        "mlp-r2-h16-fp32",
+        "mlp-r2-h32-int8",
+        "mlp-r2-h32-fp32",
+        "mlp-r2-h64-int8",
+        "mlp-r2-h64-fp32"
+      ],
+      "robust_frontier": [
+        "dt-r1-d4-fp32",
+        "dt-r1-d6-fp32",
+        "rf-r2-t25d6-fp32",
+        "mlp-r2-h16-fp32",
+        "mlp-r2-h32-fp32",
+        "mlp-r2-h64-fp32",
+        "mlp-r2-h64-int8"
+      ]
+    }
+  },
+  "kendall_tau": [
+    {
+      "energy": "inf",
+      "a": "P1",
+      "b": "P2",
+      "tau": 0.667,
+      "p": 0.333,
+      "rank_a": "DT>RF>MLP>CNN",
+      "rank_b": "RF>DT>MLP>CNN"
+    },
+    {
+      "energy": "inf",
+      "a": "P1",
+      "b": "P3",
+      "tau": 1.0,
+      "p": 0.083,
+      "rank_a": "DT>RF>MLP>CNN",
+      "rank_b": "DT>RF>MLP>CNN"
+    },
+    {
+      "energy": "inf",
+      "a": "P2",
+      "b": "P3",
+      "tau": 0.667,
+      "p": 0.333,
+      "rank_a": "RF>DT>MLP>CNN",
+      "rank_b": "DT>RF>MLP>CNN"
+    },
+    {
+      "energy": "e2e",
+      "a": "P1",
+      "b": "P2",
+      "tau": 1.0,
+      "p": 0.083,
+      "rank_a": "RF>DT>MLP>CNN",
+      "rank_b": "RF>DT>MLP>CNN"
+    },
+    {
+      "energy": "e2e",
+      "a": "P1",
+      "b": "P3",
+      "tau": 0.667,
+      "p": 0.333,
+      "rank_a": "RF>DT>MLP>CNN",
+      "rank_b": "DT>RF>MLP>CNN"
+    },
+    {
+      "energy": "e2e",
+      "a": "P2",
+      "b": "P3",
+      "tau": 0.667,
+      "p": 0.333,
+      "rank_a": "RF>DT>MLP>CNN",
+      "rank_b": "DT>RF>MLP>CNN"
+    },
+    {
+      "energy": "inf_vs_e2e",
+      "a": "P1",
+      "b": "P1",
+      "tau": 0.667,
+      "p": 0.333,
+      "rank_a": "DT>RF>MLP>CNN",
+      "rank_b": "RF>DT>MLP>CNN"
+    },
+    {
+      "energy": "inf_vs_e2e",
+      "a": "P2",
+      "b": "P2",
+      "tau": 1.0,
+      "p": 0.083,
+      "rank_a": "RF>DT>MLP>CNN",
+      "rank_b": "RF>DT>MLP>CNN"
+    },
+    {
+      "energy": "inf_vs_e2e",
+      "a": "P3",
+      "b": "P3",
+      "tau": 1.0,
+      "p": 0.083,
+      "rank_a": "DT>RF>MLP>CNN",
+      "rank_b": "DT>RF>MLP>CNN"
+    },
+    {
+      "energy": "model_f1",
+      "a": "P1",
+      "b": "P2",
+      "tau": 0.438,
+      "p": 0.0,
+      "rank_a": "",
+      "rank_b": ""
+    },
+    {
+      "energy": "model_f1",
+      "a": "P1",
+      "b": "P3",
+      "tau": 0.233,
+      "p": 0.013,
+      "rank_a": "",
+      "rank_b": ""
+    },
+    {
+      "energy": "model_f1",
+      "a": "P2",
+      "b": "P3",
+      "tau": -0.058,
+      "p": 0.5153,
+      "rank_a": "",
+      "rank_b": ""
+    }
+  ],
+  "frontend_cycles": {
+    "r0": 9274,
+    "r1": 34438,
+    "r2": 124048,
+    "r3": 145937
+  },
+  "frontend_us": {
+    "r0": 144.9,
+    "r1": 538.1,
+    "r2": 1938.2,
+    "r3": 2280.3
+  },
+  "tree_fe_share": {
+    "min": 0.9565,
+    "max": 0.9978
+  },
+  "tree_inf_cycles": {
+    "min": 277,
+    "max": 1565
+  },
+  "cmsis_speedup": {
+    "cnn-r0-w025d2": 5.87,
+    "cnn-r0-w025d4": 11.37,
+    "cnn-r0-w050d2": 10.04,
+    "cnn-r0-w050d4": 19.39,
+    "cnn-r0-w100d2": 15.75,
+    "cnn-r0-w100d4": 26.69,
+    "cnn-r0-w200d2": 22.03,
+    "cnn-r0-w200d4": 31.4
+  },
+  "fp32_over_int8_cycles": {
+    "mlp-r2-h16": 0.88,
+    "mlp-r2-h32": 1.03,
+    "mlp-r2-h64": 1.22,
+    "mlp-r2-h32x32": 1.19,
+    "mlp-r2-h64x64": 1.52,
+    "mlp-r3-h32": 1.49,
+    "mlp-r3-h64": 1.72,
+    "mlp-r3-h128": 1.88,
+    "cnn-r0-w025d2": 5.37,
+    "cnn-r0-w025d4": 10.7,
+    "cnn-r0-w050d2": 9.38,
+    "cnn-r0-w050d4": 18.54,
+    "cnn-r0-w100d2": 14.94,
+    "cnn-r0-w100d4": 25.76,
+    "cnn-r0-w200d2": 21.16,
+    "cnn-r0-w200d4": 30.48
+  },
+  "verify_class_agree_min": 1.0,
+  "verify_models_below_99": [],
+  "parity": [
+    {
+      "rep": "r1",
+      "max_abs_err": 1.3712448120095644e-05
+    },
+    {
+      "rep": "r2",
+      "max_abs_err": 1.3712448120095644e-05
+    },
+    {
+      "rep": "r3",
+      "max_abs_err": 9.557637023904776e-05
+    }
+  ],
+  "ram_peak_B": {
+    "min": 128,
+    "max": 104640
+  },
+  "flash_model_B": {
+    "min": 250,
+    "max": 331768
+  },
+  "f_star_hz": {
+    "dt-r2-d6-fp32|chip": 0.48879,
+    "dt-r2-d6-fp32|board": 153.13462,
+    "rf-r2-t25d6-fp32|chip": 0.48434,
+    "rf-r2-t25d6-fp32|board": 151.73958,
+    "mlp-r2-h64-fp32|chip": 0.38903,
+    "mlp-r2-h64-fp32|board": 121.88048,
+    "cnn-r0-w200d2-int8|chip": 0.00421,
+    "cnn-r0-w200d2-int8|board": 1.31747
+  }
+}
