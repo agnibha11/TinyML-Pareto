@@ -1,7 +1,8 @@
 # features_spec.md — front-end specification (R0–R3)
 
 Owner: Agnibha · Implemented by: `ml/features.py` (Python reference, ground truth) and `firmware/bench/frontend.*`
-(C, Abhinav). Status: **v1, frozen at M0**. The C front end must match Python to **max |error| < 1e-3 on normalized
+(C, Abhinav; reference C implementation in `tools/vmcu/fw/frontend.c`). Status: **v1.1** (v1 frozen at M0; v1.1
+changes R2 only, see the change log at the end). The C front end must match Python to **max |error| < 1e-3 on normalized
 features** over the 100 test vectors (gate M2). Changing any formula after M2 means re-running parity and re-measuring
 every tree and MLP.
 
@@ -35,14 +36,14 @@ copied into `meta.json`, and the firmware checks that the two agree.
 Order in the feature vector = the order of this table (index 0 = mean … index 9 = impulse).
 Compute μ first, then the central moments (two-pass). A single-pass raw-moment formula loses precision in float32.
 
-## R2 — R1 + 16 log band energies (26 features)
+## R2 — R1 + 14 log band energies (24 features)
 
 1. Multiply by the symmetric Hann window `w[n] = 0.5 − 0.5·cos(2πn / 1023)`, n = 0..1023. Use the generated
    constants in `handoff/hann_1024.h` / `hann_1024.npy`. Do not compute `cosf` on the device.
 2. Real FFT of length 1024 → bins k = 0..512, bin width 12000/1024 = 11.71875 Hz. Unnormalized DFT:
    `X[k] = Σ x_w[n] · e^(−2πi·kn/1024)` (NumPy `np.fft.rfft`, CMSIS `arm_rfft_fast_f32`).
 3. Power `P[k] = |X[k]|²`.
-4. Band b = 0..15 covers bins `32b … 32b + 31` (375 Hz per band, 0–6 kHz). Bin 512 (Nyquist) is not used.
+4. Band b = 0..13 covers bins `32b … 32b + 31` (375 Hz per band, 0–5250 Hz). Bins 448–512 are not used.
 5. Feature `B[b] = log10( Σ_{k in band b} P[k] + 1e-12 )`.
 
 Order: `[R1 (10), B[0] … B[15]]`.
@@ -71,3 +72,13 @@ fold 0**, the fold whose models are deployed. Exported as `handoff/norm_constant
 - Pass condition: max |C − Python| < 1e-3 on every **normalized** feature of every window.
 - Usual culprits when it fails: ddof, excess vs non-excess kurtosis, FFT packing, log of zero, float32 accumulation
   order.
+
+## Change log
+
+- **v1.1 (29 Oct 2026).** R2 keeps bands 0–13 (0–5250 Hz) instead of 0–15. Bands 14–15 sit in the stop-band of the
+  common 5 kHz low-pass that `prepare_data.py` applies to every recording: their log10 power is about −10 (signal bands:
+  +1 to +3), i.e. FIR stop-band residue below the float32 FFT noise floor. The first parity run of the C front end
+  (CMSIS-DSP `arm_rfft_fast_f32`, Cortex-M4F in QEMU, `tools/vmcu/run_vmcu.py`) matched R1 and R3 to < 1e-4 but
+  missed these two features by up to 0.62 (normalised units). They carry no physical information after the low-pass,
+  so they are removed rather than computed in double precision. R2 becomes 24 features; `g_r2_mean[24]`, `g_r2_std[24]`.
+

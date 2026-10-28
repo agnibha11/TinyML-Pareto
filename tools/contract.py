@@ -14,7 +14,7 @@ import re
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-CONTRACT_VERSION = "1.0-rc2"
+CONTRACT_VERSION = "1.0-rc3"
 
 # §2
 CLASSES_JSON = REPO / "handoff" / "classes.json"

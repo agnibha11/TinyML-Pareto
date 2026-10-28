@@ -163,6 +163,9 @@ def test_committed_handoff_files_are_in_layout():
     layout = section("## 5.")
     for f in (REPO / "handoff").rglob("*"):
         if f.is_file():
+            if f.parent.name == "outputs" and "outputs/<model_id>.npy" in layout:
+                C.parse_model_id(f.stem)          # templated entry: the file name must be a valid model ID
+                continue
             assert f.name in layout or f.stem in layout, f"{f.relative_to(REPO)} is not described in CONTRACT.md §5"
 
 
