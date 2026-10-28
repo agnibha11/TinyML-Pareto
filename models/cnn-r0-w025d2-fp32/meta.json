@@ -1,0 +1,20 @@
+{
+  "model_id": "cnn-r0-w025d2-fp32",
+  "family": "cnn",
+  "input_rep": "r0",
+  "config": "w025d2",
+  "precision": "fp32",
+  "runtime": "tflm-cmsis",
+  "n_classes": 10,
+  "input_scale": "",
+  "input_zero_point": "",
+  "output_scale": "",
+  "output_zero_point": "",
+  "params": 234,
+  "macs": 44112,
+  "ops": "CONV_2D;FULLY_CONNECTED;MAX_POOL_2D;MEAN;SOFTMAX",
+  "protocol_trained": "P2",
+  "fold": 0,
+  "seed": 0,
+  "tflite_B": 4136
+}

@@ -1,0 +1,37 @@
+model_id: cnn-r0-w200d4-int8
+family: cnn
+input_rep: r0
+config: w200d4
+precision: int8
+hyperparameters:
+  width: 2.0
+  blocks: 4
+  filters:
+  - 32
+  - 64
+  - 128
+  - 128
+architecture: 'Conv2D(k x 1) over (1024,1,1): block 1 kernel 9 stride 2, blocks 2..
+  kernel 3; each block Conv -> BatchNorm -> ReLU -> MaxPool(2); GAP -> Dense -> Softmax'
+training:
+  optimizer: adam
+  lr: 0.001
+  batch: 64
+  max_epochs: 100
+  early_stopping:
+    monitor: val_loss
+    patience: 10
+    restore_best: true
+quantization:
+  type: full-int8
+  representative_windows: 500
+seeds:
+- 0
+- 1
+- 2
+- 3
+- 4
+deployed_instance:
+  protocol: P2
+  fold: 0
+  seed: 0

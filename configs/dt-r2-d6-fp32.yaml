@@ -1,0 +1,20 @@
+model_id: dt-r2-d6-fp32
+family: dt
+input_rep: r2
+config: d6
+precision: fp32
+hyperparameters:
+  max_depth: 6
+training:
+  library: scikit-learn 1.5.2
+  criterion: gini
+seeds:
+- 0
+- 1
+- 2
+- 3
+- 4
+deployed_instance:
+  protocol: P2
+  fold: 0
+  seed: 0

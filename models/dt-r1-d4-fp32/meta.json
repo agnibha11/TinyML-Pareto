@@ -1,0 +1,20 @@
+{
+  "model_id": "dt-r1-d4-fp32",
+  "family": "dt",
+  "input_rep": "r1",
+  "config": "d4",
+  "precision": "fp32",
+  "runtime": "emlearn",
+  "n_classes": 10,
+  "input_scale": "",
+  "input_zero_point": "",
+  "output_scale": "",
+  "output_zero_point": "",
+  "params": 21,
+  "macs": 0,
+  "ops": "",
+  "protocol_trained": "P2",
+  "fold": 0,
+  "seed": 0,
+  "max_depth_fit": 4
+}
