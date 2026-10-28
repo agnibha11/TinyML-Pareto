@@ -1,0 +1,191 @@
+% results_section.tex - preliminary results (mid-semester). Numbers: \input{numbers} (paper/make_numbers.py).
+\section{Preliminary Results}
+
+\subsection{Deployment correctness before hardware}
+\label{sec:gates}
+\textbf{Feature parity (gate M2).} On the virtual Cortex-M4, the C front end reproduces \texttt{ml/features.py} on the
+100 fixed test vectors to a maximum normalised error of \NumParityROne{} (R1), \NumParityRTwo{} (R2) and
+\NumParityRThree{} (R3), all well inside the $10^{-3}$ gate. \textbf{Prediction agreement.} Replaying the board's
+VERIFY command on the same vectors, every deployable model (\NumNModelsCost{} configurations, three images) predicts
+the host class on \NumVerifyMin{} of them, with outputs inside one quantisation step (int8) or $10^{-4}$ (fp32). The
+same models served by the team's bench firmware, built for the PC and driven over the serial protocol by the
+measurement harness, give the same answers (Fig.~\ref{fig:demo}). The bundles for the real board compile with the
+pinned Arduino toolchain (\texttt{arduino:mbed\_nano} 4.6.0, Chirale TFLM 2.0.0): \NumFwBundlesLink{} of
+\NumFwBundles{} bundles link, at most \NumFwFlashMaxKB{}\,kB of the 960\,kB application flash and \NumFwRamMaxKB{}\,kB
+of static RAM, so the \NumFwModels{} bundled models are feasible.
+
+These gates found three problems that would otherwise have reached the board unnoticed.
+\begin{enumerate}
+\item \emph{Bands below float32 precision.} The first parity run failed on the two highest R2 bands (5.25--6\,kHz),
+which lie in the stop-band of the 5\,kHz low-pass. Their log-power is about ten decades below the signal bands and
+under the float32 FFT noise floor, so the C values are rounding noise. R2 now ends at 5.25\,kHz (24 features; feature
+spec v1.1, contract rc3).
+\item \emph{Soft versus hard voting.} scikit-learn's forest averages leaf probabilities; the exported emlearn C code
+takes a majority vote. They disagree on \NumRfVoteDisMean{} of test windows on average (up to \NumRfVoteDisMax{} in
+one of \NumRfVoteRuns{} runs) and move macro-F1 by up to \NumRfVoteFOneMax{}. All forest scores in this paper use the
+deployed rule.
+\item \emph{Optimised versus reference int8 kernels.} Desktop TFLite's default int8 kernels round differently from
+TFLM; int8 CNN outputs differed by up to 19 quantisation steps although TFLM with CMSIS-NN and with reference kernels
+agreed with each other exactly and with TFLite's reference kernels. On the full P2 fold-0 test set the two host paths
+agree on \NumRefAgreeMin{} or more of windows (\NumRefMlpAgree{} for MLPs); macro-F1 changes by at most
+\NumRefFOneMax{}. The VERIFY reference now uses the reference kernels.
+\end{enumerate}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig_protocol_drop}
+\caption{Host macro-F1 per family under the three protocols (bars: median configuration; ticks: best
+configuration). Mean over folds and seeds; the CNN sweep is partial at this version.}
+\label{fig:protocols}
+\end{figure}
+
+\subsection{Leakage changes the answer (RQ3, accuracy)}
+Fig.~\ref{fig:protocols} and Table~\ref{tab:f1} summarise \NumRuns{} host runs. Under the leaky split every family
+looks near-perfect (best \NumPOneBest{}). Holding out a recording (P2) costs little for the best models but separates
+the families, and on unseen bearings (P3) the best model reaches only \NumPThreeBest{} macro-F1
+(\NumPThreeBestModel{}), on a 4-class task. Rankings move with the protocol: Kendall's $\tau$ between the per-model
+macro-F1 rankings is \NumTauModelPOnePTwo{} (P1 vs P2), \NumTauModelPOnePThree{} (P1 vs P3) and
+\NumTauModelPTwoPThree{} (P2 vs P3).
+
+\begin{table}[t]
+\centering
+\caption{Best configuration per family: macro-F1, mean $\pm$ std over folds and seeds.}
+\label{tab:f1}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lccc}
+\toprule
+Family & P1 leaky & P2 recording & P3 bearing \\
+\midrule
+DT  & \NumPOneDTBest{}$\pm$\NumPOneDTBestStd{} & \NumPTwoDTBest{}$\pm$\NumPTwoDTBestStd{} & \NumPThreeDTBest{}$\pm$\NumPThreeDTBestStd{}\\
+RF  & \NumPOneRFBest{}$\pm$\NumPOneRFBestStd{} & \NumPTwoRFBest{}$\pm$\NumPTwoRFBestStd{} & \NumPThreeRFBest{}$\pm$\NumPThreeRFBestStd{}\\
+MLP & \NumPOneMLPBest{}$\pm$\NumPOneMLPBestStd{} & \NumPTwoMLPBest{}$\pm$\NumPTwoMLPBestStd{} & \NumPThreeMLPBest{}$\pm$\NumPThreeMLPBestStd{}\\
+CNN & \NumPOneCNNBest{}$\pm$\NumPOneCNNBestStd{} & \NumPTwoCNNBest{}$\pm$\NumPTwoCNNBestStd{} & \NumPThreeCNNBest{}$\pm$\NumPThreeCNNBestStd{}\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{The front end dominates feature-based models (RQ2)}
+Fig.~\ref{fig:breakdown} separates the two phases on the virtual Cortex-M4. A decision tree or forest needs
+\NumTreeInfMin{}--\NumTreeInfMax{} estimated cycles per window, but its R1 front end needs \NumFeROneKcyc{}\,k cycles
+and its R2 front end (statistics plus a 1024-point FFT) \NumFeRTwoKcyc{}\,k: at least \NumTreeFeShareMin{} of the
+end-to-end work. R0 normalisation for CNNs costs \NumFeRZeroKcyc{}\,k cycles. Counting the front end therefore moves
+every feature-based model by two orders of magnitude on the energy axis, while CNNs barely move
+(Fig.~\ref{fig:rq2}). This is the effect that inference-only reporting hides.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig_energy_breakdown}
+\caption{Front-end versus inference cycles per window on the virtual Cortex-M4 (median over configurations; bars
+span the configurations of a group). Log scale.}
+\label{fig:breakdown}
+\end{figure}
+
+\subsection{Frontiers and family dominance (RQ1, RQ3)}
+Fig.~\ref{fig:pareto} shows error against estimated end-to-end energy under P2 and P3. With three objectives
+(error, energy, peak RAM), the P2 frontier holds \NumFrontPTwoEtoe{} models (\NumRobustPTwoEtoe{} with bootstrap
+membership probability $\geq 0.5$) and the P3 frontier \NumFrontPThreeEtoe{} (\NumRobustPThreeEtoe{}). The bootstrap
+resamples test windows and draws each model's energy inside its cycle-model band (\NumBandMin{}--\NumBandMax{} wide),
+so membership reflects both accuracy noise and cost-model uncertainty. Ranked by hypervolume, the families order as
+\NumRankPOne{} under P1, \NumRankPTwo{} under P2 and \NumRankPThree{} under P3 (Kendall $\tau$ =
+\NumTauFamPOnePTwo{}, \NumTauFamPOnePThree{} and \NumTauFamPTwoPThree{} for P1--P2, P1--P3 and P2--P3).
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.32\textwidth]{fig_pareto_P1_e2e}\hfill
+\includegraphics[width=0.32\textwidth]{fig_pareto_P2_e2e}\hfill
+\includegraphics[width=0.32\textwidth]{fig_pareto_P3_e2e}
+\caption{Error versus estimated end-to-end energy per window for every deployable configuration under P1, P2 and P3.
+Colour: family; marker: precision; black staircase: two-dimensional frontier.}
+\label{fig:pareto}
+\end{figure*}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig_rq2_frontend}
+\caption{Accuracy--energy frontier members under P2 with inference-only (diamonds, dashed) and end-to-end energy
+(circles, solid).}
+\label{fig:rq2}
+\end{figure}
+
+\input{tab_costs}
+
+\subsection{Kernels, precision and memory}
+Table~\ref{tab:costs} lists the cost and accuracy of the best bearing-disjoint configuration of every
+family/input/precision group.
+On the same int8 CNNs, CMSIS-NN kernels cut estimated inference cycles by \NumCmsisMin{}--\NumCmsisMax{}$\times$
+(median \NumCmsisMedian{}$\times$) relative to TFLM's reference kernels (Fig.~\ref{fig:ablation}); float CNNs, which
+CMSIS-NN does not accelerate, need \NumCnnFpOverIntMin{}--\NumCnnFpOverIntMax{}$\times$ the cycles of their int8
+versions. For the smallest MLPs, int8 brings no speed-up, because quantising the input and requantising each layer
+cost about as much as the few hundred MACs they replace. Peak RAM (arena, feature buffers and stack) ranges from
+\NumRamMinB{}\,B to \NumRamMaxKB{}\,kB, and the largest model needs \NumFlashMaxKB{}\,kB of flash.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig_cmsis_ablation}
+\caption{Kernel ablation: estimated inference cycles of the int8 CNNs with TFLM reference kernels and with CMSIS-NN.}
+\label{fig:ablation}
+\end{figure}
+
+\subsection{Battery life (RQ4)}
+With chip-level sleep power (\SI{9.5}{\micro W}) and a CR2032 cell, the crossover rate $r^\ast$, below which sleep
+dominates and the model's energy stops mattering, ranges from \NumFstarLo{}\,Hz (\NumFstarLoModel{}) to
+\NumFstarHi{}\,Hz (\NumFstarHiModel{}) for the most accurate P3 model of each family (Fig.~\ref{fig:life}). At
+board-level sleep power (about 3\,mW for the Nano~33~BLE), sleep dominates at every practical rate. Measuring the
+board's real sleep floor is therefore part of the hardware campaign.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig_lifetime}
+\caption{Battery life versus inference rate for the most accurate P3 model of each family (estimated energy,
+chip-level sleep). Dotted: crossover rate $r^\ast$.}
+\label{fig:life}
+\end{figure}
+
+\subsection{Robustness to sensor noise}
+Adding white noise to the test windows separates models that clean accuracy cannot. At 0\,dB SNR under P2, the best
+configuration of each family keeps a macro-F1 of \NumSnrZeroPTwoDT{} (DT), \NumSnrZeroPTwoRF{} (RF),
+\NumSnrZeroPTwoMLP{} (MLP) and \NumSnrZeroPTwoCNN{} (CNN).
+
+% =====================================================================================================================
+\section{Toward a Selection Rubric}
+Fig.~\ref{fig:rubric} gives the most accurate P3 model that fits each RAM and energy budget. It is the first version
+of the rubric the study will deliver. The procedure: fix RAM and flash budgets; derive an energy budget from the
+inference rate and the target battery life; if the rate is far below $r^\ast$, take the most accurate model that fits
+RAM; otherwise take the cheapest model above the accuracy floor. Always quote bearing-disjoint (P3) accuracy, never P1.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.92\columnwidth]{fig_rubric}
+\caption{Preliminary rubric: best P3 macro-F1 (cell value) and its family (colour) under RAM and estimated-energy
+budgets.}
+\label{fig:rubric}
+\end{figure}
+
+% =====================================================================================================================
+\section{Limitations and Next Steps}
+This version has no board measurements. Cycles come from an instruction-exact emulator with a static Cortex-M4
+timing model. Energies are proportional to cycles, so they cannot show power differences between, for example, FPU-
+and integer-heavy code. The board's DWT counts (\texttt{LAT}) will calibrate the model, and
+\texttt{tools/vmcu/calibrate.py} is in place for that. The INA219 rig will then replace every energy number, including
+the board-level overheads (regulator, USB PHY) that the chip-level estimate omits. The virtual MCU uses current
+tflite-micro and GCC~13, while the board uses Chirale's TFLM build and GCC~7, a difference the calibration will
+quantify. The CNN sweep has fewer seeds than the trees so far. CWRU has a single bearing per fault class and an
+artificially seeded fault, and in P3 the normal class can only be split by load. Paderborn is the planned
+generalisation check.
+
+\section{Conclusion}
+Before any hardware arrived, the full pipeline was built and gated in emulation: data, leakage-checked splits,
+\NumConfigs{} deployable configurations, a virtual Cortex-M4 that runs the exact deployable code, and firmware bundles
+that link for the board. The preliminary answer to the project's question is already protocol-dependent. Leaky
+evaluation makes every family look interchangeable; bearing-disjoint evaluation does not. For feature-based models,
+the front end, not the classifier, sets the energy cost. The hardware campaign now has to confirm these effects with
+measured energy.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.49\textwidth]{demo_sim}\hfill
+\includegraphics[width=0.49\textwidth]{vmcu_run}
+\caption{Left: the bench firmware (PC build, real models, C front end) driven over the serial protocol by the
+harness: SEL and VERIFY on the 100 test vectors for every model. Right: the virtual Cortex-M4 run (excerpt).}
+\label{fig:demo}
+\end{figure*}
