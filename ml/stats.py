@@ -212,6 +212,17 @@ def fig_protocols(summary: pd.DataFrame, plt):
     plt.close(fig)
 
 
+def legend_handles(d: pd.DataFrame, plt) -> list:
+    """Two separate keys: colour = family, marker = precision (only those present), plus the frontier line."""
+    from matplotlib.lines import Line2D
+    h = [Line2D([], [], ls="", marker="o", ms=5, color=COLORS[f], label=f) for f in FAM_ORDER if (d.fam == f).any()]
+    names = {"fp32": "float32", "int8": "int8 PTQ", "int8qat": "int8 QAT", "int8ref": "int8 ref. kernels"}
+    h += [Line2D([], [], ls="", marker=mk, ms=5, color="#6b6a66", label=names[p])
+          for p, mk in MARKERS.items() if (d.precision == p).any()]
+    h.append(Line2D([], [], color="#0b0b0b", lw=1.0, label="2-D frontier"))
+    return h
+
+
 def fig_pareto(table: pd.DataFrame, protocol: str, energy: str, plt, name: str, prob=None):
     d = table[table.protocol == protocol]
     fig, ax = plt.subplots(figsize=(3.5, 2.6))
@@ -221,8 +232,7 @@ def fig_pareto(table: pd.DataFrame, protocol: str, energy: str, plt, name: str, 
             if g.empty:
                 continue
             ax.scatter(g[f"E_{energy}_uJ"], 1 - g.f1, s=22 if mk != "x" else 18, marker=mk, color=COLORS[fam],
-                       edgecolors="white" if mk not in ("x",) else None, linewidths=0.5, zorder=3,
-                       label=f"{fam} {prec}" if fam == "CNN" or prec == "fp32" else None)
+                       edgecolors="white" if mk not in ("x",) else None, linewidths=0.5, zorder=3)
     # 2-D accuracy-energy frontier (staircase)
     F = d[[f"E_{energy}_uJ", "f1"]].to_numpy()
     nd = nondominated(np.stack([F[:, 0], 1 - F[:, 1]], 1))
@@ -234,13 +244,13 @@ def fig_pareto(table: pd.DataFrame, protocol: str, energy: str, plt, name: str, 
             ys.append(ys[-1])
         xs.append(e)
         ys.append(f)
-    ax.plot(xs, ys, color="#0b0b0b", lw=1.0, zorder=2, label="2-D frontier")
+    ax.plot(xs, ys, color="#0b0b0b", lw=1.0, zorder=2)
     ax.set_xscale("log")
     ax.set_xlabel(f"{'end-to-end' if energy == 'e2e' else 'inference-only'} energy per window (µJ, est.)")
     ax.set_ylabel("error = 1 − macro-F1")
     ax.set_title(PROT_NAME[protocol], loc="left")
-    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.22), ncol=4, fontsize=6, handletextpad=0.2,
-              columnspacing=0.8)
+    ax.legend(handles=legend_handles(d, plt), loc="upper center", bbox_to_anchor=(0.5, -0.22), ncol=4, fontsize=6,
+              handletextpad=0.2, columnspacing=0.8)
     save(fig, name)
     plt.close(fig)
 

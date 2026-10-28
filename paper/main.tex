@@ -42,9 +42,9 @@ predictions on the \NumTV{} fixed test vectors. Leakage changes the answer. The 
 \NumPOneBest{} macro-F1 under the leaky split but \NumPThreeBest{} on unseen bearings, and the family ranking changes
 between protocols (Kendall $\tau$ = \NumTauFamPOnePThree{} between the P1 and P3 hypervolume rankings). The front end
 dominates the cost of feature-based models: \NumFeRTwoKcyc{}\,k cycles for R2 features against
-\NumTreeInfMax{} cycles for the largest tree, \NumTreeFeShareMin{} or more of their end-to-end work. Two deployment
-pitfalls surfaced and were fixed before any board measurement: FFT bands below float32 precision, and soft- versus
-hard-voting forests. Energies here are chip-level estimates; INA219 measurements replace them in the final version.
+\NumTreeInfMax{} cycles for the largest tree, \NumTreeFeShareMin{} or more of their end-to-end work. Three deployment
+pitfalls surfaced and were fixed before any board measurement: FFT bands below float32 precision, soft- versus
+hard-voting forests, and desktop int8 kernels that round differently from the microcontroller's. Energies here are chip-level estimates; INA219 measurements replace them in the final version.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -83,7 +83,7 @@ estimate, flash, arena and stack use for every model, and passes the feature-par
 in emulation;
 \item preliminary accuracy--energy--memory frontiers with hypervolume, bootstrap membership and rank-reversal
 statistics, a battery-life model and a first selection rubric;
-\item two deployment pitfalls, each found by the pipeline's own gates and fixed.
+\item three deployment pitfalls, each found by the pipeline's own gates and fixed.
 \end{itemize}
 
 % =====================================================================================================================
@@ -182,7 +182,7 @@ CNN ablation & R0 & same 8 & int8, ref.\ kernels & 8\\
 \subsection{Virtual Cortex-M4 harness}
 \label{sec:vmcu}
 The Arduino Nano~33~BLE (nRF52840, Cortex-M4F, \SI{64}{MHz}) and the INA219 rig were not yet available, so every
-deployable artefact was compiled for Cortex-M4F (\texttt{arm-none-eabi-gcc}~13.2, hard-float, \texttt{-Os}, as in the
+deployable artefact was compiled for Cortex-M4F (\texttt{arm-none-eabi-gcc}~13.2, FPv4-SP with the softfp ABI, \texttt{-Os}, as in the
 Arduino core) and run on QEMU's \texttt{mps2-an386} machine \cite{bellard2005qemu}. Three images hold, respectively, all emlearn trees \cite{nordby2019emlearn}; all
 networks on TensorFlow Lite Micro \cite{david2021tflm} with CMSIS-NN kernels \cite{lai2018cmsisnn}; and the int8 CNNs
 on reference kernels (the kernel ablation).
