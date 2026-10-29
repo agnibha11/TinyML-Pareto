@@ -1,0 +1,20 @@
+{
+  "model_id": "mlp-r4-h32x32-int8",
+  "family": "mlp",
+  "input_rep": "r4",
+  "config": "h32x32",
+  "precision": "int8",
+  "runtime": "tflm-cmsis",
+  "n_classes": 10,
+  "input_scale": 0.05048755556344986,
+  "input_zero_point": 25,
+  "output_scale": 0.00390625,
+  "output_zero_point": -128,
+  "params": 2730,
+  "macs": 2656,
+  "ops": "FULLY_CONNECTED;SOFTMAX",
+  "protocol_trained": "P2",
+  "fold": 0,
+  "seed": 0,
+  "tflite_B": 7160
+}

@@ -1,0 +1,21 @@
+model_id: rf-r4-t10d6-fp32
+family: rf
+input_rep: r4
+config: t10d6
+precision: fp32
+hyperparameters:
+  n_estimators: 10
+  max_depth: 6
+training:
+  library: scikit-learn 1.5.2
+  criterion: gini
+seeds:
+- 0
+- 1
+- 2
+- 3
+- 4
+deployed_instance:
+  protocol: P2
+  fold: 0
+  seed: 0

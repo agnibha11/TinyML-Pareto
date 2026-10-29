@@ -87,6 +87,10 @@ def build() -> dict[str, str]:
             m[f"Num{name}{f}BestStd"] = f3(b.f1_macro_std)
             m[f"Num{name}{f}BestModel"] = "\\texttt{" + b.model_id + "}"
             m[f"Num{name}{f}Median"] = f3(g.f1_macro_mean.median())
+    p3std = [float(m[f"NumPThree{f}BestStd"]) for f in ("DT", "RF", "MLP", "CNN") if f"NumPThree{f}BestStd" in m]
+    if p3std:
+        m["NumPThreeBestStdMax"] = f3(max(p3std))
+
     def tau_of(a, b, energy="e2e"):
         r = tau[(tau.energy == energy) & (tau.a == a) & (tau.b == b)]
         return f"{r.tau.iloc[0]:.2f}" if len(r) else "?"
