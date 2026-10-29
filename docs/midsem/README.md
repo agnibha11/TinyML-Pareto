@@ -16,10 +16,13 @@ from a script-written file in `results/`; the working paper is `paper/main.pdf` 
 | Board firmware | `firmware/bench/frontend.*`, `firmware/bench/tflm_glue.*`, `tools/bundle.py`, `tools/build_flash.py` | C front end and TFLM glue shared by the board, the emulator and the PC simulator; bundles for the Nano that **compile and link** with the pinned toolchain (`results/fw_build.csv`) |
 | Simulated board | `tools/vmcu/host_bundle.py`, `tools/demo_sim.py` | The unmodified `bench_core.cpp`, built for the PC with the real models and driven by `tools/dut.py` over the serial protocol (SEL, VERIFY, RUN) |
 | Logger | `logger/` | ESP32 INA219 window integrator (CONTRACT §7.4) with PC tests that check `measure.py` parses its lines and that energies are exact |
-| Tests | `tests/test_features.py`, `tests/test_logger_core.py` | 48 tests pass (37 before) |
+| R4 front end | `ml/features.py`, `firmware/bench/frontend.c`, `handoff/features_spec.md` v1.2, CONTRACT rc4 | Physics-informed envelope analysis in 41 features (no shaft speed needed). Best bearing-disjoint macro-F1 0.623 → 0.742; C on the virtual Cortex-M4 matches Python to 7e-5; 20 new model IDs (88 in total) |
+| Virtual measurement campaign | `tools/vrig/` | INA219 + ESP32 rig simulated through the logger's own C core: expected session CV ≈ 0.5 % (1 Ω shunt), precision set by baseline stability, not INA219 resolution; campaign ≈ 16 h of board time, ≈ 8 h with adaptive LAT (proposal in CONTRACT rc4) |
+| Model selector | `tools/make_selector.py`, `docs/selector/index.html` | The selection rubric as an interactive page: budgets in, best fitting model out, with the reason every other model is ruled out |
+| Tests | `tests/` | 51 tests pass (37 before sprint 1) |
 | Paper | `paper/main.tex`, `paper/make_numbers.py` | Working paper; every number is a macro generated from `results/` |
 
-## Pitfalls found by the gates (all fixed)
+## Pitfalls found (all fixed)
 
 1. **R2 bands 14–15 below float32 precision.** They sit in the stop-band of the 5 kHz low-pass. The C front end
    could not match Python there (0.62 σ error against the 1e-3 gate). Fix: feature spec v1.1, R2 = 24 features;
@@ -29,6 +32,10 @@ from a script-written file in `results/`; the working paper is `paper/main.pdf` 
 3. **Desktop TFLite int8 kernels ≠ TFLM arithmetic.** The VERIFY reference outputs now come from TFLite's
    reference kernels, which match TFLM bit for bit. `results/ref_kernel_check.csv` bounds the effect on scores.
 
+4. **The window mean is a recording fingerprint.** R1's first feature is the accelerometer's DC offset; on P2 fold 0
+   one held-out recording lies 16.6 σ outside the training range, and every R4 MLP that kept it scored ≈ 0.34
+   macro-F1 there (0.90 without). R4 drops it; R1–R3 keep it as frozen (`results/ablation_r4_mean.csv`).
+
 ## For review
 
 - **Abhinav:** `firmware/bench/frontend.*`, `firmware/bench/tflm_glue.*`, `tools/bundle.py`, `tools/build_flash.py`
@@ -36,7 +43,7 @@ from a script-written file in `results/`; the working paper is `paper/main.pdf` 
   `firmware/VERSIONS.md`.
 - **Hridayesh:** `logger/` (the sketch is untested on an ESP32: compile it on bring-up); the paper draft; the battery
   model's sleep figures.
-- **All:** CONTRACT.md rc3 (R2 = 24 features) needs the three sign-offs.
+- **All:** CONTRACT.md rc4 (R2 = 24 features; R4; adaptive-LAT proposal) needs the three sign-offs.
 
 ## Reproduce
 
@@ -46,6 +53,7 @@ python ml/train.py --families dt rf --seeds 0 1 2 3 4
 python ml/train.py --families mlp cnn --seeds 0 --shard 0/2 & python ml/train.py --families mlp cnn --seeds 0 --shard 1/2
 python ml/export.py && python ml/check_ref_kernels.py
 python tools/vmcu/run_vmcu.py --deps <deps> --plugin <libvmcount.so>      # tools/vmcu/README.md
-python ml/stats.py && python paper/make_numbers.py && (cd paper && latexmk -pdf main.tex)
+python ml/stats.py && python tools/vrig/campaign.py && python tools/make_selector.py
+python paper/make_numbers.py && (cd paper && latexmk -pdf main.tex)
 python tools/bundle.py && python tools/build_flash.py --all --compile-only
 ```

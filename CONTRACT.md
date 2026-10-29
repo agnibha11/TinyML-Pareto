@@ -406,3 +406,8 @@ Version history:
     serial protocol and VERIFY are unchanged;
   - model-ID input token `r4` for trees, forests and MLPs (20 new IDs, same sizes as on R1/R2);
   - `norm_constants` gain `g_r4_mean[41]`, `g_r4_std[41]`; the test vectors gain `r4.npy`, `r4_norm.npy`.
+  - proposal for §7.2 `LAT`, from the virtual measurement campaign (`tools/vrig/campaign.py`): repeat each stored
+    window `clamp(ceil(60 s / t), 11, 101)` times instead of always 101, where `t` is the model's front end plus
+    inference time from the virtual Cortex-M4. With 101 repetitions, LAT alone is about 10 h of the 16 h campaign,
+    mostly for a few float and reference-kernel CNNs; with the cap the campaign takes about 8 h. Not yet applied to
+    §7.2: it needs the firmware's `LAT` to take a repetition count.
