@@ -50,7 +50,7 @@ from a script-written file in `results/`; the working paper is `paper/main.pdf` 
 ```bash
 python ml/splits.py && python ml/features.py
 python ml/train.py --families dt rf --seeds 0 1 2 3 4
-python ml/train.py --families mlp cnn --seeds 0 --shard 0/2 & python ml/train.py --families mlp cnn --seeds 0 --shard 1/2
+python ml/train.py --families mlp cnn --seeds 0 1 2 3 4 --shard 0/2 & python ml/train.py --families mlp cnn --seeds 0 1 2 3 4 --shard 1/2
 python ml/export.py && python ml/check_ref_kernels.py
 python tools/vmcu/run_vmcu.py --deps <deps> --plugin <libvmcount.so>      # tools/vmcu/README.md
 python ml/stats.py && python tools/vrig/campaign.py && python tools/make_selector.py

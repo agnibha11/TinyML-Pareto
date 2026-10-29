@@ -22,6 +22,15 @@ def pct(x: float, d: int = 1) -> str:
     return f"{100 * x:.{d}f}\\,\\%"
 
 
+def sci(x: float) -> str:
+    """Three significant figures; below 0.001 as m x 10^e in math mode."""
+    if x == 0 or abs(x) >= 1e-3:
+        return f"{x:.3g}"
+    mant, exp = f"{x:.2e}".split("e")
+    mant = mant.rstrip("0").rstrip(".")
+    return f"${mant}\\times10^{{{int(exp)}}}$"
+
+
 def f3(x: float) -> str:
     return f"{x:.3f}"
 
@@ -247,8 +256,39 @@ def build() -> dict[str, str]:
     if fs:
         chip = {k.split("|")[0]: v for k, v in fs.items() if k.endswith("|chip")}
         lo, hi = min(chip, key=chip.get), max(chip, key=chip.get)
-        m["NumFstarLoModel"], m["NumFstarLo"] = "\\texttt{" + lo + "}", f"{chip[lo]:.3g}"
-        m["NumFstarHiModel"], m["NumFstarHi"] = "\\texttt{" + hi + "}", f"{chip[hi]:.3g}"
+        m["NumFstarLoModel"], m["NumFstarLo"] = "\\texttt{" + lo + "}", sci(chip[lo])
+        m["NumFstarHiModel"], m["NumFstarHi"] = "\\texttt{" + hi + "}", sci(chip[hi])
+    # the most accurate P3 CNN against its int8 (PTQ) twin: accuracy and estimated end-to-end energy
+    clean = summ[(summ.snr_db == "") & (summ.protocol == "P3")].set_index("model_id")
+    cnn = clean[clean.index.str.startswith("cnn-")]
+    best = cnn.f1_macro_mean.idxmax()
+    twin = best.replace("-fp32", "-int8")
+    E = costs.set_index("model_id").E_e2e_uJ
+    m["NumCnnTwinModel"] = "\\texttt{" + twin + "}"
+    m["NumCnnTwinFOne"] = f3(cnn.f1_macro_mean[twin])
+    m["NumCnnTwinRatio"] = f"{E[best] / E[twin]:.0f}"
+    # worked example of the rubric, with the selector's own rule (tools/selector/template.html, evaluate())
+    em = h["energy_model"]
+    ps, batt, year = em["P_sleep_chip_uW"] * 1e-6, em["battery_J"], 365.25 * 86400
+    cst = costs.set_index("model_id")
+
+    def pick(ram_kb, flash_kb, rate, life_y):
+        emax = (batt / (life_y * year) - ps) / rate * 1e6
+        ok = cst[(cst.ram_peak_B <= ram_kb * 1024) & (cst.flash_model_B <= flash_kb * 1024)
+                 & (cst.lat_e2e_us * 1e-6 <= 1 / rate) & (cst.E_e2e_uJ <= emax)].index.intersection(clean.index)
+        f1p3 = clean.f1_macro_mean[ok]
+        best_id = min(ok, key=lambda i: (-round(f1p3[i], 6), cst.E_e2e_uJ[i]))
+        life = batt / (rate * cst.E_e2e_uJ[best_id] * 1e-6 + ps) / year
+        return emax, best_id, f1p3[best_id], cst.E_e2e_uJ[best_id], life
+
+    for tag, rate, life_y in (("Two", 1.0, 2), ("Five", 1.0, 5), ("Min", 1 / 60, 2)):
+        emax, bid, f1v, ev, lv = pick(64, 256, rate, life_y)
+        m[f"NumEx{tag}Budget"] = f"{emax:.1f}" if emax < 100 else f"{emax:,.0f}".replace(",", "{,}")
+        m[f"NumEx{tag}Model"] = "\\texttt{" + bid + "}"
+        m[f"NumEx{tag}FOne"] = f3(f1v)
+        m[f"NumEx{tag}Energy"] = f"{ev:.1f}"
+        m[f"NumEx{tag}Life"] = f"{lv:.1f}"
+    m["NumExSleepLife"] = f"{batt / ps / year:.1f}"
     return m
 
 

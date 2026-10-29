@@ -39,7 +39,7 @@ Microcontroller studies of bearing-fault diagnosis usually report one model, sco
 physical bearing for training and testing, with an energy figure that leaves out feature extraction. We compare four
 model families (decision trees, random forests, MLPs and tiny 1-D CNNs in float32 and int8) as \NumConfigs{}
 deployable configurations, evaluated on the CWRU dataset under three split protocols: leaky, recording-wise and
-bearing-disjoint. Every configuration is trained over \NumSplits{} folds and up to \NumSeedsMax{} seeds
+bearing-disjoint. Every configuration is trained over \NumSplits{} folds and \NumSeedsMax{} seeds
 (\NumRuns{} host runs). Before the measurement hardware arrived, we built a virtual Cortex-M4F. It runs the exact
 deployable code (the C front end on CMSIS-DSP, emlearn trees, and TensorFlow Lite Micro with CMSIS-NN or reference
 kernels) inside QEMU and counts instructions exactly, using a cycle model taken from the Cortex-M4 technical reference
@@ -178,7 +178,7 @@ the quantization-aware training toolkit rejects Conv1D. NNs use Adam (lr $10^{-3
 early stopping on validation loss (patience 10). Int8 models use full-integer post-training quantization (PTQ) with
 500 fixed training windows; QAT fine-tunes the float model for 20 epochs at lr $10^{-4}$. NN scores come from the
 exported \texttt{.tflite} file run in the TFLite interpreter, never from Keras. Each configuration is trained on every
-fold of every protocol with \NumSeedsMin{}--\NumSeedsMax{} seeds so far (5 planned); scores are macro-F1, reported as
+fold of every protocol with \NumSeedsMax{} seeds; scores are macro-F1, reported as
 mean over folds and seeds. The deployed instance is P2, fold 0, seed 0.
 
 \begin{table}[t]

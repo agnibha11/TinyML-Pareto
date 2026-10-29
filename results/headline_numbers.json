@@ -1,5 +1,5 @@
 {
-  "n_runs": 3204,
+  "n_runs": 3520,
   "n_models_with_host": 88,
   "n_models_with_costs": 88,
   "energy_model": {
@@ -34,8 +34,8 @@
     },
     "P2": {
       "CNN": {
-        "best": 0.9554,
-        "median": 0.9246,
+        "best": 0.9553,
+        "median": 0.9225,
         "best_model": "cnn-r0-w050d4-int8qat"
       },
       "DT": {
@@ -56,9 +56,9 @@
     },
     "P3": {
       "CNN": {
-        "best": 0.6052,
-        "median": 0.5719,
-        "best_model": "cnn-r0-w200d2-int8"
+        "best": 0.5938,
+        "median": 0.5696,
+        "best_model": "cnn-r0-w200d4-fp32"
       },
       "DT": {
         "best": 0.7194,
@@ -78,7 +78,7 @@
     }
   },
   "seeds_per_model": {
-    "min": 3,
+    "min": 5,
     "max": 5
   },
   "pareto": {
@@ -301,7 +301,7 @@
       "energy": "model_f1",
       "a": "P1",
       "b": "P2",
-      "tau": 0.424,
+      "tau": 0.416,
       "p": 0.0,
       "rank_a": "",
       "rank_b": ""
@@ -310,8 +310,8 @@
       "energy": "model_f1",
       "a": "P1",
       "b": "P3",
-      "tau": -0.196,
-      "p": 0.0112,
+      "tau": -0.205,
+      "p": 0.0079,
       "rank_a": "",
       "rank_b": ""
     },
@@ -319,8 +319,8 @@
       "energy": "model_f1",
       "a": "P2",
       "b": "P3",
-      "tau": 0.022,
-      "p": 0.7712,
+      "tau": 0.002,
+      "p": 0.9801,
       "rank_a": "",
       "rank_b": ""
     }
@@ -415,7 +415,7 @@
     "rf-r4-t25d6-fp32|board": 103.37495,
     "mlp-r4-h64-int8|chip": 0.28216,
     "mlp-r4-h64-int8|board": 88.39762,
-    "cnn-r0-w200d2-int8|chip": 0.00421,
-    "cnn-r0-w200d2-int8|board": 1.31747
+    "cnn-r0-w200d4-fp32|chip": 5e-05,
+    "cnn-r0-w200d4-fp32|board": 0.01421
   }
 }

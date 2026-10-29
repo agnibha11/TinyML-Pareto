@@ -45,10 +45,10 @@ python tools/measure.py --dry-run       # writes a dummy results/dryrun/hw_measu
 
 ```bash
 python ml/splits.py                     # P1/P2/P3 split files + leakage assertions -> splits/, splits/README.md
-python ml/features.py                   # caches R1-R3 for every window (features_spec.md v1.1)
+python ml/features.py                   # caches R1-R4 for every window (features_spec.md v1.2)
 python ml/train.py --families dt rf --seeds 0 1 2 3 4            # trees: minutes
-python ml/train.py --families mlp cnn --seeds 0 --shard 0/2 &    # NNs: run two shards, one per core
-python ml/train.py --families mlp cnn --seeds 0 --shard 1/2
+python ml/train.py --families mlp cnn --seeds 0 1 2 3 4 --shard 0/2 &    # NNs: run two shards, one per core
+python ml/train.py --families mlp cnn --seeds 0 1 2 3 4 --shard 1/2
 python ml/export.py                     # models/<id>/, registry.csv, handoff/ norm constants, test vectors, ops
 python ml/stats.py                      # host_summary.csv, Pareto/HV/tau, rubric, battery model, figures
 ```
