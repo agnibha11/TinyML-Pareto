@@ -118,7 +118,7 @@ Format: `<family>-<input>-<size>-<precision>`, lowercase, regex
 | token | values |
 |---|---|
 | family | `dt` decision tree, `rf` random forest, `mlp`, `cnn` |
-| input | `r0` raw window, `r1` 10 stats, `r2` r1 + 14 log bands (0–5.25 kHz, v1.1 of the feature spec), `r3` 256-bin log spectrum, `r4` r1 + 32 log envelope-spectrum bins (11.7–375 Hz; v1.2 of the feature spec) |
+| input | `r0` raw window, `r1` 10 stats, `r2` r1 + 14 log bands (0–5.25 kHz, v1.1 of the feature spec), `r3` 256-bin log spectrum, `r4` r1 without its mean + 32 log envelope-spectrum bins (11.7–375 Hz; v1.2 of the feature spec) |
 | size | dt: `d<depth>` · rf: `t<trees>d<depth>` · mlp: `h<u1>[x<u2>]` · cnn: `w<width×100, 3 digits>d<blocks>` |
 | precision | `fp32`, `int8` (PTQ), `int8qat` (QAT), `int8ref` (the `int8` model built on TFLM reference kernels — ablation) |
 
@@ -158,7 +158,7 @@ handoff/
   norm_constants.h / .npz      P2 fold-0 training statistics; C symbols (npz keys = same names without g_):
                                g_r0_mu, g_r0_sigma (float); g_r1_mean[10], g_r1_std[10];
                                g_r2_mean[24], g_r2_std[24]; g_r3_mean[256], g_r3_std[256];
-                               g_r4_mean[42], g_r4_std[42]
+                               g_r4_mean[41], g_r4_std[41]
   ops_union.txt                union of TFLite ops over all NN models, one op per line
   test_vectors/
     ids.npy                    100 window_ids (10 per class), fixed
@@ -167,7 +167,7 @@ handoff/
     r1.npy r1_norm.npy         (100, 10)
     r2.npy r2_norm.npy         (100, 24)
     r3.npy r3_norm.npy         (100, 256)
-    r4.npy r4_norm.npy         (100, 42)
+    r4.npy r4_norm.npy         (100, 41)
     outputs/<model_id>.npy     host outputs for the same windows, in exactly the form VERIFY returns (§7.2)
     stored_inputs.npy / .json  the 5 windows behind INPUT 0–4 + provenance (P2 fold-0 test set)
 models/
@@ -400,8 +400,9 @@ Version history:
   - no other interface changes.
 - v1.0-rc4 (29 Oct 2026), proposal (Agnibha), after the first host sweep showed that every family scores ≤ 0.63
   macro-F1 on unseen bearings (P3):
-  - new input representation **R4** = R1 + 32 log envelope-spectrum bins (classical envelope analysis: 2–5 kHz
+  - new input representation **R4** = R1 without its mean (the sensor's DC offset, a recording fingerprint) + 32
+    log envelope-spectrum bins (classical envelope analysis: 2–5 kHz
     band, envelope, its 11.7–375 Hz spectrum; `handoff/features_spec.md` v1.2). It needs no shaft speed, so the
     serial protocol and VERIFY are unchanged;
   - model-ID input token `r4` for trees, forests and MLPs (20 new IDs, same sizes as on R1/R2);
-  - `norm_constants` gain `g_r4_mean[42]`, `g_r4_std[42]`; the test vectors gain `r4.npy`, `r4_norm.npy`.
+  - `norm_constants` gain `g_r4_mean[41]`, `g_r4_std[41]`; the test vectors gain `r4.npy`, `r4_norm.npy`.

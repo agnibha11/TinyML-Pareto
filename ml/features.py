@@ -8,7 +8,8 @@ Formulas are computed in float64 and returned as float32, so the reference is no
     r2(X)  (n, 24)   r1 + 14 log10 band powers of the Hann-windowed 1024-point rFFT (bins 32b..32b+31, b = 0..13,
                      0-5250 Hz; spec v1.1 drops bands 14-15, which lie in the 5 kHz low-pass stop-band)
     r3(X)  (n, 256)  log10(|X[k]| + 1e-6), k = 1..256
-    r4(X)  (n, 42)   r1 + 32 log envelope-spectrum bins (spec v1.2): the 2.0-5.0 kHz band of the un-windowed 1024-point
+    r4(X)  (n, 41)   r1 without its mean (9) + 32 log envelope-spectrum bins (spec v1.2): the 2.0-5.0 kHz band of the
+                     un-windowed 1024-point
                      rFFT (bins 171..426) shifted to baseband, |256-point IDFT| = envelope at 3 kHz, minus its mean,
                      times a 256-point Hann, |256-point rFFT| bins 1..32 (11.7-375 Hz, the bearing fault-frequency
                      range), each divided by the mean of the 32, log10(. + 1e-6). Physics-informed (envelope
@@ -32,13 +33,13 @@ import numpy as np
 REPO = Path(__file__).resolve().parents[1]
 PROCESSED = REPO / "data" / "processed"
 N = 1024
-N_FEAT = {"r1": 10, "r2": 24, "r3": 256, "r4": 42}
+N_FEAT = {"r1": 10, "r2": 24, "r3": 256, "r4": 41}
 N_BANDS = 14                                   # spec v1.1 (was 16)
 R1_NAMES = ["mean", "rms", "std", "peak", "p2p", "crest", "kurtosis", "skewness", "shape", "impulse"]
 R2_NAMES = R1_NAMES + [f"band{b:02d}" for b in range(N_BANDS)]
 R3_NAMES = [f"logmag{k:03d}" for k in range(1, 257)]
 ENV_K0, ENV_NB, ENV_NK = 171, 256, 32          # R4: band bins 171..426 (2004-5004 Hz), 256-point envelope, 32 bins
-R4_NAMES = R1_NAMES + [f"env{k:02d}" for k in range(1, ENV_NK + 1)]
+R4_NAMES = R1_NAMES[1:] + [f"env{k:02d}" for k in range(1, ENV_NK + 1)]   # no window mean (DC offset)
 
 
 def hann() -> np.ndarray:
@@ -105,7 +106,9 @@ def envelope_spectrum(X: np.ndarray) -> np.ndarray:
 
 
 def r4(X: np.ndarray) -> np.ndarray:
-    return np.concatenate([r1(X), envelope_spectrum(X).astype(np.float32)], axis=1)
+    """R1 without the window mean (index 0: the accelerometer's DC offset, which differs between recordings and lets
+    an MLP fingerprint the recording; P2 fold 0 macro-F1 0.34 -> 0.89 without it) + the 32 envelope bins."""
+    return np.concatenate([r1(X)[:, 1:], envelope_spectrum(X).astype(np.float32)], axis=1)
 
 
 FUNCS = {"r1": r1, "r2": r2, "r3": r3, "r4": r4}

@@ -95,7 +95,7 @@ def cost_table() -> pd.DataFrame:
     fe_ram = int(fp.fe_static_ram_B.max())
     c = reg[["model_id", "family", "input_rep", "config", "precision", "runtime", "params", "macs"]].merge(
         vm, on=["model_id", "runtime"], how="inner")
-    feat_buf = {"r0": 4 * 1024, "r1": 4 * 10, "r2": 4 * 24, "r3": 4 * 256, "r4": 4 * 42}
+    feat_buf = {"r0": 4 * 1024, "r1": 4 * 10, "r2": 4 * 24, "r3": 4 * 256, "r4": 4 * 41}
     c["frontend_ram_B"] = c.input_rep.map(feat_buf) + np.where(c.input_rep.isin(["r2", "r3", "r4"]), fe_ram, 0)
     c["ram_peak_B"] = c.arena_used_B + c.frontend_ram_B + c.stack_peak_B
     c["e2e_cyc"] = c.fe_cyc_med + c.inf_cyc_med

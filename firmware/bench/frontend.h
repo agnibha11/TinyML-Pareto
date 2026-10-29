@@ -25,13 +25,13 @@ void fe_r1(const float *x, float *out10);
 void fe_r2(const float *x, float *out24);
 // R3: log10(|X[k]| + 1e-6), k = 1..256.
 void fe_r3(const float *x, float *out256);
-// R4: R1 + 32 log envelope-spectrum bins (spec v1.2): 2.0-5.0 kHz band of the 1024-point rFFT shifted to baseband,
+// R4: R1 without its mean (9) + 32 log envelope-spectrum bins (spec v1.2): 2.0-5.0 kHz band of the 1024-point rFFT shifted to baseband,
 // |256-point inverse cFFT| = envelope, minus its mean, times a 256-point Hann, |256-point rFFT| bins 1..32,
 // divided by their mean, log10(. + 1e-6).
 #define FE_ENV_K0 171
 #define FE_ENV_NB 256
 #define FE_ENV_NK 32
-void fe_r4(const float *x, float *out42);
+void fe_r4(const float *x, float *out41);
 // In-place z-score: f[i] = (f[i] - mean[i]) / std[i].
 void fe_zscore(float *f, const float *mean, const float *std, int n);
 

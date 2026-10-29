@@ -35,11 +35,11 @@ static void frontend(int rep, const float *x, float *f) {
     case 1: fe_r1(x, f); fe_zscore(f, g_r1_mean, g_r1_std, 10); break;
     case 2: fe_r2(x, f); fe_zscore(f, g_r2_mean, g_r2_std, 24); break;
     case 3: fe_r3(x, f); fe_zscore(f, g_r3_mean, g_r3_std, 256); break;
-    default: fe_r4(x, f); fe_zscore(f, g_r4_mean, g_r4_std, 42); break;
+    default: fe_r4(x, f); fe_zscore(f, g_r4_mean, g_r4_std, 41); break;
   }
 }
 
-static const int k_rep_len[5] = {1024, 10, 24, 256, 42};
+static const int k_rep_len[5] = {1024, 10, 24, 256, 41};
 
 // --- painted-stack high-water mark ------------------------------------------------------------------------------
 // main() paints PAINT_BYTES below its own stack pointer (inline, through a volatile pointer, so the stores cannot

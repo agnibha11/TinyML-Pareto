@@ -67,13 +67,13 @@ def test_noise_snr():
 
 def test_r4_envelope_peak_at_modulation_rate():
     """A 3 kHz carrier, amplitude-modulated at envelope bin 10 (117.2 Hz, like a fault impact rate): R4's envelope
-    spectrum must peak at bin 10, whatever the carrier; the R1 part equals r1."""
+    spectrum must peak at bin 10, whatever the carrier; the first 9 features are R1 without the mean."""
     t = np.arange(N) / FS
     fm = 10 * 3000.0 / 256                                # envelope bin width = 3000/256 Hz
     x = ((1.0 + 0.8 * np.cos(2 * np.pi * fm * t)) * np.sin(2 * np.pi * 3000.0 * t + 0.4)).astype(np.float32)
     f = FE.r4(x)[0]
-    assert f.shape == (FE.N_FEAT["r4"],) == (42,)
-    assert np.allclose(f[:10], FE.r1(x)[0])
-    env = f[10:]
+    assert f.shape == (FE.N_FEAT["r4"],) == (41,)
+    assert np.allclose(f[:9], FE.r1(x)[0][1:])           # R1 without the mean
+    env = f[9:]
     assert int(np.argmax(env)) == 10 - 1                  # feature env10 (k = 10) is index 9 of the 32
     assert env[9] > env[[2, 5, 15, 25]].max() + 0.5       # at least ~3x the off-rate bins

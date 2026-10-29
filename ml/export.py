@@ -74,7 +74,7 @@ def write_norm(nc: dict) -> None:
              "#pragma once", "",
              f"static const float g_r0_mu = {float(nc['r0_mu']):.9e}f;",
              f"static const float g_r0_sigma = {float(nc['r0_sigma']):.9e}f;", ""]
-    for rep, n in (("r1", 10), ("r2", 24), ("r3", 256), ("r4", 42)):
+    for rep, n in (("r1", 10), ("r2", 24), ("r3", 256), ("r4", 41)):
         for k in ("mean", "std"):
             lines += [f"static const float g_{rep}_{k}[{n}] = {{", c_floats(nc[f"{rep}_{k}"]), "};", ""]
     (HANDOFF / "norm_constants.h").write_text("\n".join(lines))

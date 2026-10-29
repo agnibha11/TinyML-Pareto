@@ -57,7 +57,7 @@ excluded.
 then (Re, Im) pairs for k = 1..511. Unpack before computing magnitudes. `arm_cmplx_mag_f32` on elements 2.. gives |X[k]|
 for k ≥ 1.
 
-## R4 — R1 + 32 log envelope-spectrum bins (42 features, v1.2)
+## R4 — R1 without its mean + 32 log envelope-spectrum bins (41 features, v1.2)
 
 Classical bearing envelope analysis, reduced to a fixed-size, speed-independent feature vector. A local fault excites
 structural resonances once per impact; the impact rate (BPFO ≈ 3.58×, BPFI ≈ 5.42×, ball 2×BSF ≈ 4.71× shaft speed,
@@ -72,10 +72,13 @@ rates depend on where the fault is, not on how large it is.
 4. `u[m] = (e[m] − mean(e)) · h[m]`, with the symmetric 256-point Hann `h[m] = 0.5 − 0.5·cos(2πm / 255)`, evaluated
    in double precision and rounded to float32 (the C front end does this once in `fe_init`).
 5. `E[k] = | rFFT_256(u)[k] |`, k = 1..32 (bin width 3000/256 = 11.71875 Hz: 11.7–375 Hz).
-6. Feature `9 + k = log10( E[k] / mean_{j=1..32} E[j] + 1e-6 )`, k = 1..32. Dividing by the mean keeps only the
+6. Feature `8 + k = log10( E[k] / mean_{j=1..32} E[j] + 1e-6 )`, k = 1..32. Dividing by the mean keeps only the
    *shape* of the envelope spectrum, not its level (level tracks fault size, which P3 holds out).
 
-Order: `[R1 (10), env01 … env32]`. Same CMSIS-DSP packing trap as R3 for step 5 (element 1 is Re E[128]).
+Order: `[rms, std, peak, p2p, crest, kurtosis, skewness, shape, impulse, env01 … env32]`, i.e. R1 **without its first
+feature, the window mean**. The mean is the accelerometer's DC offset, which differs from recording to recording
+(file 169 sits 16.6 σ outside the P2 fold-0 training range); with it, every R4 MLP scored about 0.33 macro-F1 on P2
+fold 0, without it 0.89. Same CMSIS-DSP packing trap as R3 for step 5 (element 1 is Re E[128]).
 
 ## Normalization of R1–R4
 
@@ -104,4 +107,4 @@ fold 0**, the fold whose models are deployed. Exported as `handoff/norm_constant
 - **v1.2 (29 Oct 2026).** Adds R4 (above). Motivation: in the first host sweep every family scored at most 0.63
   macro-F1 on unseen bearings (P3), and the spectral R2/R3 features overfit the fault size held out. On the same random
   forest (25 trees, depth 10, 3 seeds) R4 raises P3 macro-F1 from 0.60 (R2) to 0.75, at a small cost under P1/P2.
-  R0–R3 are unchanged; `g_r4_mean[42]`, `g_r4_std[42]` are new.
+  R0–R3 are unchanged; `g_r4_mean[41]`, `g_r4_std[41]` are new.

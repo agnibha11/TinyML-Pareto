@@ -106,7 +106,9 @@ void fe_r3(const float *x, float *f) {
 }
 
 void fe_r4(const float *x, float *f) {
-  fe_r1(x, f);
+  float r1[10];
+  fe_r1(x, r1);
+  for (int i = 0; i < 9; ++i) f[i] = r1[i + 1];                   // R1 without the mean (spec v1.2)
   memcpy(s_buf, x, sizeof s_buf);                                // step 1: un-windowed 1024-point rFFT
   arm_rfft_fast_f32(&s_rfft, s_buf, s_spec, 0);
   // step 2: bins 171..426 (2.0-5.0 kHz) as a 256-point complex baseband signal; X[k] = s_spec[2k], s_spec[2k+1]
@@ -126,7 +128,7 @@ void fe_r4(const float *x, float *f) {
   float sum = 0.0f;
   for (int k = 0; k < FE_ENV_NK; ++k) sum += E[k];
   const float inv_mean = (float)FE_ENV_NK / sum;                   // step 6: shape only, then log
-  for (int k = 0; k < FE_ENV_NK; ++k) f[10 + k] = log10f(E[k] * inv_mean + 1e-6f);
+  for (int k = 0; k < FE_ENV_NK; ++k) f[9 + k] = log10f(E[k] * inv_mean + 1e-6f);
 }
 
 void fe_zscore(float *f, const float *mean, const float *std, int n) {
