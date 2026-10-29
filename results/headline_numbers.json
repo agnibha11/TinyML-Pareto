@@ -1,5 +1,5 @@
 {
-  "n_runs": 1992,
+  "n_runs": 2248,
   "n_models_with_host": 68,
   "n_models_with_costs": 68,
   "energy_model": {
@@ -34,9 +34,9 @@
     },
     "P2": {
       "CNN": {
-        "best": 0.9627,
-        "median": 0.9243,
-        "best_model": "cnn-r0-w100d4-int8qat"
+        "best": 0.9555,
+        "median": 0.923,
+        "best_model": "cnn-r0-w050d4-fp32"
       },
       "DT": {
         "best": 0.9018,
@@ -56,9 +56,9 @@
     },
     "P3": {
       "CNN": {
-        "best": 0.6123,
-        "median": 0.5771,
-        "best_model": "cnn-r0-w025d2-int8qat"
+        "best": 0.6137,
+        "median": 0.5832,
+        "best_model": "cnn-r0-w025d4-fp32"
       },
       "DT": {
         "best": 0.5842,
@@ -78,7 +78,7 @@
     }
   },
   "seeds_per_model": {
-    "min": 2,
+    "min": 3,
     "max": 5
   },
   "pareto": {
@@ -142,8 +142,7 @@
         "rf-r2-t10d10-fp32",
         "rf-r2-t25d6-fp32",
         "rf-r2-t25d10-fp32",
-        "rf-r1-t25d10-fp32",
-        "cnn-r0-w100d4-int8qat"
+        "rf-r1-t25d10-fp32"
       ],
       "robust_frontier": [
         "dt-r1-d8-fp32",
@@ -152,8 +151,7 @@
         "rf-r1-t25d10-fp32",
         "rf-r2-t10d10-fp32",
         "rf-r2-t25d6-fp32",
-        "rf-r2-t25d10-fp32",
-        "cnn-r0-w100d4-int8qat"
+        "rf-r2-t25d10-fp32"
       ]
     },
     "P2_e2e": {
@@ -164,15 +162,13 @@
         "rf-r1-t25d10-fp32",
         "rf-r2-t10d10-fp32",
         "rf-r2-t25d6-fp32",
-        "rf-r2-t25d10-fp32",
-        "cnn-r0-w100d4-int8qat"
+        "rf-r2-t25d10-fp32"
       ],
       "robust_frontier": [
         "rf-r1-t10d10-fp32",
         "rf-r1-t25d10-fp32",
         "rf-r2-t25d6-fp32",
-        "rf-r2-t25d10-fp32",
-        "cnn-r0-w100d4-int8qat"
+        "rf-r2-t25d10-fp32"
       ]
     },
     "P3_inf": {
@@ -290,7 +286,7 @@
       "energy": "model_f1",
       "a": "P1",
       "b": "P2",
-      "tau": 0.535,
+      "tau": 0.551,
       "p": 0.0,
       "rank_a": "",
       "rank_b": ""
@@ -299,8 +295,8 @@
       "energy": "model_f1",
       "a": "P1",
       "b": "P3",
-      "tau": 0.098,
-      "p": 0.2837,
+      "tau": 0.153,
+      "p": 0.0944,
       "rank_a": "",
       "rank_b": ""
     },
@@ -308,8 +304,8 @@
       "energy": "model_f1",
       "a": "P2",
       "b": "P3",
-      "tau": -0.073,
-      "p": 0.407,
+      "tau": 0.011,
+      "p": 0.8985,
       "rank_a": "",
       "rank_b": ""
     }
@@ -393,7 +389,7 @@
     "rf-r2-t25d6-fp32|board": 151.73958,
     "mlp-r2-h64-fp32|chip": 0.38903,
     "mlp-r2-h64-fp32|board": 121.88048,
-    "cnn-r0-w025d2-int8qat|chip": 0.03204,
-    "cnn-r0-w025d2-int8qat|board": 10.03935
+    "cnn-r0-w025d4-fp32|chip": 0.00221,
+    "cnn-r0-w025d4-fp32|board": 0.69367
   }
 }
