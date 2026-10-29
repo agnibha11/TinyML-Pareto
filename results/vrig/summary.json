@@ -1,0 +1,55 @@
+{
+ "n_models": 68,
+ "assumptions": {
+  "vbus_v": 5.0,
+  "i_idle_a": 0.006,
+  "i_active_a": 0.0049,
+  "noise_a": 0.0003,
+  "drift_in_window": 0.002,
+  "block_sd": 0.003,
+  "session_sd": 0.01,
+  "offset_sd_uv": 10.0,
+  "gain_err": 0.005,
+  "period_us": 1064.0,
+  "jitter_us": 20.0,
+  "min_window_s": 10.0,
+  "sessions": 3,
+  "lat_reps": 101,
+  "lat_inputs": 5,
+  "verify_vectors": 100,
+  "verify_io_s": 0.05,
+  "cmd_overhead_s": 1.5,
+  "warmup_s": 60.0,
+  "flash_s": 45.0
+ },
+ "reps": 30,
+ "campaign_hours": 15.7,
+ "campaign_hours_lat": 10.4,
+ "campaign_hours_verify": 2.2,
+ "campaign_hours_energy": 3.1,
+ "slowest_models": [
+  {
+   "model_id": "cnn-r0-w200d4-int8ref",
+   "hours": 3.68
+  },
+  {
+   "model_id": "cnn-r0-w200d4-fp32",
+   "hours": 3.58
+  },
+  {
+   "model_id": "cnn-r0-w100d4-int8ref",
+   "hours": 0.99
+  }
+ ],
+ "campaign_hours_adaptive_lat": 7.3,
+ "cv_p95_max_pct_1ohm": 1.28,
+ "cv_median_pct_1ohm": 0.45,
+ "bias_abs_max_pct_1ohm": 0.62,
+ "spread95_max_pct_1ohm": 0.85,
+ "bias_abs_max_pct_0p1ohm": 0.69,
+ "min_detectable_power_diff_pct": 0.73,
+ "sens_ref_model": "mlp-r3-h128-int8",
+ "block_drift_pct_where_cv_p95_reaches_3pct": 3.0,
+ "quiet_board_bias_pct_0p1ohm": 0.47,
+ "quiet_board_bias_pct_1ohm": 0.39
+}
