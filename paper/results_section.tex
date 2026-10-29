@@ -180,6 +180,16 @@ cost about as much as the few hundred MACs they replace. Peak RAM (arena, featur
 \label{fig:ablation}
 \end{figure}
 
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.66\textwidth]{fig_vrig_sensitivity}\hfill
+\includegraphics[width=0.32\textwidth]{fig_campaign_time}
+\caption{Virtual measurement campaign. Left and centre: error of the energy per inference recovered from simulated
+INA219 windows (3 sessions, 30 replications) against board noise and against the baseline shift between the IDLE and
+RUN windows, for the 0.1 and 1\,$\Omega$ shunts. Right: board time per model group.}
+\label{fig:vrig}
+\end{figure*}
+
 \subsection{Battery life (RQ4)}
 With chip-level sleep power (\SI{9.5}{\micro W}) and a CR2032 cell, the crossover rate $r^\ast$, below which sleep
 dominates and the model's energy stops mattering, ranges from \NumFstarLo{}\,Hz (\NumFstarLoModel{}) to
@@ -195,13 +205,6 @@ chip-level sleep). Dotted: crossover rate $r^\ast$.}
 \label{fig:life}
 \end{figure}
 
-\begin{figure}[t]
-\centering
-\includegraphics[width=0.8\columnwidth]{fig_rubric}
-\caption{Preliminary rubric: best P3 macro-F1 (cell value) and its family (colour) under RAM and estimated-energy
-budgets.}
-\label{fig:rubric}
-\end{figure}
 
 \subsection{Robustness to sensor noise}
 Adding white noise to the test windows separates models that clean accuracy cannot. At 0\,dB SNR under P2, the best
@@ -224,18 +227,16 @@ IDLE window immediately before every measured window is therefore the important 
 \NumVrigSlowHours{}\,h). Capping LAT at about one minute per model (between 11 and 101 repetitions) brings the campaign
 to about \NumVrigHoursAdaptive{} hours.
 
-\begin{figure*}[t]
-\centering
-\includegraphics[width=0.66\textwidth]{fig_vrig_sensitivity}\hfill
-\includegraphics[width=0.32\textwidth]{fig_campaign_time}
-\caption{Virtual measurement campaign. Left and centre: error of the energy per inference recovered from simulated
-INA219 windows (3 sessions, 30 replications) against board noise and against the baseline shift between the IDLE and
-RUN windows, for the 0.1 and 1\,$\Omega$ shunts. Right: board time per model group.}
-\label{fig:vrig}
-\end{figure*}
 
 % =====================================================================================================================
 \section{Toward a Selection Rubric}
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.8\columnwidth]{fig_rubric}
+\caption{Preliminary rubric: best P3 macro-F1 (cell value) and its family (colour) under RAM and estimated-energy
+budgets.}
+\label{fig:rubric}
+\end{figure}
 Fig.~\ref{fig:rubric} gives the most accurate P3 model that fits each RAM and energy budget. It is the first version
 of the rubric the study will deliver. The procedure: fix RAM and flash budgets; derive an energy budget from the
 inference rate and the target battery life; if the rate is far below $r^\ast$, take the most accurate model that fits
@@ -257,7 +258,6 @@ quantify. The CNN sweep has fewer seeds than the trees so far. CWRU has a single
 artificially seeded fault, and in P3 the normal class can only be split by load. Paderborn is the planned
 generalisation check.
 
-\FloatBarrier
 \section{Conclusion}
 Before any hardware arrived, the full pipeline was built and gated in emulation: data, leakage-checked splits,
 \NumConfigs{} deployable configurations, a virtual Cortex-M4 that runs the exact deployable code, and firmware bundles

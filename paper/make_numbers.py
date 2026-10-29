@@ -269,7 +269,7 @@ def cost_table() -> str:
     lines = ["\\begin{table*}[t]", "\\centering",
              "\\caption{Pre-hardware cost on the virtual Cortex-M4 (64\\,MHz, estimated) and host macro-F1 of the best "
              "P3 configuration in each family/input/precision group.}", "\\label{tab:costs}",
-             "\\setlength{\\tabcolsep}{4pt}", "\\begin{tabular}{lrrrrrrccc}", "\\toprule",
+             "\\setlength{\\tabcolsep}{3.5pt}", "\\begin{tabular}{lrrrrrrccc}", "\\toprule",
              "Configuration & Flash (kB) & Peak RAM (kB) & Front end (kcyc) & Inference (kcyc) & Latency (ms) & "
              "Energy ($\\mu$J) & P1 F1 & P2 F1 & P3 F1\\\\", "\\midrule"]
     for r in T.itertuples(index=False):
