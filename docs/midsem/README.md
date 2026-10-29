@@ -18,7 +18,7 @@ from a script-written file in `results/`; the working paper is `paper/main.pdf` 
 | Logger | `logger/` | ESP32 INA219 window integrator (CONTRACT §7.4) with PC tests that check `measure.py` parses its lines and that energies are exact |
 | R4 front end | `ml/features.py`, `firmware/bench/frontend.c`, `handoff/features_spec.md` v1.2, CONTRACT rc4 | Physics-informed envelope analysis in 41 features (no shaft speed needed). Best bearing-disjoint macro-F1 0.623 → 0.742; C on the virtual Cortex-M4 matches Python to 7e-5; 20 new model IDs (88 in total) |
 | Virtual measurement campaign | `tools/vrig/` | INA219 + ESP32 rig simulated through the logger's own C core: expected session CV ≈ 0.5 % (1 Ω shunt), precision set by baseline stability, not INA219 resolution; campaign ≈ 16 h of board time, ≈ 8 h with adaptive LAT (proposal in CONTRACT rc4) |
-| Model selector | `tools/make_selector.py`, `docs/selector/index.html` | The selection rubric as an interactive page: budgets in, best fitting model out, with the reason every other model is ruled out |
+| Model selector | `tools/make_selector.py`, `docs/selector/index.html`, live at <https://agnibha11.github.io/TinyML-Pareto/selector/> | The selection rubric as an interactive page: budgets in, best fitting model out, with the reason every other model is ruled out |
 | Tests | `tests/` | 51 tests pass (37 before sprint 1) |
 | Paper | `paper/main.tex`, `paper/make_numbers.py` | Working paper; every number is a macro generated from `results/` |
 

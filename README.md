@@ -6,6 +6,10 @@ compares the Pareto frontiers under leaky (P1) and leakage-free (P2, P3) evaluat
 
 Interfaces between the three workstreams are fixed in **[CONTRACT.md](CONTRACT.md)**. Read it before writing code.
 
+**Model selector (interactive):** <https://agnibha11.github.io/TinyML-Pareto/selector/>. Give it RAM and flash
+budgets, an inference rate, a battery and a target life; it returns the most accurate model that fits. Source:
+`docs/selector/index.html`, built by `tools/make_selector.py` and served by GitHub Pages from `docs/`.
+
 ## Layout
 
 ```
