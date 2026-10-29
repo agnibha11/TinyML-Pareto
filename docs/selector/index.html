@@ -1,0 +1,338 @@
+<title>Bearing Sensor Model Selector</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a parametric-search sheet, as on a component distributor's site: constraints on the left,
+   the pick + error/energy plane + ranked list on the right. */
+:root {
+  --bg: #eef2f5; --panel: #ffffff; --ink: #142230; --muted: #566676; --line: #d3dbe2; --soft: #f5f8fa;
+  --accent: #0d5ea6; --accent-ink: #ffffff; --chip-ink: #ffffff; --ok: #19723a; --bad: #a3361f; --budget: #a3361f;
+  --dt: #2a78d6; --rf: #d95c25; --mlp: #13996a; --cnn: #5a46c2;
+  --f-display: "IBM Plex Sans Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-data: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e151c; --panel: #151f29; --ink: #e4ebf2; --muted: #98a7b6; --line: #293846; --soft: #1a2633;
+  --accent: #5aa7ee; --accent-ink: #0b1622; --chip-ink: #0b1622; --ok: #5cc27f; --bad: #f08a6c; --budget: #f08a6c;
+  --dt: #62a1ec; --rf: #f08a5d; --mlp: #3fc792; --cnn: #9b8cf0; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0e151c; --panel: #151f29; --ink: #e4ebf2; --muted: #98a7b6; --line: #293846; --soft: #1a2633;
+  --accent: #5aa7ee; --accent-ink: #0b1622; --chip-ink: #0b1622; --ok: #5cc27f; --bad: #f08a6c; --budget: #f08a6c;
+  --dt: #62a1ec; --rf: #f08a5d; --mlp: #3fc792; --cnn: #9b8cf0; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 40px }
+.wrap { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px }
+header { display: flex; flex-direction: column; gap: 6px }
+.eyebrow { font-family: var(--f-data); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent) }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(28px, 4vw, 40px); line-height: 1.05; margin: 0; text-wrap: balance }
+.lede { color: var(--muted); max-width: 70ch; margin: 0 }
+.meta { font-family: var(--f-data); font-size: 12px; color: var(--muted) }
+.grid { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 22px; align-items: start }
+@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr) } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 18px }
+.controls { display: flex; flex-direction: column; gap: 18px; position: sticky; top: calc(12px + env(safe-area-inset-top, 0px)) }
+@media (max-width: 860px) { .controls { position: static } }
+.ctl { display: flex; flex-direction: column; gap: 6px }
+.ctl label, .ctl .lab { font-family: var(--f-display); font-weight: 600; font-size: 14px; letter-spacing: .02em }
+.hint { font-size: 12.5px; color: var(--muted); line-height: 1.4 }
+select, input[type=range] { width: 100%; font: inherit; color: var(--ink) }
+select { background: var(--soft); border: 1px solid var(--line); border-radius: 7px; padding: 7px 9px }
+select:focus-visible, input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+input[type=range] { accent-color: var(--accent) }
+.readout { font-family: var(--f-data); font-size: 13px }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: 8px; overflow: hidden }
+.seg button { font: 500 13px var(--f-body); border: 0; background: var(--soft); color: var(--ink); padding: 8px 4px; cursor: pointer }
+.seg button + button { border-left: 1px solid var(--line) }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink) }
+.results { display: flex; flex-direction: column; gap: 22px; min-width: 0 }
+.pick { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 18px }
+@media (max-width: 700px) { .pick { grid-template-columns: minmax(0, 1fr) } }
+.pick h2 { font-family: var(--f-display); font-size: 14px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 }
+.mid { font-family: var(--f-data); font-weight: 500; font-size: clamp(20px, 2.6vw, 26px); overflow-wrap: anywhere; margin: 6px 0 8px }
+.chips { display: flex; gap: 6px; flex-wrap: wrap }
+.chip { font: 500 12px var(--f-data); padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted) }
+.chip.fam { color: var(--chip-ink); border-color: transparent }
+.why { margin: 10px 0 0; color: var(--muted); font-size: 13.5px; max-width: 60ch }
+.kv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; align-content: start }
+.kv div { display: flex; flex-direction: column; border-top: 1px solid var(--line); padding-top: 6px; min-width: 0 }
+.kv span { font-size: 12px; color: var(--muted) }
+.kv b { font: 500 17px var(--f-data); font-variant-numeric: tabular-nums }
+.kv b.warn { color: var(--bad) }
+.none { color: var(--bad); font-weight: 500 }
+.chart h3, .tablecard h3 { font-family: var(--f-display); font-weight: 600; font-size: 17px; margin: 0 0 4px }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--muted); margin: 6px 0 4px }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px }
+svg { display: block; width: 100%; height: auto; overflow: visible }
+svg text { font-family: var(--f-data); font-size: 11px; fill: var(--muted) }
+.tablewrap { overflow-x: auto; margin-top: 8px }
+table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums }
+th { font: 600 12px var(--f-display); letter-spacing: .03em; text-align: right; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap }
+td { text-align: right; padding: 5px 8px; border-bottom: 1px solid var(--line); font-family: var(--f-data); white-space: nowrap }
+th:nth-child(2), td:nth-child(2) { text-align: left }
+tr.out td { color: var(--muted); opacity: .6 }
+tr.best td { background: var(--soft) }
+.status { font: 500 11px var(--f-data); padding: 1px 7px; border-radius: 99px; border: 1px solid currentColor }
+.status.ok { color: var(--ok) } .status.no { color: var(--bad) }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 0 }
+.toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-top: 6px }
+footer { font-size: 12.5px; color: var(--muted); max-width: 95ch; display: flex; flex-direction: column; gap: 6px }
+@media (prefers-reduced-motion: no-preference) { circle.pt { transition: opacity .2s } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">TinyML Pareto study · CWRU bearing faults · Arduino Nano 33 BLE</div>
+    <h1>Bearing Sensor Model Selector</h1>
+    <p class="lede">Set the sensor's budgets. The selector returns the most accurate model that fits them, shows where every
+      other model falls short, and draws the energy budget on the accuracy–energy plane.</p>
+    <div class="meta" id="meta"></div>
+  </header>
+
+  <div class="grid">
+    <form class="panel controls" id="form" autocomplete="off">
+      <div class="ctl">
+        <span class="lab" id="lens-lab">Trust accuracy from</span>
+        <div class="seg" role="group" aria-labelledby="lens-lab" id="lens">
+          <button type="button" data-p="P3" aria-pressed="true">Unseen bearing</button>
+          <button type="button" data-p="P2" aria-pressed="false">New recording</button>
+          <button type="button" data-p="P1" aria-pressed="false">Leaky split</button>
+        </div>
+        <div class="hint" id="lens-hint"></div>
+      </div>
+      <div class="ctl">
+        <label for="ram">RAM budget for the model</label>
+        <select id="ram"></select>
+        <div class="hint">Arena, feature buffers and stack. The Nano has 256 KB in total.</div>
+      </div>
+      <div class="ctl">
+        <label for="flash">Flash budget for the model</label>
+        <select id="flash"></select>
+      </div>
+      <div class="ctl">
+        <label for="rate">Inference rate</label>
+        <input type="range" id="rate" min="-4" max="2" step="0.125" value="-1">
+        <div class="readout" id="rate-out"></div>
+      </div>
+      <div class="ctl">
+        <label for="batt">Battery</label>
+        <select id="batt">
+          <option value="2430">CR2032 coin cell · 225 mAh at 3 V</option>
+          <option value="27000">2 × AA alkaline · 2,500 mAh at 3 V</option>
+          <option value="39960">18650 Li-ion · 3,000 mAh at 3.7 V</option>
+        </select>
+      </div>
+      <div class="ctl">
+        <label for="life">Target battery life</label>
+        <select id="life">
+          <option value="0.5">6 months</option><option value="1">1 year</option>
+          <option value="2" selected>2 years</option><option value="3">3 years</option><option value="5">5 years</option>
+        </select>
+      </div>
+      <div class="ctl">
+        <label for="sleep">Power between inferences</label>
+        <select id="sleep"></select>
+        <div class="hint">Chip-level sleep is the nRF52840 floor. The Nano board as shipped draws far more; the rig will measure it.</div>
+      </div>
+    </form>
+
+    <div class="results">
+      <section class="panel pick" id="pick" aria-live="polite"></section>
+      <section class="panel chart">
+        <h3>Accuracy against energy per window</h3>
+        <div class="legend" id="legend"></div>
+        <div id="plot"></div>
+      </section>
+      <section class="panel tablecard">
+        <h3>Every configuration, ranked by accuracy</h3>
+        <label class="toggle"><input type="checkbox" id="hide"> Hide models that do not fit</label>
+        <div class="tablewrap"><table id="tbl"></table></div>
+      </section>
+    </div>
+  </div>
+
+  <footer>
+    <div><b>Where the numbers come from.</b> Accuracy is host macro-F1, mean ± std over all folds and seeds of the chosen
+      protocol. Energy and latency are estimates from the virtual Cortex-M4 (deployable code run in QEMU, Cortex-M4 TRM
+      cycle model, 64 MHz, nRF52840 active power) and include the feature front end; the INA219 rig replaces them in the
+      final study. Battery life = battery energy ÷ (rate × energy per window + power between inferences).</div>
+    <div id="built"></div>
+  </footer>
+</div>
+
+<script>
+const DATA = {"models":[{"id":"dt-r1-d4-fp32","fam":"dt","rep":"r1","prec":"fp32","runtime":"emlearn","ram":128,"flash":298,"e2e":5.4162,"inf":0.0438,"fe":5.3723,"lat":542.48,"f1":{"P1":[0.6397,0.0007],"P2":[0.6306,0.0145],"P3":[0.5472,0.142]},"runs":40},{"id":"dt-r1-d6-fp32","fam":"dt","rep":"r1","prec":"fp32","runtime":"emlearn","ram":128,"flash":466,"e2e":5.4165,"inf":0.0441,"fe":5.3723,"lat":542.52,"f1":{"P1":[0.8351,0.0006],"P2":[0.831,0.0869],"P3":[0.5195,0.1205]},"runs":40},{"id":"dt-r1-d8-fp32","fam":"dt","rep":"r1","prec":"fp32","runtime":"emlearn","ram":128,"flash":770,"e2e":5.4165,"inf":0.0441,"fe":5.3723,"lat":542.52,"f1":{"P1":[0.9603,0.0006],"P2":[0.9018,0.0536],"P3":[0.4607,0.113]},"runs":40},{"id":"dt-r1-d12-fp32","fam":"dt","rep":"r1","prec":"fp32","runtime":"emlearn","ram":128,"flash":1942,"e2e":5.4165,"inf":0.0441,"fe":5.3723,"lat":542.52,"f1":{"P1":[0.9713,0.0015],"P2":[0.8998,0.0718],"P3":[0.4641,0.1094]},"runs":40},{"id":"dt-r2-d4-fp32","fam":"dt","rep":"r2","prec":"fp32","runtime":"emlearn","ram":8656,"flash":250,"e2e":19.3947,"inf":0.0432,"fe":19.3515,"lat":1942.58,"f1":{"P1":[0.7464,0.0],"P2":[0.6301,0.1231],"P3":[0.5837,0.2118]},"runs":40},{"id":"dt-r2-d6-fp32","fam":"dt","rep":"r2","prec":"fp32","runtime":"emlearn","ram":8656,"flash":378,"e2e":19.3947,"inf":0.0432,"fe":19.3515,"lat":1942.58,"f1":{"P1":[0.9569,0.0],"P2":[0.8045,0.1761],"P3":[0.5842,0.2165]},"runs":40},{"id":"dt-r2-d8-fp32","fam":"dt","rep":"r2","prec":"fp32","runtime":"emlearn","ram":8656,"flash":478,"e2e":19.3947,"inf":0.0432,"fe":19.3515,"lat":1942.58,"f1":{"P1":[0.9883,0.0006],"P2":[0.7957,0.1492],"P3":[0.5674,0.202]},"runs":40},{"id":"dt-r2-d12-fp32","fam":"dt","rep":"r2","prec":"fp32","runtime":"emlearn","ram":8656,"flash":522,"e2e":19.3947,"inf":0.0432,"fe":19.3515,"lat":1942.58,"f1":{"P1":[0.9887,0.0012],"P2":[0.7775,0.1833],"P3":[0.5675,0.2019]},"runs":40},{"id":"rf-r1-t5d6-fp32","fam":"rf","rep":"r1","prec":"fp32","runtime":"emlearn","ram":128,"flash":2878,"e2e":5.4474,"inf":0.075,"fe":5.3723,"lat":545.61,"f1":{"P1":[0.8841,0.0481],"P2":[0.8471,0.115],"P3":[0.4985,0.1257]},"runs":40},{"id":"rf-r1-t5d10-fp32","fam":"rf","rep":"r1","prec":"fp32","runtime":"emlearn","ram":128,"flash":7794,"e2e":5.4472,"inf":0.0749,"fe":5.3723,"lat":545.59,"f1":{"P1":[0.9605,0.0033],"P2":[0.8912,0.1099],"P3":[0.4506,0.1109]},"runs":40},{"id":"rf-r1-t10d6-fp32","fam":"rf","rep":"r1","prec":"fp32","runtime":"emlearn","ram":128,"flash":2816,"e2e":5.492,"inf":0.1197,"fe":5.3723,"lat":550.08,"f1":{"P1":[0.9015,0.029],"P2":[0.8661,0.0706],"P3":[0.4911,0.1248]},"runs":40},{"id":"rf-r1-t10d10-fp32","fam":"rf","rep":"r1","prec":"fp32","runtime":"emlearn","ram":128,"flash":8026,"e2e":5.4909,"inf":0.1186,"fe":5.3723,"lat":549.97,"f1":{"P1":[0.9629,0.002],"P2":[0.9084,0.0704],"P3":[0.4702,0.1241]},"runs":40},{"id":"rf-r1-t25d6-fp32","fam":"rf","rep":"r1","prec":"fp32","runtime":"emlearn","ram":128,"flash":8410,"e2e":5.6073,"inf":0.2349,"fe":5.3723,"lat":561.62,"f1":{"P1":[0.9308,0.0181],"P2":[0.8926,0.0488],"P3":[0.4803,0.1172]},"runs":40},{"id":"rf-r1-t25d10-fp32","fam":"rf","rep":"r1","prec":"fp32","runtime":"emlearn","ram":128,"flash":25106,"e2e":5.6165,"inf":0.2441,"fe":5.3723,"lat":562.55,"f1":{"P1":[0.9677,0.0042],"P2":[0.9184,0.0546],"P3":[0.4612,0.1037]},"runs":40},{"id":"rf-r2-t5d6-fp32","fam":"rf","rep":"r2","prec":"fp32","runtime":"emlearn","ram":8656,"flash":2374,"e2e":19.4229,"inf":0.0714,"fe":19.3515,"lat":1945.41,"f1":{"P1":[0.938,0.044],"P2":[0.8576,0.12],"P3":[0.5335,0.1637]},"runs":40},{"id":"rf-r2-t5d10-fp32","fam":"rf","rep":"r2","prec":"fp32","runtime":"emlearn","ram":8656,"flash":4592,"e2e":19.4278,"inf":0.0763,"fe":19.3515,"lat":1945.89,"f1":{"P1":[0.9945,0.0017],"P2":[0.8939,0.1252],"P3":[0.5334,0.1626]},"runs":40},{"id":"rf-r2-t10d6-fp32","fam":"rf","rep":"r2","prec":"fp32","runtime":"emlearn","ram":8656,"flash":2364,"e2e":19.4629,"inf":0.1114,"fe":19.3515,"lat":1949.41,"f1":{"P1":[0.9703,0.0168],"P2":[0.9005,0.1026],"P3":[0.5667,0.1828]},"runs":40},{"id":"rf-r2-t10d10-fp32","fam":"rf","rep":"r2","prec":"fp32","runtime":"emlearn","ram":8656,"flash":5034,"e2e":19.4721,"inf":0.1206,"fe":19.3515,"lat":1950.33,"f1":{"P1":[0.9962,0.0011],"P2":[0.9356,0.0948],"P3":[0.5944,0.199]},"runs":40},{"id":"rf-r2-t25d6-fp32","fam":"rf","rep":"r2","prec":"fp32","runtime":"emlearn","ram":8656,"flash":7758,"e2e":19.573,"inf":0.2215,"fe":19.3515,"lat":1960.44,"f1":{"P1":[0.9868,0.0041],"P2":[0.9506,0.0472],"P3":[0.6234,0.2074]},"runs":40},{"id":"rf-r2-t25d10-fp32","fam":"rf","rep":"r2","prec":"fp32","runtime":"emlearn","ram":8656,"flash":15822,"e2e":19.5861,"inf":0.2346,"fe":19.3515,"lat":1961.75,"f1":{"P1":[0.997,0.001],"P2":[0.9621,0.0543],"P3":[0.6031,0.1995]},"runs":40},{"id":"mlp-r2-h16-fp32","fam":"mlp","rep":"r2","prec":"fp32","runtime":"tflm-cmsis","ram":9512,"flash":3976,"e2e":21.313,"inf":1.9615,"fe":19.3515,"lat":2134.72,"f1":{"P1":[0.9994,0.0005],"P2":[0.8954,0.176],"P3":[0.5965,0.2544]},"runs":40},{"id":"mlp-r2-h16-int8","fam":"mlp","rep":"r2","prec":"int8","runtime":"tflm-cmsis","ram":10152,"flash":3248,"e2e":21.5681,"inf":2.2166,"fe":19.3515,"lat":2160.27,"f1":{"P1":[0.9994,0.0005],"P2":[0.9,0.1686],"P3":[0.5906,0.2544]},"runs":40},{"id":"mlp-r2-h32-fp32","fam":"mlp","rep":"r2","prec":"fp32","runtime":"tflm-cmsis","ram":9576,"flash":6216,"e2e":22.3314,"inf":2.9799,"fe":19.3515,"lat":2236.72,"f1":{"P1":[0.9999,0.0003],"P2":[0.901,0.1695],"P3":[0.5946,0.2284]},"runs":40},{"id":"mlp-r2-h32-int8","fam":"mlp","rep":"r2","prec":"int8","runtime":"tflm-cmsis","ram":10296,"flash":4240,"e2e":22.2546,"inf":2.9032,"fe":19.3515,"lat":2229.03,"f1":{"P1":[0.9999,0.0003],"P2":[0.9029,0.1656],"P3":[0.5932,0.2284]},"runs":40},{"id":"mlp-r2-h64-fp32","fam":"mlp","rep":"r2","prec":"fp32","runtime":"tflm-cmsis","ram":9704,"flash":10696,"e2e":24.3681,"inf":5.0166,"fe":19.3515,"lat":2440.72,"f1":{"P1":[1.0,0.0],"P2":[0.9054,0.1611],"P3":[0.6083,0.2523]},"runs":40},{"id":"mlp-r2-h64-int8","fam":"mlp","rep":"r2","prec":"int8","runtime":"tflm-cmsis","ram":10584,"flash":6224,"e2e":23.4702,"inf":4.1187,"fe":19.3515,"lat":2350.78,"f1":{"P1":[1.0,0.0],"P2":[0.9054,0.1606],"P3":[0.6072,0.2522]},"runs":40},{"id":"mlp-r2-h32x32-fp32","fam":"mlp","rep":"r2","prec":"fp32","runtime":"tflm-cmsis","ram":9784,"flash":10832,"e2e":24.4053,"inf":5.0538,"fe":19.3515,"lat":2444.44,"f1":{"P1":[0.9999,0.0003],"P2":[0.8977,0.1717],"P3":[0.6001,0.2396]},"runs":40},{"id":"mlp-r2-h32x32-int8","fam":"mlp","rep":"r2","prec":"int8","runtime":"tflm-cmsis","ram":10728,"flash":6616,"e2e":23.5808,"inf":4.2293,"fe":19.3515,"lat":2361.86,"f1":{"P1":[0.9999,0.0003],"P2":[0.9041,0.1609],"P3":[0.5978,0.2399]},"runs":40},{"id":"mlp-r2-h64x64-fp32","fam":"mlp","rep":"r2","prec":"fp32","runtime":"tflm-cmsis","ram":10040,"flash":27728,"e2e":31.8833,"inf":12.5318,"fe":19.3515,"lat":3193.44,"f1":{"P1":[0.9997,0.0003],"P2":[0.9052,0.1592],"P3":[0.5928,0.222]},"runs":40},{"id":"mlp-r2-h64x64-int8","fam":"mlp","rep":"r2","prec":"int8","runtime":"tflm-cmsis","ram":11304,"flash":12568,"e2e":27.6081,"inf":8.2566,"fe":19.3515,"lat":2765.23,"f1":{"P1":[0.9997,0.0003],"P2":[0.9114,0.1491],"P3":[0.5908,0.2214]},"runs":40},{"id":"mlp-r3-h32-fp32","fam":"mlp","rep":"r3","prec":"fp32","runtime":"tflm-cmsis","ram":11432,"flash":35912,"e2e":38.6365,"inf":15.8703,"fe":22.7662,"lat":3869.84,"f1":{"P1":[1.0,0.0],"P2":[0.9326,0.0882],"P3":[0.4263,0.1652]},"runs":40},{"id":"mlp-r3-h32-int8","fam":"mlp","rep":"r3","prec":"int8","runtime":"tflm-cmsis","ram":11448,"flash":11664,"e2e":33.3957,"inf":10.6295,"fe":22.7662,"lat":3344.92,"f1":{"P1":[1.0,0.0],"P2":[0.9354,0.0834],"P3":[0.4252,0.1648]},"runs":40},{"id":"mlp-r3-h64-fp32","fam":"mlp","rep":"r3","prec":"fp32","runtime":"tflm-cmsis","ram":11560,"flash":70088,"e2e":53.4128,"inf":30.6467,"fe":22.7662,"lat":5349.84,"f1":{"P1":[1.0,0.0],"P2":[0.9326,0.0903],"P3":[0.4355,0.1765]},"runs":40},{"id":"mlp-r3-h64-int8","fam":"mlp","rep":"r3","prec":"int8","runtime":"tflm-cmsis","ram":11736,"flash":21072,"e2e":40.5561,"inf":17.7899,"fe":22.7662,"lat":4062.11,"f1":{"P1":[1.0,0.0],"P2":[0.9354,0.0851],"P3":[0.4343,0.1765]},"runs":40},{"id":"mlp-r3-h128-fp32","fam":"mlp","rep":"r3","prec":"fp32","runtime":"tflm-cmsis","ram":11816,"flash":138440,"e2e":82.9655,"inf":60.1993,"fe":22.7662,"lat":8309.84,"f1":{"P1":[1.0,0.0],"P2":[0.9458,0.0792],"P3":[0.4307,0.1767]},"runs":40},{"id":"mlp-r3-h128-int8","fam":"mlp","rep":"r3","prec":"int8","runtime":"tflm-cmsis","ram":12312,"flash":39888,"e2e":54.8669,"inf":32.1007,"fe":22.7662,"lat":5495.48,"f1":{"P1":[1.0,0.0],"P2":[0.949,0.0736],"P3":[0.4296,0.176]},"runs":40},{"id":"cnn-r0-w025d2-fp32","fam":"cnn","rep":"r0","prec":"fp32","runtime":"tflm-cmsis","ram":18048,"flash":4136,"e2e":1581.8812,"inf":1580.4344,"fe":1.4467,"lat":158441.62,"f1":{"P1":[0.9883,0.0068],"P2":[0.8162,0.1748],"P3":[0.589,0.1691]},"runs":28},{"id":"cnn-r0-w025d2-int8","fam":"cnn","rep":"r0","prec":"int8","runtime":"tflm-cmsis","ram":9840,"flash":4320,"e2e":295.6974,"inf":294.2506,"fe":1.4467,"lat":29617.12,"f1":{"P1":[0.986,0.0045],"P2":[0.8114,0.1874],"P3":[0.5835,0.1703]},"runs":28},{"id":"cnn-r0-w025d2-int8qat","fam":"cnn","rep":"r0","prec":"int8qat","runtime":"tflm-cmsis","ram":9744,"flash":4416,"e2e":295.8359,"inf":294.3892,"fe":1.4467,"lat":29631.0,"f1":{"P1":[0.988,0.0062],"P2":[0.8163,0.161],"P3":[0.5996,0.1637]},"runs":28},{"id":"cnn-r0-w025d2-int8ref","fam":"cnn","rep":"r0","prec":"int8ref","runtime":"tflm-ref","ram":9980,"flash":4320,"e2e":1727.3641,"inf":1725.9174,"fe":1.4467,"lat":173013.23,"f1":{"P1":[0.986,0.0045],"P2":[0.8114,0.1874],"P3":[0.5835,0.1703]},"runs":28},{"id":"cnn-r0-w025d4-fp32","fam":"cnn","rep":"r0","prec":"fp32","runtime":"tflm-cmsis","ram":18624,"flash":10552,"e2e":4281.5442,"inf":4280.0974,"fe":1.4467,"lat":428840.56,"f1":{"P1":[0.9998,0.0003],"P2":[0.9241,0.0955],"P3":[0.6137,0.1883]},"runs":28},{"id":"cnn-r0-w025d4-int8","fam":"cnn","rep":"r0","prec":"int8","runtime":"tflm-cmsis","ram":10720,"flash":8040,"e2e":401.4563,"inf":400.0096,"fe":1.4467,"lat":40209.97,"f1":{"P1":[0.9988,0.0009],"P2":[0.9163,0.1101],"P3":[0.6131,0.1876]},"runs":28},{"id":"cnn-r0-w025d4-int8qat","fam":"cnn","rep":"r0","prec":"int8qat","runtime":"tflm-cmsis","ram":10624,"flash":8296,"e2e":401.4616,"inf":400.0149,"fe":1.4467,"lat":40210.5,"f1":{"P1":[0.9993,0.0006],"P2":[0.9234,0.094],"P3":[0.5897,0.1695]},"runs":28},{"id":"cnn-r0-w025d4-int8ref","fam":"cnn","rep":"r0","prec":"int8ref","runtime":"tflm-ref","ram":10796,"flash":8040,"e2e":4551.1903,"inf":4549.7436,"fe":1.4467,"lat":455848.39,"f1":{"P1":[0.9988,0.0009],"P2":[0.9163,0.1101],"P3":[0.6131,0.1876]},"runs":28},{"id":"cnn-r0-w050d2-fp32","fam":"cnn","rep":"r0","prec":"fp32","runtime":"tflm-cmsis","ram":30336,"flash":5800,"e2e":4402.6726,"inf":4401.2258,"fe":1.4467,"lat":440972.81,"f1":{"P1":[0.9984,0.0013],"P2":[0.916,0.0947],"P3":[0.5665,0.1524]},"runs":26},{"id":"cnn-r0-w050d2-int8","fam":"cnn","rep":"r0","prec":"int8","runtime":"tflm-cmsis","ram":13056,"flash":5064,"e2e":470.8512,"inf":469.4045,"fe":1.4467,"lat":47160.58,"f1":{"P1":[0.9944,0.003],"P2":[0.8806,0.145],"P3":[0.5659,0.1567]},"runs":26},{"id":"cnn-r0-w050d2-int8qat","fam":"cnn","rep":"r0","prec":"int8qat","runtime":"tflm-cmsis","ram":12960,"flash":5160,"e2e":471.0592,"inf":469.6124,"fe":1.4467,"lat":47181.41,"f1":{"P1":[0.9981,0.0017],"P2":[0.9131,0.0954],"P3":[0.5668,0.1527]},"runs":26},{"id":"cnn-r0-w050d2-int8ref","fam":"cnn","rep":"r0","prec":"int8ref","runtime":"tflm-ref","ram":13148,"flash":5064,"e2e":4715.405,"inf":4713.9582,"fe":1.4467,"lat":472296.17,"f1":{"P1":[0.9944,0.003],"P2":[0.8806,0.145],"P3":[0.5659,0.1567]},"runs":26},{"id":"cnn-r0-w050d4-fp32","fam":"cnn","rep":"r0","prec":"fp32","runtime":"tflm-cmsis","ram":30912,"flash":26488,"e2e":14789.9688,"inf":14788.522,"fe":1.4467,"lat":1481367.06,"f1":{"P1":[1.0,0.0],"P2":[0.9555,0.066],"P3":[0.5576,0.1462]},"runs":24},{"id":"cnn-r0-w050d4-int8","fam":"cnn","rep":"r0","prec":"int8","runtime":"tflm-cmsis","ram":14240,"flash":13216,"e2e":799.098,"inf":797.6512,"fe":1.4467,"lat":80037.86,"f1":{"P1":[0.9991,0.0007],"P2":[0.9314,0.0855],"P3":[0.555,0.1482]},"runs":24},{"id":"cnn-r0-w050d4-int8qat","fam":"cnn","rep":"r0","prec":"int8qat","runtime":"tflm-cmsis","ram":14144,"flash":13472,"e2e":799.4647,"inf":798.018,"fe":1.4467,"lat":80074.59,"f1":{"P1":[1.0,0.0],"P2":[0.9547,0.0644],"P3":[0.5558,0.1449]},"runs":24},{"id":"cnn-r0-w050d4-int8ref","fam":"cnn","rep":"r0","prec":"int8ref","runtime":"tflm-ref","ram":14220,"flash":13216,"e2e":15469.5508,"inf":15468.104,"fe":1.4467,"lat":1549434.17,"f1":{"P1":[0.9991,0.0007],"P2":[0.9314,0.0855],"P3":[0.555,0.1482]},"runs":24},{"id":"cnn-r0-w100d2-fp32","fam":"cnn","rep":"r0","prec":"fp32","runtime":"tflm-cmsis","ram":54912,"flash":11432,"e2e":13806.9454,"inf":13805.4986,"fe":1.4467,"lat":1382907.19,"f1":{"P1":[1.0,0.0],"P2":[0.9226,0.0771],"P3":[0.5639,0.1376]},"runs":24},{"id":"cnn-r0-w100d2-int8","fam":"cnn","rep":"r0","prec":"int8","runtime":"tflm-cmsis","ram":19488,"flash":7120,"e2e":925.2079,"inf":923.7612,"fe":1.4467,"lat":92669.06,"f1":{"P1":[0.9523,0.0669],"P2":[0.873,0.1226],"P3":[0.5634,0.1385]},"runs":24},{"id":"cnn-r0-w100d2-int8qat","fam":"cnn","rep":"r0","prec":"int8qat","runtime":"tflm-cmsis","ram":19392,"flash":7216,"e2e":925.212,"inf":923.7652,"fe":1.4467,"lat":92669.47,"f1":{"P1":[0.9993,0.0],"P2":[0.9227,0.077],"P3":[0.5664,0.1383]},"runs":24},{"id":"cnn-r0-w100d2-int8ref","fam":"cnn","rep":"r0","prec":"int8ref","runtime":"tflm-ref","ram":19484,"flash":7120,"e2e":14548.2229,"inf":14546.7761,"fe":1.4467,"lat":1457153.73,"f1":{"P1":[0.9523,0.0669],"P2":[0.873,0.1226],"P3":[0.5634,0.1385]},"runs":24},{"id":"cnn-r0-w100d4-fp32","fam":"cnn","rep":"r0","prec":"fp32","runtime":"tflm-cmsis","ram":55488,"flash":88312,"e2e":54541.6741,"inf":54540.2274,"fe":1.4467,"lat":5462908.06,"f1":{"P1":[1.0,0.0],"P2":[0.9487,0.0613],"P3":[0.5878,0.1721]},"runs":24},{"id":"cnn-r0-w100d4-int8","fam":"cnn","rep":"r0","prec":"int8","runtime":"tflm-cmsis","ram":21280,"flash":31048,"e2e":2118.7098,"inf":2117.263,"fe":1.4467,"lat":212210.52,"f1":{"P1":[0.9984,0.0018],"P2":[0.9196,0.0926],"P3":[0.5853,0.1719]},"runs":24},{"id":"cnn-r0-w100d4-int8qat","fam":"cnn","rep":"r0","prec":"int8qat","runtime":"tflm-cmsis","ram":21184,"flash":31304,"e2e":2119.1071,"inf":2117.6604,"fe":1.4467,"lat":212250.31,"f1":{"P1":[1.0,0.0],"P2":[0.9497,0.0664],"P3":[0.5783,0.1689]},"runs":24},{"id":"cnn-r0-w100d4-int8ref","fam":"cnn","rep":"r0","prec":"int8ref","runtime":"tflm-ref","ram":21068,"flash":31048,"e2e":56500.9258,"inf":56499.4791,"fe":1.4467,"lat":5659147.22,"f1":{"P1":[0.9984,0.0018],"P2":[0.9196,0.0926],"P3":[0.5853,0.1719]},"runs":24},{"id":"cnn-r0-w200d2-fp32","fam":"cnn","rep":"r0","prec":"fp32","runtime":"tflm-cmsis","ram":104064,"flash":31912,"e2e":47666.2512,"inf":47664.8044,"fe":1.4467,"lat":4774263.94,"f1":{"P1":[1.0,0.0],"P2":[0.9367,0.0668],"P3":[0.5849,0.15]},"runs":24},{"id":"cnn-r0-w200d2-int8","fam":"cnn","rep":"r0","prec":"int8","runtime":"tflm-cmsis","ram":32352,"flash":13536,"e2e":2254.329,"inf":2252.8823,"fe":1.4467,"lat":225794.17,"f1":{"P1":[0.9778,0.018],"P2":[0.8772,0.121],"P3":[0.5863,0.1513]},"runs":24},{"id":"cnn-r0-w200d2-int8qat","fam":"cnn","rep":"r0","prec":"int8qat","runtime":"tflm-cmsis","ram":32256,"flash":13632,"e2e":2254.5488,"inf":2253.1021,"fe":1.4467,"lat":225816.19,"f1":{"P1":[0.9998,0.0003],"P2":[0.9304,0.0775],"P3":[0.583,0.1512]},"runs":24},{"id":"cnn-r0-w200d2-int8ref","fam":"cnn","rep":"r0","prec":"int8ref","runtime":"tflm-ref","ram":32156,"flash":13536,"e2e":49627.7845,"inf":49626.3378,"fe":1.4467,"lat":4970731.62,"f1":{"P1":[0.9778,0.018],"P2":[0.8772,0.121],"P3":[0.5863,0.1513]},"runs":24},{"id":"cnn-r0-w200d4-fp32","fam":"cnn","rep":"r0","prec":"fp32","runtime":"tflm-cmsis","ram":104640,"flash":331768,"e2e":208984.5096,"inf":208983.0628,"fe":1.4467,"lat":20931942.06,"f1":{"P1":[1.0,0.0],"P2":[0.9471,0.0657],"P3":[0.6015,0.1811]},"runs":24},{"id":"cnn-r0-w200d4-int8","fam":"cnn","rep":"r0","prec":"int8","runtime":"tflm-cmsis","ram":35360,"flash":96664,"e2e":6858.545,"inf":6857.0982,"fe":1.4467,"lat":686953.62,"f1":{"P1":[1.0,0.0],"P2":[0.9253,0.0884],"P3":[0.6013,0.1822]},"runs":24},{"id":"cnn-r0-w200d4-int8qat","fam":"cnn","rep":"r0","prec":"int8qat","runtime":"tflm-cmsis","ram":35264,"flash":96920,"e2e":6858.5503,"inf":6857.1036,"fe":1.4467,"lat":686954.16,"f1":{"P1":[1.0,0.0],"P2":[0.9523,0.0696],"P3":[0.574,0.1656]},"runs":24},{"id":"cnn-r0-w200d4-int8ref","fam":"cnn","rep":"r0","prec":"int8ref","runtime":"tflm-ref","ram":34764,"flash":96664,"e2e":215332.3275,"inf":215330.8808,"fe":1.4467,"lat":21567741.14,"f1":{"P1":[1.0,0.0],"P2":[0.9253,0.0884],"P3":[0.6013,0.1822]},"runs":24}],"energy":{"P_active_mW":9.984,"f_cpu_MHz":64.0,"P_sleep_chip_uW":9.479999999999999,"P_sleep_board_mW":2.9699999999999998,"battery_J":2430.0},"n_runs":2248,"built":"2026-10-29"};
+const FAM = { dt: "Decision tree", rf: "Random forest", mlp: "MLP", cnn: "1-D CNN" };
+const REP = { r0: "raw window", r1: "10 statistics", r2: "statistics + 14 bands", r3: "256-bin spectrum", r4: "statistics + envelope spectrum" };
+const PREC = { fp32: "float32", int8: "int8 PTQ", int8qat: "int8 QAT", int8ref: "int8, reference kernels" };
+const LENS = {
+  P3: "Bearing-disjoint: test faults come from bearings never seen in training (4 classes). The realistic case.",
+  P2: "Recording-wise: a whole motor load is held out, but the same bearings were seen at other loads (10 classes).",
+  P1: "Random windows, as most papers report. Test windows overlap training windows, so scores are inflated."
+};
+const YEAR = 365.25 * 86400;
+const $ = (id) => document.getElementById(id);
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+let lens = "P3";
+
+function fill(sel, opts, def) { sel.innerHTML = opts.map(([v, t]) => `<option value="${v}"${v === def ? " selected" : ""}>${t}</option>`).join(""); }
+fill($("ram"), [2, 4, 8, 16, 32, 64, 128, 256].map((k) => [String(k * 1024), `${k} KB`]), String(32 * 1024));
+fill($("flash"), [4, 16, 64, 256, 960].map((k) => [String(k * 1024), k === 960 ? "960 KB (all application flash)" : `${k} KB`]), String(64 * 1024));
+fill($("sleep"), [[String(DATA.energy.P_sleep_chip_uW * 1e-6), `Chip-level sleep · ${fmt(DATA.energy.P_sleep_chip_uW, 1)} µW`],
+                  [String(DATA.energy.P_sleep_board_mW * 1e-3), `Nano board idle · ${fmt(DATA.energy.P_sleep_board_mW, 2)} mW`]],
+     String(DATA.energy.P_sleep_chip_uW * 1e-6));
+
+function fmt(x, d = 2) { return Number(x).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d }); }
+function sig(x) { if (x >= 1000) return fmt(x, 0); if (x >= 100) return fmt(x, 0); if (x >= 10) return fmt(x, 1); if (x >= 1) return fmt(x, 2); return fmt(x, 3); }
+function kb(b) { return b >= 1024 ? `${sig(b / 1024)} KB` : `${b} B`; }
+function period(r) { const s = 1 / r; if (s >= 3600) return `${sig(s / 3600)} h`; if (s >= 60) return `${sig(s / 60)} min`; if (s >= 1) return `${sig(s)} s`; return `${sig(s * 1000)} ms`; }
+function years(y) { return !isFinite(y) ? "∞" : y >= 1 ? `${fmt(y, 1)} y` : `${fmt(y * 12, 1)} mo`; }
+
+function state() {
+  const r = Math.pow(10, +$("rate").value);
+  return { r, ram: +$("ram").value, flash: +$("flash").value, batt: +$("batt").value, life: +$("life").value, ps: +$("sleep").value };
+}
+
+function evaluate(s) {
+  const Emax = ((s.batt / (s.life * YEAR)) - s.ps) / s.r * 1e6;      // µJ per window allowed by the life target
+  const rows = DATA.models.map((m) => {
+    const why = [];
+    if (m.ram > s.ram) why.push("RAM");
+    if (m.flash > s.flash) why.push("flash");
+    if (m.lat * 1e-6 > 1 / s.r) why.push("too slow");
+    if (!(m.e2e <= Emax)) why.push("energy");
+    const lifeY = s.batt / (s.r * m.e2e * 1e-6 + s.ps) / YEAR;
+    return { m, why, lifeY, f1: m.f1[lens][0], sd: m.f1[lens][1] };
+  });
+  rows.sort((a, b) => (a.why.length > 0) - (b.why.length > 0) || b.f1 - a.f1 || a.m.e2e - b.m.e2e);
+  return { rows, Emax, best: rows.find((x) => x.why.length === 0) || null };
+}
+
+function renderPick(s, ev) {
+  const b = ev.best, el = $("pick");
+  if (!b) {
+    const sleepOnly = s.batt / s.ps / YEAR;
+    const msg = ev.Emax <= 0
+      ? `Power between inferences alone empties this battery in ${years(sleepOnly)}, so no model can reach ${years(s.life)}. Lower the target life, choose a bigger battery or a lower sleep floor.`
+      : `No configuration meets every budget. The tightest one is ${tightest(ev.rows)}. Relax it to see a pick.`;
+    el.innerHTML = `<div><h2>Recommended</h2><p class="none">No model fits.</p><p class="why">${msg}</p></div><div class="kv">${budgetKV(s, ev)}</div>`;
+    return;
+  }
+  const m = b.m, p1 = m.f1.P1[0];
+  const gap = lens !== "P1" && p1 - b.f1 > 0.05 ? `On the leaky split the same model scores ${fmt(p1, 3)}; on this protocol, ${fmt(b.f1, 3)}.` : "";
+  el.innerHTML = `<div>
+      <h2>Recommended</h2>
+      <div class="mid">${m.id}</div>
+      <div class="chips"><span class="chip fam" style="background:var(--${m.fam})">${FAM[m.fam]}</span><span class="chip">${REP[m.rep]}</span><span class="chip">${PREC[m.prec]}</span></div>
+      <p class="why">Most accurate of the ${ev.rows.filter((x) => !x.why.length).length} configurations that fit. ${gap}</p>
+    </div>
+    <div class="kv">
+      <div><span>macro-F1 (${lens})</span><b>${fmt(b.f1, 3)} ± ${fmt(b.sd, 3)}</b></div>
+      <div><span>Battery life</span><b>${years(b.lifeY)}</b></div>
+      <div><span>Energy per window</span><b>${sig(m.e2e)} µJ</b></div>
+      <div><span>Latency per window</span><b>${sig(m.lat / 1000)} ms</b></div>
+      <div><span>Peak RAM</span><b>${kb(m.ram)}</b></div>
+      <div><span>Model flash</span><b>${kb(m.flash)}</b></div>
+      <div><span>Front end share of energy</span><b>${fmt(100 * m.fe / m.e2e, 0)} %</b></div>
+      <div><span>Energy budget per window</span><b>${ev.Emax > 0 ? sig(ev.Emax) + " µJ" : "none"}</b></div>
+    </div>`;
+}
+function budgetKV(s, ev) {
+  return `<div><span>Energy budget per window</span><b class="warn">${ev.Emax > 0 ? sig(ev.Emax) + " µJ" : "none"}</b></div>
+          <div><span>One window every</span><b>${period(s.r)}</b></div>`;
+}
+function tightest(rows) {
+  const c = {}; rows.forEach((x) => x.why.forEach((w) => (c[w] = (c[w] || 0) + 1)));
+  const k = Object.keys(c).sort((a, b) => c[b] - c[a])[0];
+  return { RAM: "the RAM budget", flash: "the flash budget", "too slow": "the inference rate", energy: "the energy budget from battery and target life" }[k] || "a budget";
+}
+
+function renderPlot(s, ev) {
+  const W = 760, H = 330, L = 52, R = 14, T = 12, B = 40;
+  const xs = DATA.models.map((m) => m.e2e);
+  const x0 = Math.floor(Math.log10(Math.min(...xs))), x1 = Math.ceil(Math.log10(Math.max(...xs)));
+  const f1s = DATA.models.map((m) => m.f1[lens][0]);
+  const yLo = Math.max(0, Math.floor((Math.min(...f1s) - 0.02) * 10) / 10), yHi = 1;
+  const X = (e) => L + (Math.log10(e) - x0) / (x1 - x0) * (W - L - R);
+  const Y = (f) => T + (yHi - f) / (yHi - yLo) * (H - T - B);
+  let g = "";
+  for (let d = x0; d <= x1; d++) {
+    const x = X(Math.pow(10, d));
+    g += `<line x1="${x}" x2="${x}" y1="${T}" y2="${H - B}" style="stroke:var(--line)" stroke-width="1"/>`;
+    g += `<text x="${x}" y="${H - B + 16}" text-anchor="middle">${d >= 3 ? fmt(Math.pow(10, d), 0) : Math.pow(10, d)}</text>`;
+  }
+  const step = yHi - yLo > 0.5 ? 0.2 : 0.1;
+  for (let v = yLo; v <= yHi + 1e-9; v += step) {
+    const y = Y(v);
+    g += `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" style="stroke:var(--line)" stroke-width="1"/>`;
+    g += `<text x="${L - 8}" y="${y + 4}" text-anchor="end">${fmt(v, 1)}</text>`;
+  }
+  g += `<text x="${(L + W - R) / 2}" y="${H - 4}" text-anchor="middle">energy per window, front end + inference (µJ, log scale)</text>`;
+  g += `<text transform="translate(13 ${(T + H - B) / 2}) rotate(-90)" text-anchor="middle">macro-F1 (${lens}), higher is better</text>`;
+  if (ev.Emax > 0 && Math.log10(ev.Emax) > x0 && Math.log10(ev.Emax) < x1) {
+    const x = X(ev.Emax);
+    g += `<rect x="${x}" y="${T}" width="${W - R - x}" height="${H - T - B}" style="fill:var(--budget)" opacity="0.06"/>`;
+    g += `<line x1="${x}" x2="${x}" y1="${T}" y2="${H - B}" style="stroke:var(--budget)" stroke-dasharray="5 4" stroke-width="1.5"/>`;
+    g += `<text x="${x + 6}" y="${T + 12}" style="fill:var(--budget)">energy budget ${sig(ev.Emax)} µJ</text>`;
+  }
+  const shape = { fp32: "c", int8: "s", int8qat: "t", int8ref: "x" };
+  for (const r of ev.rows.slice().reverse()) {
+    const m = r.m, cx = X(m.e2e), cy = Y(r.f1), col = `var(--${m.fam})`, op = r.why.length ? 0.22 : 0.95;
+    const t = `<title>${m.id} · F1 ${fmt(r.f1, 3)} · ${sig(m.e2e)} µJ · ${kb(m.ram)} RAM${r.why.length ? " · ruled out: " + r.why.join(", ") : ""}</title>`;
+    const k = shape[m.prec];
+    if (k === "c") g += `<circle class="pt" cx="${cx}" cy="${cy}" r="5" style="fill:${col}" opacity="${op}">${t}</circle>`;
+    else if (k === "s") g += `<rect class="pt" x="${cx - 4.5}" y="${cy - 4.5}" width="9" height="9" style="fill:${col}" opacity="${op}">${t}</rect>`;
+    else if (k === "t") g += `<path d="M${cx} ${cy - 6} L${cx + 5.5} ${cy + 4} L${cx - 5.5} ${cy + 4} Z" style="fill:${col}" opacity="${op}">${t}</path>`;
+    else g += `<path d="M${cx - 4} ${cy - 4} L${cx + 4} ${cy + 4} M${cx + 4} ${cy - 4} L${cx - 4} ${cy + 4}" style="stroke:${col}" stroke-width="2" fill="none" opacity="${op}">${t}</path>`;
+  }
+  if (ev.best) {
+    const cx = X(ev.best.m.e2e), cy = Y(ev.best.f1);
+    g += `<circle cx="${cx}" cy="${cy}" r="10" fill="none" style="stroke:var(--ink)" stroke-width="2"/>`;
+    g += `<text x="${cx + 13}" y="${cy - 8}" style="fill:var(--ink)">pick</text>`;
+  }
+  $("plot").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Accuracy against energy per window for every configuration; models that fit are solid, the others faded">${g}</svg>`;
+}
+
+function renderLegend() {
+  const fams = Object.keys(FAM).filter((f) => DATA.models.some((m) => m.fam === f));
+  $("legend").innerHTML = fams.map((f) => `<span><i style="background:var(--${f})"></i>${FAM[f]}</span>`).join("")
+    + `<span>● float32 &nbsp;■ int8 PTQ &nbsp;▲ int8 QAT &nbsp;✕ reference kernels</span><span>faded = ruled out</span>`;
+}
+
+function renderTable(s, ev) {
+  const hide = $("hide").checked;
+  let h = `<thead><tr><th>#</th><th>Model</th><th>F1 ${lens}</th><th>F1 P1</th><th>µJ / window</th><th>ms</th><th>RAM</th><th>Flash</th><th>Life</th><th>Status</th></tr></thead><tbody>`;
+  ev.rows.forEach((r, i) => {
+    if (hide && r.why.length) return;
+    const m = r.m, cls = r.why.length ? "out" : (ev.best && r === ev.best ? "best" : "");
+    const st = r.why.length ? `<span class="status no">${r.why.join(" · ")}</span>` : `<span class="status ok">fits</span>`;
+    h += `<tr class="${cls}"><td>${i + 1}</td><td><span class="dot" style="background:var(--${m.fam})"></span>${m.id}</td>
+      <td>${fmt(r.f1, 3)} ± ${fmt(r.sd, 3)}</td><td>${fmt(m.f1.P1[0], 3)}</td><td>${sig(m.e2e)}</td><td>${sig(m.lat / 1000)}</td>
+      <td>${kb(m.ram)}</td><td>${kb(m.flash)}</td><td>${years(r.lifeY)}</td><td>${st}</td></tr>`;
+  });
+  $("tbl").innerHTML = h + "</tbody>";
+}
+
+function render() {
+  const s = state();
+  $("rate-out").textContent = `${s.r >= 1 ? fmt(s.r, s.r < 10 ? 1 : 0) : s.r.toPrecision(2)} windows / s · one every ${period(s.r)}`;
+  $("lens-hint").textContent = LENS[lens];
+  const ev = evaluate(s);
+  renderPick(s, ev); renderPlot(s, ev); renderTable(s, ev);
+}
+
+document.querySelectorAll("#lens button").forEach((b) => b.addEventListener("click", () => {
+  lens = b.dataset.p;
+  document.querySelectorAll("#lens button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  render();
+}));
+["ram", "flash", "rate", "batt", "life", "sleep", "hide"].forEach((id) => $(id).addEventListener("input", render));
+$("form").addEventListener("submit", (e) => e.preventDefault());
+$("meta").textContent = `${DATA.models.length} configurations · ${DATA.n_runs.toLocaleString("en-US")} host training runs · costs from the virtual Cortex-M4`;
+$("built").textContent = `Built ${DATA.built} by tools/make_selector.py from results/prehw_costs.csv and results/host_summary.csv.`;
+renderLegend(); render();
+</script>
