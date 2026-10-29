@@ -49,7 +49,11 @@ between protocols (Kendall $\tau$ = \NumTauFamPOnePThree{} between the P1 and P3
 dominates the cost of feature-based models: \NumFeRTwoKcyc{}\,k cycles for R2 features against
 \NumTreeInfMax{} cycles for the largest tree, \NumTreeFeShareMin{} or more of their end-to-end work. Three deployment
 pitfalls surfaced and were fixed before any board measurement: FFT bands below float32 precision, soft- versus
-hard-voting forests, and desktop int8 kernels that round differently from the microcontroller's. Energies here are chip-level estimates; INA219 measurements replace them in the final version.
+hard-voting forests, and desktop int8 kernels that round differently from the microcontroller's. Because no
+family exceeded \NumPThreeNoRFourBest{} on unseen bearings, we added a physics-informed envelope-spectrum front end
+(R4), which raises the best bearing-disjoint macro-F1 to \NumPThreeRFourBest{}. A simulated measurement campaign that
+runs synthetic INA219 samples through the logger's own integration code predicts a session-to-session CV of
+\NumVrigCvMedian{} and about \NumVrigHours{} hours of board time. Energies here are chip-level estimates; INA219 measurements replace them in the final version.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -89,6 +93,9 @@ in emulation;
 \item preliminary accuracy--energy--memory frontiers with hypervolume, bootstrap membership and rank-reversal
 statistics, a battery-life model and a first selection rubric;
 \item three deployment pitfalls, each found by the pipeline's own gates and fixed.
+\item a physics-informed envelope front end (R4) for unseen bearings, verified in C against the Python reference;
+\item a virtual measurement campaign, run through the logger's own C code, that sizes the rig's error budget and the
+campaign duration before the hardware arrives, and an interactive model selector built from the results.
 \end{itemize}
 
 % =====================================================================================================================
@@ -151,8 +158,14 @@ P3 bearing-disjoint & 4 & 3 & \NumPThreeTrain{} / \NumPThreeVal{} & \NumPThreeTe
 information, so windows are not normalised individually). \textbf{R1} has 10 time-domain statistics: mean, RMS,
 standard deviation, peak, peak-to-peak, crest, kurtosis, skewness, shape and impulse factor. \textbf{R2} is R1 plus
 the log power of 14 bands of 375~Hz from a Hann-windowed 1024-point FFT, covering 0--5.25~kHz.
-\textbf{R3} is the log magnitude of FFT bins 1--256. Features are z-scored with training statistics of each fold;
-the deployed models use P2 fold 0.
+\textbf{R3} is the log magnitude of FFT bins 1--256. \textbf{R4}, added after the first sweep (Section~\ref{sec:r4}),
+is the classical envelope analysis of bearing diagnostics \cite{randall2011rolling,smith2015rolling} reduced to a fixed
+vector: the 2--5~kHz band of the un-windowed 1024-point FFT is shifted to baseband, a 256-point inverse FFT gives the
+envelope (at 3~kHz), and the log magnitude of its Hann-windowed spectrum at 11.7--375~Hz (32 bins, divided by their
+mean) captures the impact rates of outer-race, inner-race and ball faults (about 3.6, 5.4 and 4.7 times the shaft
+speed, 70--165~Hz here). These rates depend on where the fault is, not on its size, and no shaft-speed input is needed.
+R4 also carries R1's statistics except the window mean (Section~\ref{sec:r4}): 41 features. Features are z-scored with
+training statistics of each fold; the deployed models use P2 fold 0.
 
 \subsection{Model families and sweep}
 Table~\ref{tab:sweep} lists the \NumConfigs{} configurations. CNN blocks are Conv (kernel 9 and stride 2 in the first
@@ -167,16 +180,16 @@ mean over folds and seeds. The deployed instance is P2, fold 0, seed 0.
 
 \begin{table}[t]
 \centering
-\caption{Design matrix (68 model IDs).}
+\caption{Design matrix (\NumConfigs{} model IDs; R4 rows added after the first sweep).}
 \label{tab:sweep}
 \setlength{\tabcolsep}{3pt}
 \begin{tabular}{llll r}
 \toprule
 Family & Input & Sizes & Precision & IDs\\
 \midrule
-Decision tree & R1, R2 & depth 4, 6, 8, 12 & fp32 & 8\\
-Random forest & R1, R2 & 5/10/25 trees $\times$ depth 6/10 & fp32 & 12\\
-MLP & R2 & 16, 32, 64, 32-32, 64-64 & fp32, int8 & 10\\
+Decision tree & R1, R2, R4 & depth 4, 6, 8, 12 & fp32 & 12\\
+Random forest & R1, R2, R4 & 5/10/25 trees $\times$ depth 6/10 & fp32 & 18\\
+MLP & R2, R4 & 16, 32, 64, 32-32, 64-64 & fp32, int8 & 20\\
 MLP & R3 & 32, 64, 128 & fp32, int8 & 6\\
 1-D CNN & R0 & width 0.25--2 $\times$ 2/4 blocks & fp32, int8, QAT & 24\\
 CNN ablation & R0 & same 8 & int8, ref.\ kernels & 8\\
@@ -217,6 +230,21 @@ each family after min--max normalisation (reference point 1.1; pymoo \cite{blank
 probability that a model is non-dominated over 1000 paired bootstrap resamples of the test windows. Family rankings
 are compared with Kendall's $\tau$. Battery life uses $P_\text{avg} = r\,E + P_\text{sleep}$ and a CR2032 cell
 (225~mAh, 3~V); the crossover rate is $r^\ast = P_\text{sleep}/E$.
+
+\subsection{Virtual measurement campaign}
+\label{sec:vrig}
+To plan the hardware phase, the campaign of the board contract is replayed on a simulated rig. For every model, the
+window schedule (IDLE, then RUN, FRONT and E2E with $N$ chosen so that each window lasts at least 10\,s) follows from
+its latency on the virtual Cortex-M4. The board current in each window is synthesised from a stated power model:
+\NumVrigIdleMa{}\,mA at 5\,V in the idle loop, \NumVrigActiveMa{}\,mA more while the CPU runs (the nRF52840's
+active current through the board's buck converter), \NumVrigNoiseMa{}\,mA of per-sample noise, and baseline drift
+within and between windows and sessions. A small C program quantises the current exactly as the INA219 registers do
+(10\,$\mu$V shunt and 4\,mV bus LSBs, $\pm$40\,mV range, \SI{532}{\micro s} conversions, offset and 0.5\,\% gain
+error) and integrates it with the logger's own C core, the code that will run on the ESP32; the measurement script's
+parser reads the resulting lines. Energy per inference is then recovered as the analysis will do it,
+$\Delta E = (\bar P_\text{RUN} - \bar P_\text{IDLE})\,T_\text{RUN}/N$, over three sessions and 30 Monte-Carlo replications,
+and compared with the injected truth. The power-model values are assumptions; the first rig sessions (gate M3) replace
+them. What the simulation establishes is which effects dominate the error, and how long the campaign will take.
 
 \input{results_section}
 

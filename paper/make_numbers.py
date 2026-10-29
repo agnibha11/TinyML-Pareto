@@ -59,11 +59,11 @@ def build() -> dict[str, str]:
     m["NumPactmW"] = f"{h['energy_model']['P_active_mW']:.2f}"
     rr = par[par.vector == -1].set_index("rep").max_abs_err
     m["NumParityMax"] = f"\\num{{{rr.max():.1e}}}"
-    for rep in ("r1", "r2", "r3"):
+    for rep in ("r1", "r2", "r3", "r4"):
         if rep in rr:
             m[f"NumParity{rep.upper()}"] = f"\\num{{{rr[rep]:.1e}}}"
     fe = h["frontend_cycles"]
-    for rep, key in (("r0", "RZero"), ("r1", "ROne"), ("r2", "RTwo"), ("r3", "RThree")):
+    for rep, key in (("r0", "RZero"), ("r1", "ROne"), ("r2", "RTwo"), ("r3", "RThree"), ("r4", "RFour")):
         if rep in fe:
             m[f"NumFe{key}Kcyc"] = f"{fe[rep] / 1e3:.1f}"
             m[f"NumFe{key}Us"] = f"{fe[rep] / 64:.0f}"
@@ -172,6 +172,73 @@ def build() -> dict[str, str]:
         snr0["fam"] = snr0.model_id.str.split("-").str[0].map(fam)
         for f, g in snr0.groupby("fam"):
             m[f"NumSnrZeroPTwo{f}"] = f3(g.f1_macro_mean.max())
+    # R4 (physics-informed envelope front end) against the best R1-R3 configuration of the same family
+    clean["rep"] = clean.model_id.str.split("-").str[1]
+    for p, name in (("P1", "POne"), ("P2", "PTwo"), ("P3", "PThree")):
+        cp = clean[clean.protocol == p]
+        for f in ("DT", "RF", "MLP"):
+            g = cp[cp.fam == f]
+            r4, base = g[g.rep == "r4"], g[g.rep.isin(["r1", "r2", "r3"])]
+            if len(r4) and len(base):
+                b4, bb = r4.sort_values("f1_macro_mean").iloc[-1], base.sort_values("f1_macro_mean").iloc[-1]
+                m[f"Num{name}{f}RFourBest"], m[f"Num{name}{f}RFourBestStd"] = f3(b4.f1_macro_mean), f3(b4.f1_macro_std)
+                m[f"Num{name}{f}RFourBestModel"] = "\\texttt{" + b4.model_id + "}"
+                m[f"Num{name}{f}BaseBest"], m[f"Num{name}{f}BaseBestStd"] = f3(bb.f1_macro_mean), f3(bb.f1_macro_std)
+                m[f"Num{name}{f}BaseBestModel"] = "\\texttt{" + bb.model_id + "}"
+        r4all = cp[cp.rep == "r4"]
+        if len(r4all):
+            b = r4all.sort_values("f1_macro_mean").iloc[-1]
+            m[f"Num{name}RFourBest"], m[f"Num{name}RFourBestModel"] = f3(b.f1_macro_mean), "\\texttt{" + b.model_id + "}"
+        nonr4 = cp[cp.rep != "r4"]
+        if len(nonr4):
+            b = nonr4.sort_values("f1_macro_mean").iloc[-1]
+            m[f"Num{name}NoRFourBest"], m[f"Num{name}NoRFourBestModel"] = f3(b.f1_macro_mean), "\\texttt{" + b.model_id + "}"
+    # the window mean as a recording fingerprint (why R4 drops it): ablation runs and the z-score of the outlier
+    ab = RES / "ablation_r4_mean.csv"
+    if ab.exists():
+        a = pd.read_csv(ab)
+        a = a[(a.protocol == "P2") & (a.fold == 0) & a.model_id.str.startswith("mlp")]
+        new = []
+        for r in a.itertuples(index=False):
+            f = RES / "host" / f"{r.model_id}__P2__f0__s{r.seed}.json"
+            if f.exists():
+                new.append(json.loads(f.read_text())["f1_macro"])
+        m["NumAblMeanWith"] = f3(a.f1_macro_with_mean.mean())
+        if new:
+            m["NumAblMeanWithout"] = f3(float(np.mean(new)))
+    try:
+        import sys
+        sys.path.insert(0, str(REPO / "ml"))
+        import features as FE
+        from splits import load_split
+        F1 = np.asarray(FE.cached("r1"))
+        sp = load_split("P2", 0)
+        mu, sd = F1[sp["train"], 0].mean(), F1[sp["train"], 0].std()
+        m["NumMeanZMax"] = f"{np.abs((F1[sp['test'], 0] - mu) / sd).max():.1f}"
+    except Exception:  # noqa: BLE001 - data not present (e.g. CI): leave the macro out
+        pass
+    # virtual measurement campaign (tools/vrig/campaign.py)
+    vs = RES / "vrig" / "summary.json"
+    if vs.exists():
+        v = json.loads(vs.read_text())
+        m["NumVrigHours"] = f"{v['campaign_hours']:.0f}"
+        m["NumVrigHoursLat"] = f"{v['campaign_hours_lat']:.0f}"
+        m["NumVrigHoursAdaptive"] = f"{v['campaign_hours_adaptive_lat']:.0f}"
+        m["NumVrigCvMedian"] = f"{v['cv_median_pct_1ohm']:.2f}\\,\\%"
+        m["NumVrigCvMaxPNinetyFive"] = f"{v['cv_p95_max_pct_1ohm']:.1f}\\,\\%"
+        m["NumVrigBiasMax"] = f"{v['bias_abs_max_pct_1ohm']:.1f}\\,\\%"
+        m["NumVrigMinDetect"] = f"{v['min_detectable_power_diff_pct']:.1f}\\,\\%"
+        sens = pd.read_csv(RES / "vrig" / "sensitivity.csv")
+        sd_ = sens[(sens.sweep == "block_drift") & (sens.shunt_ohm == 1.0)].sort_values("x")
+        below, above = sd_[sd_.cv_p95_pct < 3.0].x.max(), sd_[sd_.cv_p95_pct >= 3.0].x.min()
+        m["NumVrigDriftGateLo"], m["NumVrigDriftGateHi"] = f"{below:g}", f"{above:g}"
+        m["NumVrigSlowModel"] = "\\texttt{" + v["slowest_models"][0]["model_id"] + "}"
+        m["NumVrigSlowHours"] = f"{v['slowest_models'][0]['hours']:.1f}"
+        m["NumVrigModels"] = str(v["n_models"])
+        a_ = v["assumptions"]
+        m["NumVrigIdleMa"] = f"{a_['i_idle_a'] * 1e3:g}"
+        m["NumVrigActiveMa"] = f"{a_['i_active_a'] * 1e3:g}"
+        m["NumVrigNoiseMa"] = f"{a_['noise_a'] * 1e3:g}"
     fs = h.get("f_star_hz", {})
     if fs:
         chip = {k.split("|")[0]: v for k, v in fs.items() if k.endswith("|chip")}

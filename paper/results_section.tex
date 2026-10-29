@@ -79,6 +79,45 @@ CNN & \NumPOneCNNBest{}$\pm$\NumPOneCNNBestStd{} & \NumPTwoCNNBest{}$\pm$\NumPTw
 \end{tabular}
 \end{table}
 
+\subsection{A physics-informed front end for unseen bearings (R4)}
+\label{sec:r4}
+Without R4, no configuration exceeds \NumPThreeNoRFourBest{} macro-F1 on unseen bearings
+(\NumPThreeNoRFourBestModel{}). The spectral representations describe the resonance band in absolute terms, and its
+level and shape change with fault size, the variable P3 holds out. R4 keeps only what envelope analysis looks at, the
+shape of the envelope spectrum around the fault impact rates. Table~\ref{tab:r4} compares the best R4 configuration of
+each family with its best R1--R3 configuration. On unseen bearings R4 raises the best macro-F1 to \NumPThreeRFourBest{}
+(\NumPThreeRFourBestModel{}); on the leaky and recording-wise splits it costs a few points, the same trade-off the
+protocol comparison shows: the features that fit the training recordings best are not the ones that transfer. The R4
+front end needs \NumFeRFourKcyc{}\,k estimated cycles on the virtual Cortex-M4 (R2: \NumFeRTwoKcyc{}\,k), and its C
+implementation matches the Python reference to \NumParityRFour{}.
+
+\begin{table}[t]
+\centering
+\caption{Best configuration on R1--R3 against best on R4, per family: macro-F1, mean $\pm$ std over folds and
+seeds.}
+\label{tab:r4}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{llccc}
+\toprule
+Family & Input & P1 leaky & P2 recording & P3 bearing \\
+\midrule
+DT  & R1--R3 & \NumPOneDTBaseBest{} & \NumPTwoDTBaseBest{} & \NumPThreeDTBaseBest{}$\pm$\NumPThreeDTBaseBestStd{}\\
+    & R4     & \NumPOneDTRFourBest{} & \NumPTwoDTRFourBest{} & \NumPThreeDTRFourBest{}$\pm$\NumPThreeDTRFourBestStd{}\\
+RF  & R1--R3 & \NumPOneRFBaseBest{} & \NumPTwoRFBaseBest{} & \NumPThreeRFBaseBest{}$\pm$\NumPThreeRFBaseBestStd{}\\
+    & R4     & \NumPOneRFRFourBest{} & \NumPTwoRFRFourBest{} & \NumPThreeRFRFourBest{}$\pm$\NumPThreeRFRFourBestStd{}\\
+MLP & R1--R3 & \NumPOneMLPBaseBest{} & \NumPTwoMLPBaseBest{} & \NumPThreeMLPBaseBest{}$\pm$\NumPThreeMLPBaseBestStd{}\\
+    & R4     & \NumPOneMLPRFourBest{} & \NumPTwoMLPRFourBest{} & \NumPThreeMLPRFourBest{}$\pm$\NumPThreeMLPRFourBestStd{}\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{A recording fingerprint.} The first R4 version kept all ten R1 statistics, and every R4 MLP scored about
+\NumAblMeanWith{} macro-F1 on P2 fold 0 while the other folds stayed near 0.9. The cause is R1's first feature, the
+window mean: it is the accelerometer's DC offset, which differs from recording to recording, and one held-out
+recording lies \NumMeanZMax{} training standard deviations away from the rest. A tree only thresholds such a value;
+an MLP extrapolates on it. Without the mean, the same R4 MLPs average \NumAblMeanWithout{} on that fold. R4 drops the
+mean; R1--R3 keep it as frozen in the feature specification, so their MLP scores on P2 carry the same effect.
+
 \subsection{The front end dominates feature-based models (RQ2)}
 Fig.~\ref{fig:breakdown} separates the two phases on the virtual Cortex-M4. A decision tree or forest needs
 \NumTreeInfMin{}--\NumTreeInfMax{} estimated cycles per window, but its R1 front end needs \NumFeROneKcyc{}\,k cycles
@@ -169,12 +208,41 @@ Adding white noise to the test windows separates models that clean accuracy cann
 configuration of each family keeps a macro-F1 of \NumSnrZeroPTwoDT{} (DT), \NumSnrZeroPTwoRF{} (RF),
 \NumSnrZeroPTwoMLP{} (MLP) and \NumSnrZeroPTwoCNN{} (CNN).
 
+\subsection{What the rig will resolve, and how long it will take}
+\label{sec:vrigres}
+The virtual campaign (Section~\ref{sec:vrig}, Fig.~\ref{fig:vrig}) gives a median session-to-session coefficient of
+variation of \NumVrigCvMedian{} for the energy per inference with the 1\,$\Omega$ shunt (\NumVrigCvMaxPNinetyFive{} at
+the 95th percentile for the worst model), so the M3 gate (CV $< 3$\,\%) is within reach, and two workloads whose power
+differs by \NumVrigMinDetect{} can be told apart. The bias, at most \NumVrigBiasMax{}, is mostly the INA219's 0.5\,\% gain error,
+which the known-load validation step calibrates. Precision is set by the stability of the board's baseline between the
+IDLE window and the window it is subtracted from, not by the INA219: changing the per-sample noise a hundredfold or the
+shunt from 0.1 to 1\,$\Omega$ moves the error by tenths of a percent, whereas a baseline shift between
+\NumVrigDriftGateLo{} and \NumVrigDriftGateHi{}\,\% takes the 95th-percentile CV past the gate. The contract's rule of an
+IDLE window immediately before every measured window is therefore the important one. The whole campaign for
+\NumVrigModels{} models takes about \NumVrigHours{} hours of board time, \NumVrigHoursLat{} of them in the LAT command
+(101 timed runs on 5 inputs), mostly for a few slow float and reference-kernel CNNs (\NumVrigSlowModel{} alone needs
+\NumVrigSlowHours{}\,h). Capping LAT at about one minute per model (between 11 and 101 repetitions) brings the campaign
+to about \NumVrigHoursAdaptive{} hours.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.66\textwidth]{fig_vrig_sensitivity}\hfill
+\includegraphics[width=0.32\textwidth]{fig_campaign_time}
+\caption{Virtual measurement campaign. Left and centre: error of the energy per inference recovered from simulated
+INA219 windows (3 sessions, 30 replications) against board noise and against the baseline shift between the IDLE and
+RUN windows, for the 0.1 and 1\,$\Omega$ shunts. Right: board time per model group.}
+\label{fig:vrig}
+\end{figure*}
+
 % =====================================================================================================================
 \section{Toward a Selection Rubric}
 Fig.~\ref{fig:rubric} gives the most accurate P3 model that fits each RAM and energy budget. It is the first version
 of the rubric the study will deliver. The procedure: fix RAM and flash budgets; derive an energy budget from the
 inference rate and the target battery life; if the rate is far below $r^\ast$, take the most accurate model that fits
 RAM; otherwise take the cheapest model above the accuracy floor. Always quote bearing-disjoint (P3) accuracy, never P1.
+The repository also publishes the rubric as an interactive page (\texttt{docs/selector/index.html}): given RAM and
+flash budgets, an inference rate, a battery and a target life, it returns the most accurate configuration that fits
+and the reason every other one does not.
 
 
 % =====================================================================================================================
@@ -195,6 +263,7 @@ Before any hardware arrived, the full pipeline was built and gated in emulation:
 \NumConfigs{} deployable configurations, a virtual Cortex-M4 that runs the exact deployable code, and firmware bundles
 that link for the board. The preliminary answer to the project's question is already protocol-dependent. Leaky
 evaluation makes every family look interchangeable; bearing-disjoint evaluation does not. For feature-based models,
-the front end, not the classifier, sets the energy cost. The hardware campaign now has to confirm these effects with
-measured energy.
+the front end, not the classifier, sets the energy cost, and a physics-informed front end (R4) buys back much of the
+accuracy that leakage-free evaluation removes. The simulated campaign shows that the rig can resolve these effects if
+the board's baseline stays stable between windows. The hardware campaign now has to confirm them with measured energy.
 
