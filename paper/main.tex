@@ -11,6 +11,11 @@
 \usepackage{xcolor}
 \usepackage{siunitx}
 \usepackage[hidelinks]{hyperref}
+\usepackage{placeins}
+% Let floats sit near their first reference instead of piling up after the references.
+\renewcommand{\topfraction}{0.9}\renewcommand{\dbltopfraction}{0.9}\renewcommand{\bottomfraction}{0.6}
+\renewcommand{\textfraction}{0.07}\renewcommand{\floatpagefraction}{0.75}\renewcommand{\dblfloatpagefraction}{0.75}
+\setcounter{topnumber}{3}\setcounter{dbltopnumber}{2}\setcounter{totalnumber}{5}
 \sisetup{group-separator={,},group-minimum-digits=4}
 \graphicspath{{figs/}}
 \input{numbers}
