@@ -8,6 +8,11 @@ Formulas are computed in float64 and returned as float32, so the reference is no
     r2(X)  (n, 24)   r1 + 14 log10 band powers of the Hann-windowed 1024-point rFFT (bins 32b..32b+31, b = 0..13,
                      0-5250 Hz; spec v1.1 drops bands 14-15, which lie in the 5 kHz low-pass stop-band)
     r3(X)  (n, 256)  log10(|X[k]| + 1e-6), k = 1..256
+    r4(X)  (n, 42)   r1 + 32 log envelope-spectrum bins (spec v1.2): the 2.0-5.0 kHz band of the un-windowed 1024-point
+                     rFFT (bins 171..426) shifted to baseband, |256-point IDFT| = envelope at 3 kHz, minus its mean,
+                     times a 256-point Hann, |256-point rFFT| bins 1..32 (11.7-375 Hz, the bearing fault-frequency
+                     range), each divided by the mean of the 32, log10(. + 1e-6). Physics-informed (envelope
+                     analysis) and independent of shaft speed.
     r0 normalisation  (x - mu) / sigma with two global scalars from the training samples
 
 Also:
@@ -27,11 +32,13 @@ import numpy as np
 REPO = Path(__file__).resolve().parents[1]
 PROCESSED = REPO / "data" / "processed"
 N = 1024
-N_FEAT = {"r1": 10, "r2": 24, "r3": 256}
+N_FEAT = {"r1": 10, "r2": 24, "r3": 256, "r4": 42}
 N_BANDS = 14                                   # spec v1.1 (was 16)
 R1_NAMES = ["mean", "rms", "std", "peak", "p2p", "crest", "kurtosis", "skewness", "shape", "impulse"]
 R2_NAMES = R1_NAMES + [f"band{b:02d}" for b in range(N_BANDS)]
 R3_NAMES = [f"logmag{k:03d}" for k in range(1, 257)]
+ENV_K0, ENV_NB, ENV_NK = 171, 256, 32          # R4: band bins 171..426 (2004-5004 Hz), 256-point envelope, 32 bins
+R4_NAMES = R1_NAMES + [f"env{k:02d}" for k in range(1, ENV_NK + 1)]
 
 
 def hann() -> np.ndarray:
@@ -80,7 +87,28 @@ def r3(X: np.ndarray) -> np.ndarray:
     return np.log10(np.abs(S[:, 1:257]) + 1e-6).astype(np.float32)
 
 
-FUNCS = {"r1": r1, "r2": r2, "r3": r3}
+def hann256() -> np.ndarray:
+    """Symmetric 256-point Hann for R4, float32 values of the float64 formula (the C front end computes the same
+    numbers once in fe_init with double-precision cos)."""
+    k = np.arange(ENV_NB, dtype=np.float64)
+    return (0.5 - 0.5 * np.cos(2.0 * np.pi * k / (ENV_NB - 1))).astype(np.float32).astype(np.float64)
+
+
+def envelope_spectrum(X: np.ndarray) -> np.ndarray:
+    """(n, 32) log envelope spectrum of R4 (see module docstring and features_spec.md v1.2)."""
+    X = np.asarray(X, dtype=np.float64).reshape(-1, N)
+    band = np.fft.rfft(X, axis=1)[:, ENV_K0:ENV_K0 + ENV_NB]     # 2.0-5.0 kHz, shifted to baseband
+    env = np.abs(np.fft.ifft(band, axis=1))                       # envelope, 256 samples at 3 kHz
+    env = (env - env.mean(axis=1, keepdims=True)) * hann256()[None, :]
+    E = np.abs(np.fft.rfft(env, axis=1))[:, 1:ENV_NK + 1]         # 11.7-375 Hz
+    return np.log10(E / E.mean(axis=1, keepdims=True) + 1e-6)
+
+
+def r4(X: np.ndarray) -> np.ndarray:
+    return np.concatenate([r1(X), envelope_spectrum(X).astype(np.float32)], axis=1)
+
+
+FUNCS = {"r1": r1, "r2": r2, "r3": r3, "r4": r4}
 
 
 def compute(rep: str, X: np.ndarray, batch: int = 2048) -> np.ndarray:
@@ -145,6 +173,6 @@ def cached(rep: str) -> np.ndarray:
 
 if __name__ == "__main__":
     W = windows()
-    for rep in ("r1", "r2", "r3"):
+    for rep in ("r1", "r2", "r3", "r4"):
         F = cached(rep)
         print(f"{rep}: {F.shape} finite={np.isfinite(F).all()}")

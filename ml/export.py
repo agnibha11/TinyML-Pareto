@@ -2,7 +2,7 @@
 """Export the deployed instances (P2, fold 0, seed 0) and the handoff files (CONTRACT.md sections 4-6).
 
 Writes:
-    handoff/norm_constants.npz / .h       P2 fold-0 training statistics (R0 mu/sigma, R1-R3 mean/std)
+    handoff/norm_constants.npz / .h       P2 fold-0 training statistics (R0 mu/sigma, R1-R4 mean/std)
     handoff/test_vectors/ids.npy          100 fixed window ids, 10 per class, from the P2 fold-0 test set
     handoff/test_vectors/raw.npy, r{1,2,3}.npy, r{1,2,3}_norm.npy, r0_norm.npy
     handoff/test_vectors/outputs/<model_id>.npy   host outputs in exactly the form VERIFY returns
@@ -61,7 +61,7 @@ def norm_constants(split) -> dict[str, np.ndarray]:
     tr = split["train"]
     r0 = FE.R0Norm.fit(W[tr])
     out = {"r0_mu": np.float32(r0.mu), "r0_sigma": np.float32(r0.sigma)}
-    for rep in ("r1", "r2", "r3"):
+    for rep in ("r1", "r2", "r3", "r4"):
         n = FE.Normalizer.fit(FE.cached(rep)[tr])
         out[f"{rep}_mean"], out[f"{rep}_std"] = n.mean, n.std
     return out
@@ -74,7 +74,7 @@ def write_norm(nc: dict) -> None:
              "#pragma once", "",
              f"static const float g_r0_mu = {float(nc['r0_mu']):.9e}f;",
              f"static const float g_r0_sigma = {float(nc['r0_sigma']):.9e}f;", ""]
-    for rep, n in (("r1", 10), ("r2", 24), ("r3", 256)):
+    for rep, n in (("r1", 10), ("r2", 24), ("r3", 256), ("r4", 42)):
         for k in ("mean", "std"):
             lines += [f"static const float g_{rep}_{k}[{n}] = {{", c_floats(nc[f"{rep}_{k}"]), "};", ""]
     (HANDOFF / "norm_constants.h").write_text("\n".join(lines))
@@ -95,7 +95,7 @@ def write_test_vectors(ids, nc) -> dict[str, np.ndarray]:
     raw = np.asarray(FE.windows()[ids], dtype=np.float32)
     tv = {"ids": ids, "raw": raw,
           "r0_norm": FE.R0Norm(float(nc["r0_mu"]), float(nc["r0_sigma"]))(raw)}
-    for rep in ("r1", "r2", "r3"):
+    for rep in ("r1", "r2", "r3", "r4"):
         F = FE.compute(rep, raw)
         tv[rep] = F
         tv[f"{rep}_norm"] = FE.Normalizer(nc[f"{rep}_mean"], nc[f"{rep}_std"])(F)

@@ -1,4 +1,4 @@
-// frontend.h - C front end R0..R3 (handoff/features_spec.md v1), float32, no dynamic allocation.
+// frontend.h - C front end R0..R4 (handoff/features_spec.md v1.2), float32, no dynamic allocation.
 //
 // Portable C99 + CMSIS-DSP (arm_rfft_fast_f32), so the same file builds for the board (Arduino_CMSIS-DSP 5.7.0), the
 // virtual MCU (tools/vmcu) and the PC (host simulation). Checked against ml/features.py by the M2 parity test
@@ -12,7 +12,8 @@ extern "C" {
 
 #define FE_N 1024
 
-// Call once before any fe_r2 / fe_r3 call (initialises the CMSIS-DSP rFFT instance). Returns 0 on success.
+// Call once before any fe_r2 / fe_r3 / fe_r4 call (initialises the CMSIS-DSP rFFT instances and R4's 256-point
+// Hann window). Returns 0 on success.
 int fe_init(void);
 
 // R0: out[i] = (x[i] - mu) / sigma, i = 0..1023.
@@ -24,6 +25,13 @@ void fe_r1(const float *x, float *out10);
 void fe_r2(const float *x, float *out24);
 // R3: log10(|X[k]| + 1e-6), k = 1..256.
 void fe_r3(const float *x, float *out256);
+// R4: R1 + 32 log envelope-spectrum bins (spec v1.2): 2.0-5.0 kHz band of the 1024-point rFFT shifted to baseband,
+// |256-point inverse cFFT| = envelope, minus its mean, times a 256-point Hann, |256-point rFFT| bins 1..32,
+// divided by their mean, log10(. + 1e-6).
+#define FE_ENV_K0 171
+#define FE_ENV_NB 256
+#define FE_ENV_NK 32
+void fe_r4(const float *x, float *out42);
 // In-place z-score: f[i] = (f[i] - mean[i]) / std[i].
 void fe_zscore(float *f, const float *mean, const float *std, int n);
 

@@ -34,7 +34,7 @@ from tools.contract import c_name  # noqa: E402
 
 BENCH = REPO / "firmware" / "bench"
 OUT = BENCH / "models"
-N_FEAT = {"r0": 1024, "r1": 10, "r2": 24, "r3": 256}
+N_FEAT = {"r0": 1024, "r1": 10, "r2": 24, "r3": 256, "r4": 42}
 
 FE_WRAPPERS = """
 static int s_fe_ready = 0;
@@ -43,6 +43,7 @@ static void fe_rep0(const float *x, float *f) { fe_r0(x, g_r0_mu, g_r0_sigma, f)
 static void fe_rep1(const float *x, float *f) { fe_r1(x, f); fe_zscore(f, g_r1_mean, g_r1_std, 10); }
 static void fe_rep2(const float *x, float *f) { fe_r2(x, f); fe_zscore(f, g_r2_mean, g_r2_std, 24); }
 static void fe_rep3(const float *x, float *f) { fe_r3(x, f); fe_zscore(f, g_r3_mean, g_r3_std, 256); }
+static void fe_rep4(const float *x, float *f) { fe_r4(x, f); fe_zscore(f, g_r4_mean, g_r4_std, 42); }
 static int s_last_cls = 0;
 static int tree_outputs(float *o, int n) {
   const int m = n < 10 ? n : 10;

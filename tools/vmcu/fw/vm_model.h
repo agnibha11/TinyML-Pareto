@@ -6,7 +6,7 @@
 typedef struct {
   const char *model_id;   // CONTRACT.md section 4
   const char *runtime;    // "tflm-cmsis" | "tflm-ref" | "emlearn"
-  int rep;                // 0..3 = R0..R3
+  int rep;                // 0..4 = R0..R4
   int (*setup)(uint32_t *arena_used_bytes);   // never measured
   int (*infer)(const float *features, int *cls);  // RUN phase: quantise input, Invoke/predict, argmax
   int (*outputs)(float *out, int max_n);      // dequantised outputs (softmax) or one-hot for trees

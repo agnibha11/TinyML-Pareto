@@ -14,16 +14,16 @@ import re
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-CONTRACT_VERSION = "1.0-rc3"
+CONTRACT_VERSION = "1.0-rc4"
 
 # §2
 CLASSES_JSON = REPO / "handoff" / "classes.json"
 
 # §4
 FAMILIES = ("dt", "rf", "mlp", "cnn")
-INPUT_REPS = ("r0", "r1", "r2", "r3")
+INPUT_REPS = ("r0", "r1", "r2", "r3", "r4")
 PRECISIONS = ("fp32", "int8", "int8qat", "int8ref")
-MODEL_ID_RE = re.compile(r"^(dt|rf|mlp|cnn)-(r[0-3])-([a-z0-9]+)-(fp32|int8|int8qat|int8ref)$")
+MODEL_ID_RE = re.compile(r"^(dt|rf|mlp|cnn)-(r[0-4])-([a-z0-9]+)-(fp32|int8|int8qat|int8ref)$")
 _CONFIG_RE = {
     "dt": re.compile(r"^d\d+$"),
     "rf": re.compile(r"^t\d+d\d+$"),
@@ -66,11 +66,11 @@ def parse_model_id(model_id: str) -> dict[str, str]:
     if not _CONFIG_RE[family].match(config):
         raise ValueError(f"model_id {model_id!r}: size token {config!r} is not valid for family {family!r}")
     if family in ("dt", "rf") and (input_rep == "r0" or precision != "fp32"):
-        raise ValueError(f"model_id {model_id!r}: trees take features (r1-r3) and are fp32 in the main sweep")
+        raise ValueError(f"model_id {model_id!r}: trees take features (r1-r4) and are fp32 in the main sweep")
     if family == "cnn" and input_rep != "r0":
         raise ValueError(f"model_id {model_id!r}: CNNs take the raw window (r0)")
     if family == "mlp" and input_rep == "r0":
-        raise ValueError(f"model_id {model_id!r}: MLPs take features (r1-r3)")
+        raise ValueError(f"model_id {model_id!r}: MLPs take features (r1-r4)")
     if precision == "int8ref" and family != "cnn":
         raise ValueError(f"model_id {model_id!r}: int8ref (reference-kernel ablation) exists only for CNNs")
     return {"family": family, "input_rep": input_rep, "config": config, "precision": precision}

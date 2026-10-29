@@ -34,11 +34,12 @@ static void frontend(int rep, const float *x, float *f) {
     case 0: fe_r0(x, g_r0_mu, g_r0_sigma, f); break;
     case 1: fe_r1(x, f); fe_zscore(f, g_r1_mean, g_r1_std, 10); break;
     case 2: fe_r2(x, f); fe_zscore(f, g_r2_mean, g_r2_std, 24); break;
-    default: fe_r3(x, f); fe_zscore(f, g_r3_mean, g_r3_std, 256); break;
+    case 3: fe_r3(x, f); fe_zscore(f, g_r3_mean, g_r3_std, 256); break;
+    default: fe_r4(x, f); fe_zscore(f, g_r4_mean, g_r4_std, 42); break;
   }
 }
 
-static const int k_rep_len[4] = {1024, 10, 24, 256};
+static const int k_rep_len[5] = {1024, 10, 24, 256, 42};
 
 // --- painted-stack high-water mark ------------------------------------------------------------------------------
 // main() paints PAINT_BYTES below its own stack pointer (inline, through a volatile pointer, so the stores cannot
@@ -74,7 +75,7 @@ int main(void) {
 
   // M2 parity: every representation used by this image, on the 100 test vectors.
   if (g_vm_emit_parity) {
-    for (int rep = 1; rep <= 3; ++rep) {
+    for (int rep = 1; rep <= 4; ++rep) {
       for (int i = 0; i < VM_N_TV; ++i) {
         char head[32];
         frontend(rep, g_vm_tv[i], s_feat);

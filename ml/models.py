@@ -5,7 +5,8 @@ One *architecture* is trained per (protocol, fold, seed). It yields one or more 
     mlp       -> fp32 and int8 (PTQ of the same trained weights)
     cnn       -> fp32, int8 (PTQ), int8qat (QAT fine-tune), int8ref (the int8 file run on TFLM reference kernels;
                  identical predictions, differs only in hardware cost)
-68 model IDs in total (execution plan, "Model sweep").
+68 model IDs from the execution plan's sweep, plus 20 on the physics-informed R4 front end (envelope spectrum,
+features_spec.md v1.2): trees, forests and MLPs, the same sizes as on R1/R2. 88 model IDs in total.
 """
 from __future__ import annotations
 
@@ -18,7 +19,7 @@ os.environ.setdefault("TF_USE_LEGACY_KERAS", "1")
 @dataclass(frozen=True)
 class Arch:
     family: str           # dt rf mlp cnn
-    rep: str              # r0..r3
+    rep: str              # r0..r4
     size: str             # d8 | t10d6 | h32x32 | w050d4
     hp: dict = field(default_factory=dict, compare=False, hash=False)
 
@@ -42,10 +43,10 @@ class Arch:
 
 def all_archs() -> list[Arch]:
     a: list[Arch] = []
-    for rep in ("r1", "r2"):
+    for rep in ("r1", "r2", "r4"):
         for d in (4, 6, 8, 12):
             a.append(Arch("dt", rep, f"d{d}", {"max_depth": d}))
-    for rep in ("r1", "r2"):
+    for rep in ("r1", "r2", "r4"):
         for t in (5, 10, 25):
             for d in (6, 10):
                 a.append(Arch("rf", rep, f"t{t}d{d}", {"n_estimators": t, "max_depth": d}))
@@ -53,6 +54,8 @@ def all_archs() -> list[Arch]:
         a.append(Arch("mlp", "r2", "h" + "x".join(map(str, h)), {"hidden": h}))
     for h in ((32,), (64,), (128,)):
         a.append(Arch("mlp", "r3", "h" + "x".join(map(str, h)), {"hidden": h}))
+    for h in ((16,), (32,), (64,), (32, 32), (64, 64)):
+        a.append(Arch("mlp", "r4", "h" + "x".join(map(str, h)), {"hidden": h}))
     for w in (0.25, 0.5, 1.0, 2.0):
         for d in (2, 4):
             a.append(Arch("cnn", "r0", f"w{int(round(w * 100)):03d}d{d}", {"width": w, "blocks": d}))

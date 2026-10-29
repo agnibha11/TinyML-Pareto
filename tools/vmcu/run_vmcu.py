@@ -42,8 +42,8 @@ OUT = REPO / "results" / "vmcu"
 TV = REPO / "handoff" / "test_vectors"
 F_CPU = 64e6
 ARCH = ["-mcpu=cortex-m4", "-mthumb", "-mfpu=fpv4-sp-d16", "-mfloat-abi=softfp"]   # as the mbed_nano core
-REP_INDEX = {"r0": 0, "r1": 1, "r2": 2, "r3": 3}
-N_FEAT = {"r0": 1024, "r1": 10, "r2": 24, "r3": 256}
+REP_INDEX = {"r0": 0, "r1": 1, "r2": 2, "r3": 3, "r4": 4}
+N_FEAT = {"r0": 1024, "r1": 10, "r2": 24, "r3": 256, "r4": 42}
 
 
 def c_floats(a: np.ndarray) -> str:

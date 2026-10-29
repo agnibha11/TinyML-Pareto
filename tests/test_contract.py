@@ -117,7 +117,7 @@ def test_registry_validator_catches_mistakes(tmp_path):
 
 # 6. Model-ID format -------------------------------------------------------------------------------------------------
 def test_model_id_examples_from_contract_parse():
-    examples = re.findall(r"`([a-z0-9]+-r[0-3]-[a-z0-9]+-[a-z0-9]+)`", section("## 4."))
+    examples = re.findall(r"`([a-z0-9]+-r[0-4]-[a-z0-9]+-[a-z0-9]+)`", section("## 4."))
     assert len(examples) >= 5
     for mid in examples:
         C.parse_model_id(mid)
