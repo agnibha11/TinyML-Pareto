@@ -1,170 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Bearing Sensor Model Selector</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-/* Layout: a parametric-search sheet, as on a component distributor's site: constraints on the left,
-   the pick + error/energy plane + ranked list on the right. */
+/* Monochrome engineering datasheet: black on white (white on black in dark mode), square corners, hairline rules.
+   Model families are told apart by marker shape, precision by fill; nothing depends on colour. */
 :root {
-  --bg: #eef2f5; --panel: #ffffff; --ink: #142230; --muted: #566676; --line: #d3dbe2; --soft: #f5f8fa;
-  --accent: #0d5ea6; --accent-ink: #ffffff; --chip-ink: #ffffff; --ok: #19723a; --bad: #a3361f; --budget: #a3361f;
-  --dt: #2a78d6; --rf: #d95c25; --mlp: #13996a; --cnn: #5a46c2;
-  --f-display: "Barlow Semi Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
-  --f-body: "Barlow", "Segoe UI", system-ui, sans-serif;
-  --f-data: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
-  --r: 10px;
+  --bg: #ffffff; --ink: #0b0b0b; --muted: #5c5c5c; --faint: #b8b8b8; --line: #d9d9d9; --rule: #0b0b0b;
+  --soft: #f3f3f3; --inv-bg: #0b0b0b; --inv-ink: #ffffff;
+  --f-sans: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: light;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --bg: #0e151c; --panel: #151f29; --ink: #e4ebf2; --muted: #98a7b6; --line: #293846; --soft: #1a2633;
-  --accent: #5aa7ee; --accent-ink: #0b1622; --chip-ink: #0b1622; --ok: #5cc27f; --bad: #f08a6c; --budget: #f08a6c;
-  --dt: #62a1ec; --rf: #f08a5d; --mlp: #3fc792; --cnn: #9b8cf0; color-scheme: dark } }
+  --bg: #0b0b0b; --ink: #f2f2f2; --muted: #a3a3a3; --faint: #4d4d4d; --line: #2e2e2e; --rule: #f2f2f2;
+  --soft: #171717; --inv-bg: #f2f2f2; --inv-ink: #0b0b0b; color-scheme: dark } }
 :root[data-theme="dark"] {
-  --bg: #0e151c; --panel: #151f29; --ink: #e4ebf2; --muted: #98a7b6; --line: #293846; --soft: #1a2633;
-  --accent: #5aa7ee; --accent-ink: #0b1622; --chip-ink: #0b1622; --ok: #5cc27f; --bad: #f08a6c; --budget: #f08a6c;
-  --dt: #62a1ec; --rf: #f08a5d; --mlp: #3fc792; --cnn: #9b8cf0; color-scheme: dark }
+  --bg: #0b0b0b; --ink: #f2f2f2; --muted: #a3a3a3; --faint: #4d4d4d; --line: #2e2e2e; --rule: #f2f2f2;
+  --soft: #171717; --inv-bg: #f2f2f2; --inv-ink: #0b0b0b; color-scheme: dark }
 * { box-sizing: border-box }
-body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5;
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 var(--f-sans);
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
-  padding-block: 28px 40px }
-.wrap { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px }
-header { display: flex; flex-direction: column; gap: 6px }
-h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(28px, 4vw, 40px); line-height: 1.05; margin: 0; text-wrap: balance }
-.lede { color: var(--muted); max-width: 70ch; margin: 0 }
-.meta { font-family: var(--f-data); font-size: 12px; color: var(--muted) }
-.grid { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 22px; align-items: start }
+  padding-block: 0 40px }
+.wrap { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px }
+header { display: flex; justify-content: space-between; align-items: flex-end; gap: 8px 24px; flex-wrap: wrap;
+  border-bottom: 2px solid var(--rule); padding: 28px 0 12px }
+h1 { font-weight: 600; font-size: clamp(22px, 3vw, 28px); letter-spacing: -0.01em; line-height: 1.15; margin: 0 }
+.sub { font-family: var(--f-mono); font-size: 12px; color: var(--muted); margin-top: 4px }
+.meta { font-family: var(--f-mono); font-size: 12px; color: var(--muted); text-align: right }
+.grid { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 24px; align-items: start }
 @media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr) } }
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 18px }
-.controls { display: flex; flex-direction: column; gap: 18px; position: sticky; top: calc(12px + env(safe-area-inset-top, 0px)) }
+.block { border: 1px solid var(--line); background: var(--bg) }
+.bh { font: 600 11px var(--f-sans); letter-spacing: .12em; text-transform: uppercase; padding: 9px 14px;
+  border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 12px }
+.bb { padding: 14px }
+.controls { position: sticky; top: calc(12px + env(safe-area-inset-top, 0px)) }
 @media (max-width: 860px) { .controls { position: static } }
+.controls .bb { display: flex; flex-direction: column; gap: 16px }
 .ctl { display: flex; flex-direction: column; gap: 6px }
-.ctl label, .ctl .lab { font-family: var(--f-display); font-weight: 600; font-size: 14px; letter-spacing: .02em }
-.hint { font-size: 12.5px; color: var(--muted); line-height: 1.4 }
+.ctl > label, .ctl > .lab { font-size: 12px; font-weight: 500; color: var(--muted) }
+.hint { font-size: 12px; color: var(--muted); line-height: 1.4 }
 select, input[type=range] { width: 100%; font: inherit; color: var(--ink) }
-select { background: var(--soft); border: 1px solid var(--line); border-radius: 7px; padding: 7px 9px }
-select:focus-visible, input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
-input[type=range] { accent-color: var(--accent) }
-.readout { font-family: var(--f-data); font-size: 13px }
-.seg { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: 8px; overflow: hidden }
-.seg button { font: 500 13px var(--f-body); border: 0; background: var(--soft); color: var(--ink); padding: 8px 4px; cursor: pointer }
-.seg button + button { border-left: 1px solid var(--line) }
-.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink) }
-.results { display: flex; flex-direction: column; gap: 22px; min-width: 0 }
-.pick { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 18px }
-@media (max-width: 700px) { .pick { grid-template-columns: minmax(0, 1fr) } }
-.pick h2 { font-family: var(--f-display); font-size: 14px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 }
-.mid { font-family: var(--f-data); font-weight: 500; font-size: clamp(20px, 2.6vw, 26px); overflow-wrap: anywhere; margin: 6px 0 8px }
-.chips { display: flex; gap: 6px; flex-wrap: wrap }
-.chip { font: 500 12px var(--f-data); padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted) }
-.chip.fam { color: var(--chip-ink); border-color: transparent }
-.why { margin: 10px 0 0; color: var(--muted); font-size: 13.5px; max-width: 60ch }
-.kv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; align-content: start }
-.kv div { display: flex; flex-direction: column; border-top: 1px solid var(--line); padding-top: 6px; min-width: 0 }
+select { background: var(--bg); border: 1px solid var(--line); border-radius: 0; padding: 7px 8px; appearance: auto }
+select:hover { border-color: var(--muted) }
+select:focus-visible, input:focus-visible, button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px }
+input[type=range] { accent-color: var(--ink) }
+input[type=checkbox] { accent-color: var(--ink); width: 15px; height: 15px; margin: 0 }
+.readout { font: 12px var(--f-mono); color: var(--ink) }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--rule) }
+.seg button { font: 500 12px var(--f-sans); border: 0; background: var(--bg); color: var(--ink); padding: 7px 2px; cursor: pointer }
+.seg button + button { border-left: 1px solid var(--rule) }
+.seg button[aria-pressed="true"] { background: var(--inv-bg); color: var(--inv-ink) }
+.check { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer }
+hr.sep { border: 0; border-top: 1px solid var(--line); margin: 0 }
+.results { display: flex; flex-direction: column; gap: 24px; min-width: 0 }
+.pick { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 20px }
+@media (max-width: 720px) { .pick { grid-template-columns: minmax(0, 1fr) } }
+.mid { font: 500 clamp(18px, 2.4vw, 22px) var(--f-mono); overflow-wrap: anywhere; margin: 0 0 6px }
+.desc { font-size: 13px; color: var(--muted); margin: 0 }
+.why { margin: 10px 0 0; font-size: 13px; color: var(--muted); max-width: 56ch }
+.kv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 20px; align-content: start }
+.kv div { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; border-bottom: 1px solid var(--line);
+  padding: 6px 0; min-width: 0 }
 .kv span { font-size: 12px; color: var(--muted) }
-.kv b { font: 500 17px var(--f-data); font-variant-numeric: tabular-nums }
-.kv b.warn { color: var(--bad) }
-.none { color: var(--bad); font-weight: 500 }
-.chart h3, .tablecard h3 { font-family: var(--f-display); font-weight: 600; font-size: 17px; margin: 0 0 4px }
-.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--muted); margin: 6px 0 4px }
-.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px }
+.kv b { font: 500 14px var(--f-mono); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap }
+.kv b.warn { text-decoration: underline; text-underline-offset: 3px }
+.none { font-weight: 600; margin: 0 }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--muted); padding: 10px 14px 0 }
+.legend svg { width: 12px; height: 12px; vertical-align: -1px; margin-right: 5px; overflow: visible }
+#plot { padding: 4px 14px 14px }
 svg { display: block; width: 100%; height: auto; overflow: visible }
-svg text { font-family: var(--f-data); font-size: 11px; fill: var(--muted) }
-.tablewrap { overflow-x: auto; margin-top: 8px }
-table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums }
-th { font: 600 12px var(--f-display); letter-spacing: .03em; text-align: right; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap }
-td { text-align: right; padding: 5px 8px; border-bottom: 1px solid var(--line); font-family: var(--f-data); white-space: nowrap }
+#plot svg text { font-family: var(--f-mono); font-size: 10.5px; fill: var(--muted) }
+.tablewrap { overflow-x: auto }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; font-variant-numeric: tabular-nums }
+th { font: 600 11.5px var(--f-sans); text-align: right; color: var(--muted);
+  padding: 8px 10px; border-bottom: 1px solid var(--rule); white-space: nowrap; position: sticky; top: 0; background: var(--bg) }
+td { text-align: right; padding: 5px 10px; border-bottom: 1px solid var(--line); font-family: var(--f-mono); white-space: nowrap }
 th:nth-child(2), td:nth-child(2) { text-align: left }
-tr.out td { color: var(--muted); opacity: .6 }
-tr.best td { background: var(--soft) }
-.status { font: 500 11px var(--f-data); padding: 1px 7px; border-radius: 99px; border: 1px solid currentColor }
-.status.ok { color: var(--ok) } .status.no { color: var(--bad) }
-.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 0 }
-.toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-top: 6px }
-footer { font-size: 12.5px; color: var(--muted); max-width: 95ch; display: flex; flex-direction: column; gap: 6px }
-@media (prefers-reduced-motion: no-preference) { circle.pt { transition: opacity .2s } }
+th:last-child, td:last-child { text-align: left }
+tr.out td { color: var(--faint) }
+tr.best td { background: var(--soft); font-weight: 500 }
+tr.best td:first-child { box-shadow: inset 3px 0 0 var(--ink) }
+.glyph { display: inline-block; width: 1.4em; font-family: var(--f-mono) }
+footer { border-top: 1px solid var(--line); padding-top: 12px; font-size: 12px; color: var(--muted);
+  display: flex; justify-content: space-between; gap: 6px 24px; flex-wrap: wrap }
+footer a { color: var(--ink) }
 </style>
-
+</head>
+<body>
 <div class="wrap">
   <header>
-    <h1>Bearing Sensor Model Selector</h1>
-    <p class="lede">Set the sensor's budgets. The selector returns the most accurate model that fits them, shows where every
-      other model falls short, and draws the energy budget on the accuracy–energy plane.</p>
+    <div>
+      <h1>Bearing Sensor Model Selector</h1>
+      <div class="sub">TinyML bearing-fault diagnosis · Arm Cortex-M4 · nRF52840</div>
+    </div>
     <div class="meta" id="meta"></div>
   </header>
 
   <div class="grid">
-    <form class="panel controls" id="form" autocomplete="off">
-      <div class="ctl">
-        <span class="lab" id="lens-lab">Trust accuracy from</span>
-        <div class="seg" role="group" aria-labelledby="lens-lab" id="lens">
-          <button type="button" data-p="P3" aria-pressed="true">Unseen bearing</button>
-          <button type="button" data-p="P2" aria-pressed="false">New recording</button>
-          <button type="button" data-p="P1" aria-pressed="false">Leaky split</button>
+    <form class="block controls" id="form" autocomplete="off">
+      <div class="bh">Constraints</div>
+      <div class="bb">
+        <div class="ctl">
+          <span class="lab" id="lens-lab">Evaluation protocol</span>
+          <div class="seg" role="group" aria-labelledby="lens-lab" id="lens">
+            <button type="button" data-p="P3" aria-pressed="true">Bearing</button>
+            <button type="button" data-p="P2" aria-pressed="false">Load</button>
+            <button type="button" data-p="P1" aria-pressed="false">Random</button>
+          </div>
+          <div class="hint" id="lens-hint"></div>
         </div>
-        <div class="hint" id="lens-hint"></div>
-      </div>
-      <div class="ctl">
-        <label for="ram">RAM budget for the model</label>
-        <select id="ram"></select>
-        <div class="hint">Arena, feature buffers and stack. The Nano has 256 KB in total.</div>
-      </div>
-      <div class="ctl">
-        <label for="flash">Flash budget for the model</label>
-        <select id="flash"></select>
-      </div>
-      <div class="ctl">
-        <label for="rate">Inference rate</label>
-        <input type="range" id="rate" min="-4" max="2" step="0.125" value="-1">
-        <div class="readout" id="rate-out"></div>
-      </div>
-      <div class="ctl">
-        <label for="batt">Battery</label>
-        <select id="batt">
-          <option value="2430">CR2032 coin cell · 225 mAh at 3 V</option>
-          <option value="27000">2 × AA alkaline · 2,500 mAh at 3 V</option>
-          <option value="39960">18650 Li-ion · 3,000 mAh at 3.7 V</option>
-        </select>
-      </div>
-      <div class="ctl">
-        <label for="life">Target battery life</label>
-        <select id="life">
-          <option value="0.5">6 months</option><option value="1">1 year</option>
-          <option value="2" selected>2 years</option><option value="3">3 years</option><option value="5">5 years</option>
-        </select>
-      </div>
-      <div class="ctl">
-        <label for="sleep">Power between inferences</label>
-        <select id="sleep"></select>
-        <div class="hint">Chip-level sleep is the nRF52840 floor. The Nano board as shipped draws far more; the rig will measure it.</div>
-      </div>
-      <div class="ctl">
-        <label class="toggle" style="margin-top:0;color:var(--ink)"><input type="checkbox" id="gate"> Detect-then-diagnose gate</label>
-        <div class="hint">A cheap integer-feature gate runs on every window; the chosen model runs only when it raises an alarm.</div>
-        <label for="pi">Share of windows from a faulty machine</label>
-        <input type="range" id="pi" min="-3" max="0" step="0.125" value="-2" disabled>
-        <div class="readout" id="pi-out"></div>
+        <div class="ctl">
+          <label for="ram">RAM budget (of 256 KB)</label>
+          <select id="ram"></select>
+        </div>
+        <div class="ctl">
+          <label for="flash">Flash budget</label>
+          <select id="flash"></select>
+        </div>
+        <div class="ctl">
+          <label for="rate">Inference rate</label>
+          <input type="range" id="rate" min="-4" max="2" step="0.125" value="-1">
+          <div class="readout" id="rate-out"></div>
+        </div>
+        <div class="ctl">
+          <label for="batt">Battery</label>
+          <select id="batt">
+            <option value="2430">CR2032 · 225 mAh, 3 V</option>
+            <option value="27000">2 × AA · 2,500 mAh, 3 V</option>
+            <option value="39960">18650 Li-ion · 3,000 mAh, 3.7 V</option>
+          </select>
+        </div>
+        <div class="ctl">
+          <label for="life">Target battery life</label>
+          <select id="life">
+            <option value="0.5">6 months</option><option value="1">1 year</option>
+            <option value="2" selected>2 years</option><option value="3">3 years</option><option value="5">5 years</option>
+          </select>
+        </div>
+        <div class="ctl">
+          <label for="sleep">Idle power</label>
+          <select id="sleep"></select>
+        </div>
+        <hr class="sep">
+        <div class="ctl">
+          <label class="check"><input type="checkbox" id="gate"> Detect-then-diagnose gate</label>
+          <label for="pi">Fault prevalence</label>
+          <input type="range" id="pi" min="-3" max="0" step="0.125" value="-2" disabled>
+          <div class="readout" id="pi-out"></div>
+        </div>
       </div>
     </form>
 
     <div class="results">
-      <section class="panel pick" id="pick" aria-live="polite"></section>
-      <section class="panel chart">
-        <h3>Accuracy against energy per window</h3>
+      <section class="block" aria-live="polite">
+        <div class="bh">Recommendation</div>
+        <div class="bb pick" id="pick"></div>
+      </section>
+      <section class="block">
+        <div class="bh">Accuracy vs. energy per window</div>
         <div class="legend" id="legend"></div>
         <div id="plot"></div>
       </section>
-      <section class="panel tablecard">
-        <h3>Every configuration, ranked by accuracy</h3>
-        <label class="toggle"><input type="checkbox" id="hide"> Hide models that do not fit</label>
+      <section class="block">
+        <div class="bh"><span>All configurations</span>
+          <label class="check" style="font:400 12px var(--f-sans);letter-spacing:0;text-transform:none"><input type="checkbox" id="hide"> Fitting only</label></div>
         <div class="tablewrap"><table id="tbl"></table></div>
       </section>
     </div>
   </div>
 
   <footer>
-    <div><b>Where the numbers come from.</b> Accuracy is host macro-F1, mean ± std over all folds and seeds of the chosen
-      protocol. Energy and latency are estimates from the virtual Cortex-M4 (deployable code run in QEMU, Cortex-M4 TRM
-      cycle model, 64 MHz, nRF52840 active power) and include the feature front end; the INA219 rig replaces them in the
-      final study. Battery life = battery energy ÷ (rate × energy per window + power between inferences).</div>
+    <div>Accuracy: host macro-F1, mean ± sd over folds and seeds. Energy and latency: virtual Cortex-M4 estimates, pending hardware measurement.</div>
     <div id="built"></div>
   </footer>
 </div>
@@ -175,27 +188,41 @@ const FAM = { dt: "Decision tree", rf: "Random forest", mlp: "MLP", cnn: "1-D CN
 const REP = { r0: "raw window", r1: "10 statistics", r2: "statistics + 14 bands", r3: "256-bin spectrum", r4: "statistics + envelope spectrum" };
 const PREC = { fp32: "float32", int8: "int8 PTQ", int8qat: "int8 QAT", int8ref: "int8, reference kernels" };
 const LENS = {
-  P3: "Bearing-disjoint: test faults come from bearings never seen in training (4 classes). The realistic case.",
-  P2: "Recording-wise: a whole motor load is held out, but the same bearings were seen at other loads (10 classes).",
-  P1: "Random windows, as most papers report. Test windows overlap training windows, so scores are inflated."
+  P3: "Bearing-disjoint · test bearings unseen in training · 4 classes",
+  P2: "Load-disjoint · one motor load held out · 10 classes",
+  P1: "Random split · overlapping windows, optimistic · 10 classes"
 };
 const YEAR = 365.25 * 86400;
 const $ = (id) => document.getElementById(id);
-const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 let lens = "P3";
 
 function fill(sel, opts, def) { sel.innerHTML = opts.map(([v, t]) => `<option value="${v}"${v === def ? " selected" : ""}>${t}</option>`).join(""); }
 fill($("ram"), [2, 4, 8, 16, 32, 64, 128, 256].map((k) => [String(k * 1024), `${k} KB`]), String(32 * 1024));
-fill($("flash"), [4, 16, 64, 256, 960].map((k) => [String(k * 1024), k === 960 ? "960 KB (all application flash)" : `${k} KB`]), String(64 * 1024));
-fill($("sleep"), [[String(DATA.energy.P_sleep_chip_uW * 1e-6), `Chip-level sleep · ${fmt(DATA.energy.P_sleep_chip_uW, 1)} µW`],
-                  [String(DATA.energy.P_sleep_board_mW * 1e-3), `Nano board idle · ${fmt(DATA.energy.P_sleep_board_mW, 2)} mW`]],
+fill($("flash"), [4, 16, 64, 256, 960].map((k) => [String(k * 1024), k === 960 ? "960 KB (all)" : `${k} KB`]), String(64 * 1024));
+fill($("sleep"), [[String(DATA.energy.P_sleep_chip_uW * 1e-6), `Chip sleep · ${fmt(DATA.energy.P_sleep_chip_uW, 1)} µW`],
+                  [String(DATA.energy.P_sleep_board_mW * 1e-3), `Board idle · ${fmt(DATA.energy.P_sleep_board_mW, 2)} mW`]],
      String(DATA.energy.P_sleep_chip_uW * 1e-6));
 
 function fmt(x, d = 2) { return Number(x).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d }); }
-function sig(x) { if (x >= 1000) return fmt(x, 0); if (x >= 100) return fmt(x, 0); if (x >= 10) return fmt(x, 1); if (x >= 1) return fmt(x, 2); return fmt(x, 3); }
+function sig(x) { if (x >= 100) return fmt(x, 0); if (x >= 10) return fmt(x, 1); if (x >= 1) return fmt(x, 2); return fmt(x, 3); }
 function kb(b) { return b >= 1024 ? `${sig(b / 1024)} KB` : `${b} B`; }
 function period(r) { const s = 1 / r; if (s >= 3600) return `${sig(s / 3600)} h`; if (s >= 60) return `${sig(s / 60)} min`; if (s >= 1) return `${sig(s)} s`; return `${sig(s * 1000)} ms`; }
 function years(y) { return !isFinite(y) ? "∞" : y >= 1 ? `${fmt(y, 1)} y` : `${fmt(y * 12, 1)} mo`; }
+
+// Markers: family = shape, precision = fill (float32 solid, int8 hollow; reference kernels dashed).
+const SHAPE = { dt: "circle", rf: "square", mlp: "triangle", cnn: "diamond" };
+function marker(fam, prec, cx, cy, s, cls, extra = "") {
+  const solid = prec === "fp32";
+  const st = `stroke:${cls};fill:${solid ? cls : "var(--bg)"}${prec === "int8ref" ? ";stroke-dasharray:2 1.5" : ""}`;
+  const a = `style="${st}" stroke-width="1.4" ${extra}`;
+  switch (SHAPE[fam]) {
+    case "circle": return `<circle cx="${cx}" cy="${cy}" r="${s}" ${a}`;
+    case "square": return `<rect x="${cx - s * .9}" y="${cy - s * .9}" width="${s * 1.8}" height="${s * 1.8}" ${a}`;
+    case "triangle": return `<path d="M${cx} ${cy - s * 1.15} L${cx + s * 1.1} ${cy + s * .8} L${cx - s * 1.1} ${cy + s * .8} Z" ${a}`;
+    default: return `<path d="M${cx} ${cy - s * 1.2} L${cx + s * 1.1} ${cy} L${cx} ${cy + s * 1.2} L${cx - s * 1.1} ${cy} Z" ${a}`;
+  }
+}
+const GLYPH = { dt: "●", rf: "■", mlp: "▲", cnn: "◆" };
 
 function state() {
   const r = Math.pow(10, +$("rate").value);
@@ -217,7 +244,7 @@ function evaluate(s) {
     const why = [];
     if (m.ram > s.ram) why.push("RAM");
     if (m.flash > s.flash) why.push("flash");
-    if (m.lat * 1e-6 > 1 / s.r) why.push("too slow");
+    if (m.lat * 1e-6 > 1 / s.r) why.push("rate");
     const d = deployed(m, s);
     if (!(d.e <= Emax)) why.push("energy");
     const lifeY = s.batt / (s.r * d.e * 1e-6 + s.ps) / YEAR;
@@ -232,115 +259,107 @@ function renderPick(s, ev) {
   if (!b) {
     const sleepOnly = s.batt / s.ps / YEAR;
     const msg = ev.Emax <= 0
-      ? `Power between inferences alone empties this battery in ${years(sleepOnly)}, so no model can reach ${years(s.life)}. Lower the target life, choose a bigger battery or a lower sleep floor.`
-      : `No configuration meets every budget. The tightest one is ${tightest(ev.rows)}. Relax it to see a pick.`;
-    el.innerHTML = `<div><h2>Recommended</h2><p class="none">No model fits.</p><p class="why">${msg}</p></div><div class="kv">${budgetKV(s, ev)}</div>`;
+      ? `Idle power alone empties this battery in ${years(sleepOnly)}. Lower the target life or choose a larger battery.`
+      : `Binding constraint: ${tightest(ev.rows)}.`;
+    el.innerHTML = `<div><p class="none">No configuration fits.</p><p class="why">${msg}</p></div>
+      <div class="kv"><div><span>Energy budget / window</span><b class="warn">${ev.Emax > 0 ? sig(ev.Emax) + " µJ" : "none"}</b></div>
+      <div><span>Window period</span><b>${period(s.r)}</b></div></div>`;
     return;
   }
   const m = b.m, p1 = m.f1.P1[0];
-  const gap = lens !== "P1" && p1 - b.f1 > 0.05 ? `On the leaky split the same model scores ${fmt(p1, 3)}; on this protocol, ${fmt(b.f1, 3)}.` : "";
+  const gap = lens !== "P1" && p1 - b.f1 > 0.05 ? ` Random-split score: ${fmt(p1, 3)}.` : "";
   el.innerHTML = `<div>
-      <h2>Recommended</h2>
       <div class="mid">${m.id}</div>
-      <div class="chips"><span class="chip fam" style="background:var(--${m.fam})">${FAM[m.fam]}</span><span class="chip">${REP[m.rep]}</span><span class="chip">${PREC[m.prec]}</span></div>
-      <p class="why">Most accurate of the ${ev.rows.filter((x) => !x.why.length).length} configurations that fit. ${gap}</p>
+      <p class="desc">${FAM[m.fam]} · ${REP[m.rep]} · ${PREC[m.prec]}</p>
+      <p class="why">Best of ${ev.rows.filter((x) => !x.why.length).length} fitting configurations.${gap}</p>
     </div>
     <div class="kv">
-      <div><span>macro-F1 (${lens})</span><b>${fmt(b.f1, 3)} ± ${fmt(b.sd, 3)}</b></div>
+      <div><span>Macro-F1</span><b>${fmt(b.f1, 3)} ± ${fmt(b.sd, 3)}</b></div>
       <div><span>Battery life</span><b>${years(b.lifeY)}</b></div>
-      <div><span>Energy per window</span><b>${sig(b.e)} µJ</b></div>
-      <div><span>Latency per window</span><b>${sig(m.lat / 1000)} ms</b></div>
+      <div><span>Energy / window</span><b>${sig(b.e)} µJ</b></div>
+      <div><span>Latency</span><b>${sig(m.lat / 1000)} ms</b></div>
       <div><span>Peak RAM</span><b>${kb(m.ram)}</b></div>
-      <div><span>Model flash</span><b>${kb(m.flash)}</b></div>
-      ${s.gate ? `<div><span>Model runs on</span><b>${fmt(100 * b.esc, 1)} % of windows</b></div><div><span>Alone it would cost</span><b>${sig(m.e2e)} µJ</b></div>`
-               : `<div><span>Front end share of energy</span><b>${fmt(100 * m.fe / m.e2e, 0)} %</b></div>`}
-      <div><span>Energy budget per window</span><b>${ev.Emax > 0 ? sig(ev.Emax) + " µJ" : "none"}</b></div>
+      <div><span>Flash</span><b>${kb(m.flash)}</b></div>
+      ${s.gate ? `<div><span>Model duty</span><b>${fmt(100 * b.esc, 1)} %</b></div><div><span>Without gate</span><b>${sig(m.e2e)} µJ</b></div>`
+               : `<div><span>Front-end share</span><b>${fmt(100 * m.fe / m.e2e, 0)} %</b></div>`}
+      <div><span>Energy budget</span><b>${ev.Emax > 0 ? sig(ev.Emax) + " µJ" : "none"}</b></div>
     </div>`;
-}
-function budgetKV(s, ev) {
-  return `<div><span>Energy budget per window</span><b class="warn">${ev.Emax > 0 ? sig(ev.Emax) + " µJ" : "none"}</b></div>
-          <div><span>One window every</span><b>${period(s.r)}</b></div>`;
 }
 function tightest(rows) {
   const c = {}; rows.forEach((x) => x.why.forEach((w) => (c[w] = (c[w] || 0) + 1)));
   const k = Object.keys(c).sort((a, b) => c[b] - c[a])[0];
-  return { RAM: "the RAM budget", flash: "the flash budget", "too slow": "the inference rate", energy: "the energy budget from battery and target life" }[k] || "a budget";
+  return { RAM: "RAM budget", flash: "flash budget", rate: "inference rate", energy: "energy budget (battery and target life)" }[k] || "a budget";
 }
 
 function renderPlot(s, ev) {
-  const W = 760, H = 330, L = 52, R = 14, T = 12, B = 40;
+  const W = 760, H = 330, L = 50, R = 14, T = 12, B = 40;
   const xs = ev.rows.map((r) => r.e).concat(DATA.models.map((m) => m.e2e));
   const x0 = Math.floor(Math.log10(Math.min(...xs))), x1 = Math.ceil(Math.log10(Math.max(...xs)));
   const f1s = ev.rows.map((r) => r.f1);
   const yLo = Math.max(0, Math.floor((Math.min(...f1s) - 0.02) * 10) / 10), yHi = 1;
   const X = (e) => L + (Math.log10(e) - x0) / (x1 - x0) * (W - L - R);
   const Y = (f) => T + (yHi - f) / (yHi - yLo) * (H - T - B);
-  let g = "";
+  let g = `<rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" style="fill:none;stroke:var(--rule)" stroke-width="1"/>`;
   for (let d = x0; d <= x1; d++) {
     const x = X(Math.pow(10, d));
-    g += `<line x1="${x}" x2="${x}" y1="${T}" y2="${H - B}" style="stroke:var(--line)" stroke-width="1"/>`;
-    g += `<text x="${x}" y="${H - B + 16}" text-anchor="middle">${d >= 3 ? fmt(Math.pow(10, d), 0) : Math.pow(10, d)}</text>`;
+    if (d > x0 && d < x1) g += `<line x1="${x}" x2="${x}" y1="${T}" y2="${H - B}" style="stroke:var(--line)" stroke-width="1"/>`;
+    g += `<text x="${x}" y="${H - B + 15}" text-anchor="middle">${d >= 3 ? fmt(Math.pow(10, d), 0) : Math.pow(10, d)}</text>`;
   }
   const step = yHi - yLo > 0.5 ? 0.2 : 0.1;
   for (let v = yLo; v <= yHi + 1e-9; v += step) {
     const y = Y(v);
-    g += `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" style="stroke:var(--line)" stroke-width="1"/>`;
-    g += `<text x="${L - 8}" y="${y + 4}" text-anchor="end">${fmt(v, 1)}</text>`;
+    if (v > yLo + 1e-9 && v < yHi - 1e-9) g += `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" style="stroke:var(--line)" stroke-width="1"/>`;
+    g += `<text x="${L - 7}" y="${y + 4}" text-anchor="end">${fmt(v, 1)}</text>`;
   }
-  g += `<text x="${(L + W - R) / 2}" y="${H - 4}" text-anchor="middle">energy per window, front end + inference (µJ, log scale)</text>`;
-  g += `<text transform="translate(13 ${(T + H - B) / 2}) rotate(-90)" text-anchor="middle">macro-F1 (${lens}), higher is better</text>`;
+  g += `<text x="${(L + W - R) / 2}" y="${H - 4}" text-anchor="middle">energy per window, µJ (log)</text>`;
+  g += `<text transform="translate(12 ${(T + H - B) / 2}) rotate(-90)" text-anchor="middle">macro-F1 (${lens})</text>`;
   if (ev.Emax > 0 && Math.log10(ev.Emax) > x0 && Math.log10(ev.Emax) < x1) {
     const x = X(ev.Emax);
-    g += `<rect x="${x}" y="${T}" width="${W - R - x}" height="${H - T - B}" style="fill:var(--budget)" opacity="0.06"/>`;
-    g += `<line x1="${x}" x2="${x}" y1="${T}" y2="${H - B}" style="stroke:var(--budget)" stroke-dasharray="5 4" stroke-width="1.5"/>`;
-    g += `<text x="${x + 6}" y="${T + 12}" style="fill:var(--budget)">energy budget ${sig(ev.Emax)} µJ</text>`;
+    g += `<rect x="${x}" y="${T}" width="${W - R - x}" height="${H - T - B}" style="fill:var(--soft)"/>`;
+    g += `<line x1="${x}" x2="${x}" y1="${T}" y2="${H - B}" style="stroke:var(--ink)" stroke-dasharray="4 3" stroke-width="1.2"/>`;
+    g += `<text x="${x + 6}" y="${T + 13}" style="fill:var(--ink)">budget ${sig(ev.Emax)} µJ</text>`;
   }
-  const shape = { fp32: "c", int8: "s", int8qat: "t", int8ref: "x" };
   for (const r of ev.rows.slice().reverse()) {
-    const m = r.m, cx = X(r.e), cy = Y(r.f1), col = `var(--${m.fam})`, op = r.why.length ? 0.22 : 0.95;
-    const t = `<title>${m.id} · F1 ${fmt(r.f1, 3)} · ${sig(r.e)} µJ · ${kb(m.ram)} RAM${r.why.length ? " · ruled out: " + r.why.join(", ") : ""}</title>`;
-    const k = shape[m.prec];
-    if (k === "c") g += `<circle class="pt" cx="${cx}" cy="${cy}" r="5" style="fill:${col}" opacity="${op}">${t}</circle>`;
-    else if (k === "s") g += `<rect class="pt" x="${cx - 4.5}" y="${cy - 4.5}" width="9" height="9" style="fill:${col}" opacity="${op}">${t}</rect>`;
-    else if (k === "t") g += `<path d="M${cx} ${cy - 6} L${cx + 5.5} ${cy + 4} L${cx - 5.5} ${cy + 4} Z" style="fill:${col}" opacity="${op}">${t}</path>`;
-    else g += `<path d="M${cx - 4} ${cy - 4} L${cx + 4} ${cy + 4} M${cx + 4} ${cy - 4} L${cx - 4} ${cy + 4}" style="stroke:${col}" stroke-width="2" fill="none" opacity="${op}">${t}</path>`;
+    const m = r.m, col = r.why.length ? "var(--faint)" : "var(--ink)";
+    const t = `<title>${m.id} · F1 ${fmt(r.f1, 3)} · ${sig(r.e)} µJ · ${kb(m.ram)} RAM${r.why.length ? " · exceeds: " + r.why.join(", ") : ""}</title>`;
+    g += marker(m.fam, m.prec, X(r.e), Y(r.f1), 4.2, col) + `>${t}</${SHAPE[m.fam] === "circle" ? "circle" : SHAPE[m.fam] === "square" ? "rect" : "path"}>`;
   }
   if (ev.best) {
     const cx = X(ev.best.e), cy = Y(ev.best.f1);
-    g += `<circle cx="${cx}" cy="${cy}" r="10" fill="none" style="stroke:var(--ink)" stroke-width="2"/>`;
-    g += `<text x="${cx + 13}" y="${cy - 8}" style="fill:var(--ink)">pick</text>`;
+    g += `<circle cx="${cx}" cy="${cy}" r="10" fill="none" style="stroke:var(--ink)" stroke-width="1.6"/>`;
+    g += `<text x="${cx + 13}" y="${cy - 8}" style="fill:var(--ink);font-weight:500">selected</text>`;
   }
-  $("plot").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Accuracy against energy per window for every configuration; models that fit are solid, the others faded">${g}</svg>`;
+  $("plot").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Accuracy against energy per window for every configuration; configurations that fit are black, the others grey">${g}</svg>`;
 }
 
 function renderLegend() {
   const fams = Object.keys(FAM).filter((f) => DATA.models.some((m) => m.fam === f));
-  $("legend").innerHTML = fams.map((f) => `<span><i style="background:var(--${f})"></i>${FAM[f]}</span>`).join("")
-    + `<span>● float32 &nbsp;■ int8 PTQ &nbsp;▲ int8 QAT &nbsp;✕ reference kernels</span><span>faded = ruled out</span>`;
+  const ico = (f, p) => `<svg viewBox="-6 -6 12 12">${marker(f, p, 0, 0, 4.2, "var(--ink)")}/></svg>`;
+  $("legend").innerHTML = fams.map((f) => `<span>${ico(f, "fp32")}${FAM[f]}</span>`).join("")
+    + `<span>solid float32 · hollow int8</span><span>grey: exceeds a constraint</span>`;
 }
 
 function renderTable(s, ev) {
   const hide = $("hide").checked;
-  let h = `<thead><tr><th>#</th><th>Model</th><th>F1 ${lens}</th><th>F1 P1</th><th>µJ / window</th><th>ms</th><th>RAM</th><th>Flash</th><th>Life</th><th>Status</th></tr></thead><tbody>`;
+  let h = `<thead><tr><th>#</th><th>Model</th><th>F1 ${lens}</th><th>F1 P1</th><th>µJ</th><th>ms</th><th>RAM</th><th>Flash</th><th>Life</th><th>Exceeds</th></tr></thead><tbody>`;
   ev.rows.forEach((r, i) => {
     if (hide && r.why.length) return;
     const m = r.m, cls = r.why.length ? "out" : (ev.best && r === ev.best ? "best" : "");
-    const st = r.why.length ? `<span class="status no">${r.why.join(" · ")}</span>` : `<span class="status ok">fits</span>`;
-    h += `<tr class="${cls}"><td>${i + 1}</td><td><span class="dot" style="background:var(--${m.fam})"></span>${m.id}</td>
+    h += `<tr class="${cls}"><td>${i + 1}</td><td><span class="glyph">${GLYPH[m.fam]}</span>${m.id}</td>
       <td>${fmt(r.f1, 3)} ± ${fmt(r.sd, 3)}</td><td>${fmt(m.f1.P1[0], 3)}</td><td>${sig(r.e)}</td><td>${sig(m.lat / 1000)}</td>
-      <td>${kb(m.ram)}</td><td>${kb(m.flash)}</td><td>${years(r.lifeY)}</td><td>${st}</td></tr>`;
+      <td>${kb(m.ram)}</td><td>${kb(m.flash)}</td><td>${years(r.lifeY)}</td><td>${r.why.length ? r.why.join(", ") : "—"}</td></tr>`;
   });
   $("tbl").innerHTML = h + "</tbody>";
 }
 
 function render() {
   const s = state();
-  $("rate-out").textContent = `${s.r >= 1 ? fmt(s.r, s.r < 10 ? 1 : 0) : s.r.toPrecision(2)} windows / s · one every ${period(s.r)}`;
+  $("rate-out").textContent = `${s.r >= 1 ? fmt(s.r, s.r < 10 ? 1 : 0) : s.r.toPrecision(2)} /s · every ${period(s.r)}`;
   $("lens-hint").textContent = LENS[lens];
   $("pi").disabled = !$("gate").checked;
-  $("pi-out").textContent = !$("gate").checked ? "Gate off: every window runs the model."
-    : lens === "P1" ? "The gate is evaluated on P2 and P3 only; pick one of those to apply it."
-    : `${s.pi < 0.01 ? fmt(100 * s.pi, 2) : fmt(100 * s.pi, 1)} % · gate catches ${fmt(100 * DATA.cascade.rate[lens].tpr, 1)} % of faults, ${fmt(100 * DATA.cascade.rate[lens].fpr, 1)} % false alarms on this protocol`;
+  $("pi-out").textContent = !$("gate").checked ? "Off"
+    : lens === "P1" ? "Not evaluated on the random split"
+    : `${s.pi < 0.01 ? fmt(100 * s.pi, 2) : fmt(100 * s.pi, 1)} % · recall ${fmt(100 * DATA.cascade.rate[lens].tpr, 1)} % · false alarms ${fmt(100 * DATA.cascade.rate[lens].fpr, 1)} %`;
   const ev = evaluate(s);
   renderPick(s, ev); renderPlot(s, ev); renderTable(s, ev);
 }
@@ -352,7 +371,9 @@ document.querySelectorAll("#lens button").forEach((b) => b.addEventListener("cli
 }));
 ["ram", "flash", "rate", "batt", "life", "sleep", "hide", "gate", "pi"].forEach((id) => $(id).addEventListener("input", render));
 $("form").addEventListener("submit", (e) => e.preventDefault());
-$("meta").textContent = `${DATA.models.length} configurations · ${DATA.n_runs.toLocaleString("en-US")} host training runs · costs from the virtual Cortex-M4`;
-$("built").textContent = `Built ${DATA.built} by tools/make_selector.py from results/prehw_costs.csv and results/host_summary.csv.`;
+$("meta").textContent = `${DATA.models.length} configurations · ${DATA.n_runs.toLocaleString("en-US")} training runs`;
+$("built").innerHTML = `Updated ${DATA.built} · <a href="https://github.com/agnibha11/TinyML-Pareto">github.com/agnibha11/TinyML-Pareto</a>`;
 renderLegend(); render();
 </script>
+</body>
+</html>
