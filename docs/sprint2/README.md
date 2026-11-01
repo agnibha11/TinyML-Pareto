@@ -80,3 +80,13 @@ python -m pytest tests/             # includes tests/test_sprint2.py
 1. Flash the hybrid front end as an extra configuration. Its VERIFY output must equal the float front end's.
 2. Measure the gate's stage-1 energy and the escalation energy separately (`FRONT` + `E2E`).
 3. Record healthy data at every load at installation, so the healthy-only gate does not raise false alarms.
+
+## Sprint 2 review: slides and presentation guide
+
+- **Slides** (12, split by workstream: Agnibha 1–3 and 8, Abhinav 4–7, Hridayesh 9–12):
+  <https://claude.ai/artifact/KkS1QYqHHwJhx7iyBWiPN9>. Speaker notes hold a short script for each slide; the deck
+  downloads as PowerPoint or PDF.
+- **Presentation guide** (who presents what, per-slide scripts, likely questions, and every number on the slides
+  with the file it comes from): <https://claude.ai/artifact/DtcNSZTUBzAF4BLqHnkZJ6>.
+
+Both links are private to their owner until shared.
