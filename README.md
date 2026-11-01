@@ -63,6 +63,9 @@ python ml/cascade.py                    # detect-then-diagnose cascade over ever
 Sprint 2 added a fixed-point/hybrid front end (`firmware/bench/frontend_fx.c`, `tools/fxfe/`, `ml/fixed_point.py`)
 and the detect-then-diagnose cascade; see [docs/sprint2/README.md](docs/sprint2/README.md).
 
+Second dataset (Paderborn, real bearing damage): `python tools/pu/run_pu.py` downloads, prepares and trains all
+88 model IDs on it (CNNs on the GPU, live dashboard, resumable); see [tools/pu/README.md](tools/pu/README.md).
+
 Every NN score comes from the exported `.tflite` run in the TFLite interpreter. Random-forest scores use the deployed
 emlearn rule (hard majority vote), not scikit-learn's soft vote. See `ml/train.py::rf_hard_predict`.
 

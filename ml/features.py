@@ -25,13 +25,17 @@ Run as a script to (re)build the caches:  python ml/features.py
 """
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import dataset as DS  # noqa: E402
+
 REPO = Path(__file__).resolve().parents[1]
-PROCESSED = REPO / "data" / "processed"
+PROCESSED = DS.PROCESSED                       # data/processed (CWRU) or data/processed/pu (TINYML_DATASET=pu)
 N = 1024
 N_FEAT = {"r1": 10, "r2": 24, "r3": 256, "r4": 41}
 N_BANDS = 14                                   # spec v1.1 (was 16)

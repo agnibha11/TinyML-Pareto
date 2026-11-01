@@ -47,3 +47,6 @@ paper/*.fdb_latexmk
 paper/*.fls
 paper/*.out
 paper/*.log
+
+# --- Paderborn run: live status file (rewritten every few seconds) ---
+results/pu/progress.json

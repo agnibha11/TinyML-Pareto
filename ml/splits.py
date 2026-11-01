@@ -34,12 +34,18 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import dataset as DS  # noqa: E402
+
 REPO = Path(__file__).resolve().parents[1]
 WIN = 1024
 SIZES = (0.007, 0.014, 0.021)
 VAL_FRAC = 0.15
-PROTOCOLS = {"P1": 1, "P2": 4, "P3": 3}          # number of folds
-LABEL = {"P1": "class10", "P2": "class10", "P3": "class4"}
+# Number of folds and label column per protocol. For CWRU (default) these are {"P1": 1, "P2": 4, "P3": 3} and
+# class10/class10/class4; with TINYML_DATASET=pu they are Paderborn's (ml/dataset.py), so load_split, train.py,
+# cascade.py and stats.py run unchanged on the second dataset. This script itself only builds the CWRU splits.
+PROTOCOLS = DS.PROTOCOLS
+LABEL = DS.LABEL
 SPLIT_SEED = 20261012                             # fixed: splits never depend on the training seed
 
 
@@ -103,7 +109,7 @@ def read(root: Path) -> dict[tuple[str, int], dict[str, np.ndarray]]:
     return out
 
 
-def load_split(p: str, k: int, root: Path = REPO / "splits") -> dict[str, np.ndarray]:
+def load_split(p: str, k: int, root: Path = DS.SPLITS) -> dict[str, np.ndarray]:
     """Public helper for train.py / evaluate.py."""
     d = split_dir(root, p, k)
     return {s: np.load(d / f"{s}.npy") for s in ("train", "val", "test")}
@@ -216,6 +222,8 @@ def main() -> None:
     ap.add_argument("--processed", type=Path, default=REPO / "data" / "processed")
     ap.add_argument("--out", type=Path, default=REPO / "splits")
     a = ap.parse_args()
+    if DS.NAME != "cwru":
+        sys.exit("ml/splits.py builds the CWRU splits; Paderborn splits come from `python ml/pu_data.py splits`")
     m = load_manifest(a.processed)
     if a.check:
         check(m, read(a.out))

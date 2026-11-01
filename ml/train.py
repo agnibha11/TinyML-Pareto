@@ -40,19 +40,26 @@ import pandas as pd
 from sklearn.metrics import accuracy_score, confusion_matrix, f1_score
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import dataset as DS  # noqa: E402
 import features as FE  # noqa: E402
 import models as MD  # noqa: E402
 from splits import LABEL, PROTOCOLS, load_split  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
-HOST = REPO / "results" / "host"
-DEPLOY = REPO / "build" / "deploy"
+HOST = DS.HOST                    # results/host (CWRU) or results/pu/host (TINYML_DATASET=pu)
+DEPLOY = DS.DEPLOY
 SNRS = (20, 10, 5, 0)
-DEPLOYED = ("P2", 0, 0)
+DEPLOYED = DS.DEPLOYED
 N_REP = 500
 EPOCHS, PATIENCE, BATCH, LR = 100, 10, 64, 1e-3
 QAT_EPOCHS, QAT_LR = 20, 1e-4
 SPE = 32          # steps_per_execution: fewer Python round trips; identical per-batch updates
+
+# Set by main(): resumable NN checkpoints (--ckpt-dir), one log line per epoch (--epoch-log), and whether TF op
+# determinism is requested (off by default on a GPU, where it is slower and not available for every kernel).
+CKPT_DIR: Path | None = None
+EPOCH_LOG = False
+DETERMINISTIC = True
 
 _MANIFEST = None
 
@@ -60,7 +67,7 @@ _MANIFEST = None
 def manifest() -> pd.DataFrame:
     global _MANIFEST
     if _MANIFEST is None:
-        _MANIFEST = pd.read_parquet(REPO / "data" / "processed" / "manifest.parquet")
+        _MANIFEST = pd.read_parquet(DS.PROCESSED / "manifest.parquet")
     return _MANIFEST
 
 
@@ -95,7 +102,7 @@ class Data:
         self.rep, self.p, self.k = rep, p, k
         self.sp = load_split(p, k)
         lab = manifest()[LABEL[p]].to_numpy().astype(np.int64)
-        self.n_classes = 10 if LABEL[p] == "class10" else 4
+        self.n_classes = DS.N_CLASSES[LABEL[p]]
         self.y = {s: lab[ids] for s, ids in self.sp.items()}
         W = FE.windows()
         if rep == "r0":
@@ -236,29 +243,154 @@ def tflite_predict(blob: bytes, X: np.ndarray, ref: bool = False) -> tuple[np.nd
     return O.argmax(axis=1), O
 
 
+class NNCheckpoint:
+    """Resumable training state for one NN job, in CKPT_DIR/<arch>__<P>__f<k>__s<seed>/.
+
+    After every epoch it writes the model and optimizer (tf.train.Checkpoint, two alternating slots so a kill during
+    a write never corrupts the last good one), the best weights so far, and state.json with the loss history and the
+    early-stopping counters. Early stopping follows tf_keras 2.18's EarlyStopping(monitor="val_loss", patience,
+    restore_best_weights=True) exactly: wait += 1 each epoch, reset on a strict improvement, stop once
+    wait >= patience after the first epoch, and the best epoch's weights are restored at the end of training
+    (stopped early or not). An interrupted job resumes at the next epoch; only the shuffling order of the resumed
+    epochs differs from an uninterrupted run, and the result records how many epochs were resumed."""
+
+    def __init__(self, root: Path):
+        self.dir = root
+        self.dir.mkdir(parents=True, exist_ok=True)
+        self.path = self.dir / "state.json"
+        self.state = json.loads(self.path.read_text()) if self.path.exists() else {
+            "epochs_done": 0, "loss": [], "val_loss": [], "best": None, "best_epoch": -1, "wait": 0,
+            "stopped": False, "fit_done": False, "fit_s": 0.0, "last_slot": None, "best_slot": None,
+            "resumed_at": []}
+
+    def save_state(self) -> None:
+        tmp = self.path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(self.state))
+        tmp.replace(self.path)
+
+    def _write(self, kind: str, model, with_opt: bool) -> None:
+        import tensorflow as tf
+        slot = "b" if self.state[f"{kind}_slot"] == "a" else "a"
+        objs = {"model": model, "optimizer": model.optimizer} if with_opt else {"model": model}
+        tf.train.Checkpoint(**objs).write(str(self.dir / f"{kind}_{slot}"))
+        self.state[f"{kind}_slot"] = slot
+
+    def _read(self, kind: str, model, with_opt: bool) -> None:
+        import tensorflow as tf
+        objs = {"model": model, "optimizer": model.optimizer} if with_opt else {"model": model}
+        tf.train.Checkpoint(**objs).read(str(self.dir / f"{kind}_{self.state[f'{kind}_slot']}")).expect_partial()
+
+    def resume(self, model) -> int:
+        """Restore model + optimizer from the last finished epoch; returns the epoch to start from."""
+        if self.state["last_slot"] is None:
+            return 0
+        try:
+            model.optimizer.build(model.trainable_variables)
+        except Exception:  # noqa: BLE001 - older optimizers build lazily; the checkpoint then restores on creation
+            pass
+        self._read("last", model, True)
+        self.state["resumed_at"].append(self.state["epochs_done"])
+        return int(self.state["epochs_done"])
+
+    def restore_final(self, model) -> None:
+        self._read("final", model, False)
+
+    def callback(self, patience: int, epoch_log: str | None):
+        import tf_keras as keras
+        ck = self
+
+        class _CB(keras.callbacks.Callback):
+            def on_epoch_begin(self, epoch, logs=None):
+                self._t = time.time()
+
+            def on_epoch_end(self, epoch, logs=None):
+                st = ck.state
+                cur = float(logs["val_loss"])
+                st["loss"].append(float(logs["loss"]))
+                st["val_loss"].append(cur)
+                st["wait"] += 1
+                if st["best"] is None or cur < st["best"]:
+                    st["best"], st["best_epoch"], st["wait"] = cur, epoch, 0
+                    ck._write("best", self.model, False)
+                elif st["wait"] >= patience and epoch > 0:
+                    st["stopped"] = True
+                    self.model.stop_training = True
+                st["epochs_done"] = epoch + 1
+                st["fit_s"] += time.time() - self._t
+                ck._write("last", self.model, True)
+                ck.save_state()
+                if epoch_log:
+                    print(f"    {epoch_log} epoch {epoch + 1:3d}/{EPOCHS}  loss {logs['loss']:.4f}  "
+                          f"val_loss {cur:.4f}  best {st['best']:.4f}@{st['best_epoch'] + 1}  "
+                          f"wait {st['wait']}/{patience}  {time.time() - self._t:5.1f}s", flush=True)
+
+        return _CB()
+
+    def finish_fit(self, model) -> None:
+        """End of training: best epoch's weights into the model, saved as 'final' (QAT and export start here)."""
+        self._read("best", model, False)
+        import tensorflow as tf
+        tf.train.Checkpoint(model=model).write(str(self.dir / "final_a"))
+        self.state["final_slot"] = "a"
+        self.state["fit_done"] = True
+        self.save_state()
+
+    def clear(self) -> None:
+        import shutil
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+
 def run_nn(a: MD.Arch, p, k, s, d: Data) -> None:
     import tensorflow as tf
     import tf_keras as keras
     keras.backend.clear_session()
     keras.utils.set_random_seed(s)
-    try:
-        tf.config.experimental.enable_op_determinism()
-    except Exception:  # noqa: BLE001
-        pass
+    if DETERMINISTIC:
+        try:
+            tf.config.experimental.enable_op_determinism()
+        except Exception:  # noqa: BLE001
+            pass
     Xtr, Xva = d.shaped(d.X["train"]), d.shaped(d.X["val"])
     Xte = d.shaped(d.X["test"])
     noisy_X = {snr: d.shaped(d.test_noisy(snr)) for snr in SNRS}
     model = MD.build(a, d.n_classes, Xtr.shape[1] if a.rep != "r0" else 1024)
     model.compile(keras.optimizers.Adam(LR), "sparse_categorical_crossentropy", metrics=["accuracy"],
                   steps_per_execution=SPE)
-    es = keras.callbacks.EarlyStopping(monitor="val_loss", patience=PATIENCE, restore_best_weights=True)
-    t0 = time.time()
-    h = model.fit(Xtr, d.y["train"], validation_data=(Xva, d.y["val"]), batch_size=BATCH, epochs=EPOCHS,
-                  callbacks=[es], verbose=0, shuffle=True)
-    fit_s = time.time() - t0
-    vl = h.history["val_loss"]
+    tag = f"{a.key} {p}/f{k}/s{s}"
+    ck = NNCheckpoint(CKPT_DIR / f"{a.key}__{p}__f{k}__s{s}") if CKPT_DIR else None
+    if ck is None:
+        es = keras.callbacks.EarlyStopping(monitor="val_loss", patience=PATIENCE, restore_best_weights=True)
+        t0 = time.time()
+        h = model.fit(Xtr, d.y["train"], validation_data=(Xva, d.y["val"]), batch_size=BATCH, epochs=EPOCHS,
+                      callbacks=[es], verbose=0, shuffle=True)
+        fit_s = time.time() - t0
+        vl = h.history["val_loss"]
+        resumed = []
+    else:
+        if ck.state["fit_done"]:
+            ck.restore_final(model)
+            print(f"    {tag} training already finished; resuming at QAT/export", flush=True)
+        else:
+            start = ck.resume(model)
+            if start:
+                print(f"    {tag} resuming at epoch {start + 1}", flush=True)
+            if not ck.state["stopped"] and start < EPOCHS:
+                model.fit(Xtr, d.y["train"], validation_data=(Xva, d.y["val"]), batch_size=BATCH, epochs=EPOCHS,
+                          initial_epoch=start, callbacks=[ck.callback(PATIENCE, tag if EPOCH_LOG else None)],
+                          verbose=0, shuffle=True)
+            ck.finish_fit(model)
+        fit_s, vl, resumed = ck.state["fit_s"], ck.state["val_loss"], ck.state["resumed_at"]
     info = {"fit_s": round(fit_s, 1), "epochs": len(vl), "best_epoch": int(np.argmin(vl)) + 1,
             "val_loss_best": float(np.min(vl))}
+    if resumed:
+        info["resumed_at_epochs"] = resumed
+    if not DETERMINISTIC:
+        info["op_determinism"] = False
+    try:
+        if tf.config.list_logical_devices("GPU"):
+            info["device"] = "gpu"
+    except Exception:  # noqa: BLE001
+        pass
     params, macs = MD.nn_cost(a, d.n_classes, Xtr.shape[1] if a.rep != "r0" else 1024)
     info.update(params=params, macs=macs)
     rep_x = Xtr[rep_ids(d.sp["train"])]
@@ -269,10 +401,15 @@ def run_nn(a: MD.Arch, p, k, s, d: Data) -> None:
         q = tfmot.quantization.keras.quantize_model(model)
         q.compile(keras.optimizers.Adam(QAT_LR), "sparse_categorical_crossentropy", metrics=["accuracy"],
                   steps_per_execution=SPE)
+        if EPOCH_LOG:
+            print(f"    {tag} QAT fine-tune ({QAT_EPOCHS} epochs)", flush=True)
         t1 = time.time()
         q.fit(Xtr, d.y["train"], batch_size=BATCH, epochs=QAT_EPOCHS, verbose=0, shuffle=True)
         info["qat_s"] = round(time.time() - t1, 1)
         blobs["int8qat"] = tflite_convert(q, rep_x)
+    if EPOCH_LOG:
+        print(f"    {tag} scoring {len(blobs)} .tflite files on {len(Xte)} test windows (+{len(SNRS)} noise levels)",
+              flush=True)
 
     for prec, blob in blobs.items():
         mid = f"{a.key}-{prec}"
@@ -288,6 +425,8 @@ def run_nn(a: MD.Arch, p, k, s, d: Data) -> None:
             (DEPLOY / f"{mid}.tflite").write_bytes(blob)
             np.savez(DEPLOY / f"{a.key}.norm.npz", **({"mu": d.norm.mu, "sigma": d.norm.sigma} if a.rep == "r0"
                                                       else {"mean": d.norm.mean, "std": d.norm.std}))
+    if ck is not None:
+        ck.clear()                     # every result file of this job is written; the checkpoint is no longer needed
     keras.backend.clear_session()
 
 
@@ -303,7 +442,15 @@ def main() -> None:
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--deadline", type=float, default=0,
                     help="unix time after which no new job is started (lets a capped runner exit cleanly)")
+    ap.add_argument("--ckpt-dir", type=Path, help="checkpoint NN training after every epoch here and resume from it")
+    ap.add_argument("--epoch-log", action="store_true", help="print one line per NN epoch (live progress)")
+    ap.add_argument("--gpu", action="store_true",
+                    help="NN training on the GPU: memory growth on, TF op determinism off unless --deterministic")
+    ap.add_argument("--deterministic", action="store_true", help="keep TF op determinism even with --gpu")
     a = ap.parse_args()
+    global CKPT_DIR, EPOCH_LOG, DETERMINISTIC
+    CKPT_DIR, EPOCH_LOG = a.ckpt_dir, a.epoch_log
+    DETERMINISTIC = a.deterministic or not a.gpu
 
     J = jobs(a.families, a.seeds, a.protocols)
     if a.archs:
@@ -316,8 +463,14 @@ def main() -> None:
     J = [j for idx, j in enumerate(J) if idx % n == i and not done(j)]
     if any(x.is_nn for x, *_ in J):
         import tensorflow as tf
+        if a.gpu:
+            gpus = tf.config.list_physical_devices("GPU")
+            for g in gpus:
+                tf.config.experimental.set_memory_growth(g, True)
+            print(f"GPU: {[g.name for g in gpus] or 'none visible to TensorFlow (running on CPU)'}", flush=True)
         tf.config.threading.set_intra_op_parallelism_threads(a.threads)
         tf.config.threading.set_inter_op_parallelism_threads(a.threads)
+    print(f"dataset={DS.NAME}  {len(J)} jobs to run in this worker", flush=True)
     cache: dict = {}
     t_start = time.time()
     for idx, (arch, p, k, s) in enumerate(J, 1):
@@ -328,6 +481,7 @@ def main() -> None:
         if key not in cache:
             cache.clear()
             cache[key] = Data(arch.rep, p, k)
+        print(f"[{idx}/{len(J)}] start {arch.key} {p}/f{k}/s{s}", flush=True)
         t0 = time.time()
         try:
             (run_tree if arch.family in ("dt", "rf") else run_nn)(arch, p, k, s, cache[key])
