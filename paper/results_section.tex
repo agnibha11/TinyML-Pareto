@@ -134,6 +134,70 @@ span the configurations of a group). Log scale.}
 \label{fig:breakdown}
 \end{figure}
 
+\subsection{Cheaper front ends: the right arithmetic depends on the core}
+\label{sec:fx}
+Fig.~\ref{fig:fx} shows the estimated front-end cycles per window. On the Cortex-M4F the float front end is hard to
+beat: CMSIS-DSP's radix-8 float FFT and the single-cycle FPU make the q15 R2 and R4 front ends
+\NumFxMfQRTwoSlow{}$\times$ and \NumFxMfQRFourSlow{}$\times$ slower and the q31 ones about \NumFxMfQtRTwoSlow{}$\times$
+(enabling CMSIS-DSP's loop unrolling speeds q15 R2 up by only \NumFxUnrollQRTwo{}). The integer R1, however, needs
+\NumFxMfIROneKcyc{}\,k cycles against \NumFxMfFROneKcyc{}\,k: \NumFxMfROneSave{} less, or \NumFxMfROneSaveSensor{}
+less than a float front end that must first convert int16 samples (\NumFxMfConvKcyc{}\,k cycles). The hybrid R2 and
+R4 front ends, integer R1 plus float FFT, save \NumFxMfRTwoSaveSensor{} and \NumFxMfRFourSaveSensor{} against the
+sensor-fed float front end. Without an FPU the picture inverts. Every float operation becomes a library call, and the
+q15 front ends are \NumFxNofpuROneSpeedQ{}$\times$ (R1), \NumFxNofpuRTwoSpeedQ{}$\times$ (R2) and
+\NumFxNofpuRFourSpeedQ{}$\times$ (R4) faster than float on the M4 without FPU, and \NumFxMzpROneSpeedQ{}--\NumFxMzpRTwoSpeedQ{}$\times$
+faster on the M0+. The design rule is therefore core-specific: on an FPU core, integer statistics with float FFTs; on
+an FPU-less core, q15 throughout.
+
+Accuracy does not stand in the way. The integer R1, q31 and hybrid front ends reproduce the float features to within
+\NumFxFidExactPNN{} standard deviations at the 99th percentile, and dropped into the float-trained trees and forests
+they change the mean macro-F1 by at most \NumFxDeployMaxAbsMean{} for any representation (worst single run
+\NumFxExactMinRun{}). The q15 front ends are coarser (99th percentile \NumFxFidQRTwoPNN{}\,$\sigma$ for R2, worst run
+\NumFxQfifteenMinRun{}), and the deployed MLPs agree with the float front end on \NumFxMlpAgreeQfifteen{} of windows
+with q15, below the 99\,\% agreement gate, against \NumFxMlpAgreeQtone{} with q31 or the hybrid. The most accurate
+unseen-bearing model, \NumFxBestModel{}, scores \NumFxBestRef{} with float features, \NumFxBestHyb{} with the hybrid
+front end and \NumFxBestQ{} with q15.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.92\textwidth]{fig_fx_cores}
+\caption{Estimated front-end cycles per window (z-score included) for the float, q31, q15 and hybrid front ends on
+three core classes, all built from the same source and run on the virtual MCU. The fixed-point variants share the
+integer R1. Log scale.}
+\label{fig:fx}
+\end{figure*}
+
+\subsection{A detect-then-diagnose cascade}
+\label{sec:cas}
+Healthy-versus-fault detection is far easier than diagnosis on unseen bearings. Under P3 the headline gate flags
+\NumCasPThreeEitherTpr{} of fault windows and \NumCasPThreeEitherFpr{} of healthy ones (supervised alone:
+\NumCasPThreeSupTpr{} and \NumCasPThreeSupFpr{}). Placed in front of every stored run, it changes the mean P3 macro-F1 by
+\NumCasPThreeEitherDFOne{}, and \NumCasPThreeEitherNotWorse{} of the models lose less than 0.005; the MLPs even gain
+(\NumCasMlpFOneSingle{} to \NumCasMlpFOneCascade{} for the best), because the gate removes their false fault calls on
+healthy windows. The first stage costs \NumCasStageOneUj{}\,$\mu$J per window. For \NumCasBestModel{} the energy per
+window falls from \NumCasBestESingle{}\,$\mu$J to \NumCasBestEZero{}\,$\mu$J on a healthy machine and
+\NumCasBestEOne{}\,$\mu$J at 1\,\% fault prevalence (\NumCasBestEOneReuse{}\,$\mu$J if stage 2 reuses the R1 features
+stage 1 has computed); with a fault in every window it costs \NumCasBestEHundredReuse{}\,$\mu$J with reuse, still
+below the model alone. Across all \NumConfigs{} models the median saving at 1\,\% prevalence is
+\NumCasPThreeEitherSaveMed{}$\times$ (Fig.~\ref{fig:cas}), \NumCasSaveFamMin{}--\NumCasSaveFamMax{}$\times$ for the most
+accurate model of each family. False alarms cap the saving of expensive models. Confirming an alarm on the next window
+lowers the P3 false-alarm rate to \NumCasPThreeEitherTwoFpr{} and raises the median saving to
+\NumCasPThreeEitherTwoSaveMed{}$\times$ (up to \NumCasPThreeEitherTwoSaveMax{}$\times$), at a mean macro-F1 change of
+\NumCasPThreeEitherTwoDFOne{}, mostly the delayed first window of each short test recording. Under P2 the healthy
+windows of a load the gate never saw raise alarms (FPR \NumCasPTwoEitherFpr{}), so the median saving drops to
+\NumCasPTwoEitherSaveMed{}$\times$ with unchanged accuracy: a gate must learn the healthy machine at every operating
+point it will see.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.46\textwidth]{fig_cascade_energy}\hfill
+\includegraphics[width=0.46\textwidth]{fig_cascade_pareto}
+\caption{Detect-then-diagnose cascade under P3. Left: energy per window relative to the model alone against fault
+prevalence, for the most accurate model of each family (stage 2 reuses the R1 features). Right: error against energy
+for every model, alone (hollow) and in the cascade at 1\,\% fault prevalence (filled).}
+\label{fig:cas}
+\end{figure*}
+
 \subsection{Frontiers and family dominance (RQ1, RQ3)}
 Fig.~\ref{fig:pareto} shows error against estimated end-to-end energy under P2 and P3. With three objectives
 (error, energy, peak RAM), the P2 frontier holds \NumFrontPTwoEtoe{} models (\NumRobustPTwoEtoe{} with bootstrap
@@ -271,7 +335,10 @@ artificially seeded fault, and in P3 the normal class can only be split by load.
 generalisation check. R4's 2--5\,kHz demodulation band was chosen for the CWRU test rig's resonances, and another
 machine may need a different band. The board noise, baseline drift and INA219 offsets in the virtual campaign are
 assumptions, not measurements of this board; the rig will measure them, and the campaign will be re-run with the
-measured values.
+measured values. The fixed-point comparison across cores uses one cycle model; for the M0+ (two-stage pipeline, two-cycle
+loads) it is an approximation, and energy per cycle differs between cores. The cascade's saving depends on how often
+the machine is faulty, which the study treats as a parameter, and its gate needs healthy data from every operating
+condition.
 
 \section{Conclusion}
 Before any hardware arrived, the full pipeline was built and gated in emulation: data, leakage-checked splits,
@@ -280,5 +347,7 @@ that link for the board. The preliminary answer to the project's question is alr
 evaluation makes every family look interchangeable; bearing-disjoint evaluation does not. For feature-based models,
 the front end, not the classifier, sets the energy cost, and a physics-informed front end (R4) buys back much of the
 accuracy that leakage-free evaluation removes. The simulated campaign shows that the rig can resolve these effects if
-the board's baseline stays stable between windows. The hardware campaign now has to confirm them with measured energy.
+the board's baseline stays stable between windows. Two front-end-level changes cut the energy further without
+retraining any model: integer statistics on the sensor's own samples, and a gate that lets the diagnosis model sleep
+while the machine is healthy. The hardware campaign now has to confirm them with measured energy.
 

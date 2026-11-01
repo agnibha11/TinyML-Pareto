@@ -289,6 +289,96 @@ def build() -> dict[str, str]:
         m[f"NumEx{tag}Energy"] = f"{ev:.1f}"
         m[f"NumEx{tag}Life"] = f"{lv:.1f}"
     m["NumExSleepLife"] = f"{batt / ps / year:.1f}"
+    m.update(fixed_point_numbers())
+    m.update(cascade_numbers())
+    return m
+
+
+def kc(x: float) -> str:
+    return f"{x / 1e3:.1f}"
+
+
+def fixed_point_numbers() -> dict[str, str]:
+    """Macros for the front-end arithmetic study (tools/fxfe/run_fxfe.py, ml/fixed_point.py)."""
+    m: dict[str, str] = {}
+    fs = RES / "fixedpoint" / "fx_cost_summary.csv"
+    if not fs.exists():
+        return m
+    c = pd.read_csv(fs).set_index(["core", "region"]).cyc_med
+    for core, tag in (("m4f", "Mf"), ("m4nofp", "Nofpu"), ("m0p", "Mzp")):
+        for reg, rt in (("CONV", "Conv"), ("F32_R1", "FROne"), ("F32_R2", "FRTwo"), ("F32_R4", "FRFour"),
+                        ("FX_R1", "IROne"), ("FX_R2_Q15", "QRTwo"), ("FX_R2_Q31", "QtRTwo"), ("FX_R4_Q15", "QRFour"),
+                        ("FX_R4_Q31", "QtRFour"), ("HYB_R2", "HRTwo"), ("HYB_R4", "HRFour"),
+                        ("GATE_MAHAL", "Gate")):
+            m[f"NumFx{tag}{rt}Kcyc"] = kc(c[(core, reg)])
+        for r, fx15, fx31 in (("ROne", "FX_R1", "FX_R1"), ("RTwo", "FX_R2_Q15", "FX_R2_Q31"),
+                              ("RFour", "FX_R4_Q15", "FX_R4_Q31")):
+            f32 = c[(core, {"ROne": "F32_R1", "RTwo": "F32_R2", "RFour": "F32_R4"}[r])]
+            m[f"NumFx{tag}{r}SpeedQ"] = f"{f32 / c[(core, fx15)]:.1f}"
+            m[f"NumFx{tag}{r}SpeedQt"] = f"{f32 / c[(core, fx31)]:.1f}"
+    # Cortex-M4F: savings of the integer R1 and the hybrid R2/R4, against the float front end fed float samples and
+    # against the float front end fed int16 sensor samples (which must first convert them)
+    conv = c[("m4f", "CONV")]
+    for r, f32, best in (("ROne", "F32_R1", "FX_R1"), ("RTwo", "F32_R2", "HYB_R2"), ("RFour", "F32_R4", "HYB_R4")):
+        m[f"NumFxMf{r}Save"] = pct(1 - c[("m4f", best)] / c[("m4f", f32)], 0)
+        m[f"NumFxMf{r}SaveSensor"] = pct(1 - c[("m4f", best)] / (c[("m4f", f32)] + conv), 0)
+    m["NumFxMfQRTwoSlow"] = f"{c[('m4f', 'FX_R2_Q15')] / c[('m4f', 'F32_R2')]:.1f}"
+    m["NumFxMfQRFourSlow"] = f"{c[('m4f', 'FX_R4_Q15')] / c[('m4f', 'F32_R4')]:.1f}"
+    m["NumFxMfQtRTwoSlow"] = f"{c[('m4f', 'FX_R2_Q31')] / c[('m4f', 'F32_R2')]:.1f}"
+    m["NumFxMfQtRFourSlow"] = f"{c[('m4f', 'FX_R4_Q31')] / c[('m4f', 'F32_R4')]:.1f}"
+    em = json.loads((RES / "headline_numbers.json").read_text())["energy_model"]
+    uj = lambda cyc: cyc / (em["f_cpu_MHz"] * 1e6) * em["P_active_mW"] * 1e3  # noqa: E731
+    m["NumFxMfROneFloatUj"] = f"{uj(c[('m4f', 'F32_R1')]):.1f}"
+    m["NumFxMfROneIntUj"] = f"{uj(c[('m4f', 'FX_R1')]):.1f}"
+    u = pd.read_csv(RES / "fixedpoint" / "fx_cost_summary_loopunroll.csv").set_index(["core", "region"]).cyc_med
+    m["NumFxUnrollQRTwo"] = pct(1 - u[("m4f", "FX_R2_Q15")] / c[("m4f", "FX_R2_Q15")], 0)
+    s = json.loads((RES / "fixedpoint" / "fx_summary.json").read_text())
+    dep = s["deploy"]
+    m["NumFxDeployMaxAbsMean"] = f"{max(abs(v['mean_dF1']) for v in dep.values()):.4f}"
+    m["NumFxQfifteenMinRun"] = f"{min(dep['r2_q15']['min_dF1'], dep['r4_q15']['min_dF1']):.3f}"
+    m["NumFxExactMinRun"] = f"{min(v['min_dF1'] for k, v in dep.items() if not k.endswith('q15')):.4f}"
+    m["NumFxRuns"] = f"{s['n_runs_deploy']:,}".replace(",", "{,}")
+    m["NumFxMlpAgreeQfifteen"] = pct(s["mlp_min_agreement"]["q15"])
+    m["NumFxMlpAgreeQtone"] = pct(s["mlp_min_agreement"]["q31"])
+    m["NumFxMlpAgreeHyb"] = pct(s["mlp_min_agreement"]["hyb"])
+    b = s["best_P3_deploy"]["r4"]
+    m["NumFxBestModel"] = "\\texttt{" + b["model_id"] + "}"
+    m["NumFxBestRef"], m["NumFxBestHyb"], m["NumFxBestQ"] = f3(b["ref"]), f3(b["hyb"]), f3(b["q15"])
+    fid = pd.read_csv(RES / "fixedpoint" / "fx_fidelity.csv").set_index(["rep", "front_end"])
+    m["NumFxFidQRTwoPNN"] = f"{fid.loc[('r2', 'q15'), 'p99_abs_z']:.2f}"
+    m["NumFxFidExactPNN"] = f"{max(fid.loc[(r, v), 'p99_abs_z'] for r, v in (('r1', 'int'), ('r2', 'q31'), ('r2', 'hyb'))):.3f}"
+    return m
+
+
+def cascade_numbers() -> dict[str, str]:
+    """Macros for the detect-then-diagnose cascade (ml/cascade.py)."""
+    m: dict[str, str] = {}
+    p = RES / "cascade" / "summary.json"
+    if not p.exists():
+        return m
+    s = json.loads(p.read_text())
+    g = s["gates"]
+    for pr, pt in (("P2", "PTwo"), ("P3", "PThree")):
+        for gate, gt in (("sup", "Sup"), ("healthy", "Healthy"), ("either", "Either"), ("either2", "EitherTwo")):
+            m[f"NumCas{pt}{gt}Tpr"] = pct(g[f"{pr}_{gate}"]["tpr_mean"])
+            m[f"NumCas{pt}{gt}Fpr"] = pct(g[f"{pr}_{gate}"]["fpr_mean"])
+            v = s[f"{pr}_{gate}"]
+            m[f"NumCas{pt}{gt}DFOne"] = f"{v['dF1_mean']:+.4f}".replace("+", "+").replace("-", "$-$")
+            m[f"NumCas{pt}{gt}SaveMed"] = f"{v['saving_median_pi0.01']:.1f}"
+            m[f"NumCas{pt}{gt}SaveMax"] = f"{v['saving_max_pi0.01']:.0f}"
+            m[f"NumCas{pt}{gt}NotWorse"] = pct(v["share_models_not_worse"], 0)
+    e = s["P3_either"]
+    m["NumCasStageOneUj"] = f"{s['E_stage1_uJ']['either']:.1f}"
+    m["NumCasBestModel"] = "\\texttt{" + e["best_model"] + "}"
+    m["NumCasBestFOneSingle"], m["NumCasBestFOneCascade"] = f3(e["best_f1_single"]), f3(e["best_f1_cascade"])
+    m["NumCasBestESingle"] = f"{e['best_E_single_uJ']:.1f}"
+    for pi, t in (("0", "Zero"), ("0.01", "One"), ("0.1", "Ten"), ("1", "Hundred")):
+        m[f"NumCasBestE{t}"] = f"{e[f'best_E_pi{pi}_uJ']:.1f}"
+        m[f"NumCasBestE{t}Reuse"] = f"{e[f'best_E_pi{pi}_reuse_uJ']:.1f}"
+    fam = e["families"]
+    m["NumCasSaveFamMin"] = f"{min(v['saving_pi0.01'] for v in fam.values()):.1f}"
+    m["NumCasSaveFamMax"] = f"{max(v['saving_pi0.01'] for v in fam.values()):.1f}"
+    m["NumCasMlpFOneSingle"], m["NumCasMlpFOneCascade"] = f3(fam["mlp"]["f1_single"]), f3(fam["mlp"]["f1_cascade"])
     return m
 
 

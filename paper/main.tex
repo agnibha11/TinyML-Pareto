@@ -55,7 +55,13 @@ hard-voting forests, and desktop int8 kernels that round differently from the mi
 family exceeded \NumPThreeNoRFourBest{} on unseen bearings, we added a physics-informed envelope-spectrum front end
 (R4), which raises the best bearing-disjoint macro-F1 to \NumPThreeRFourBest{}. A simulated measurement campaign that
 runs synthetic INA219 samples through the logger's own integration code predicts a session-to-session CV of
-\NumVrigCvMedian{} and about \NumVrigHours{} hours of board time. Energies here are chip-level estimates; INA219 measurements replace them in the final version.
+\NumVrigCvMedian{} and about \NumVrigHours{} hours of board time. Because the front end sets the cost, we then cut
+it in two ways. A fixed-point R1 front end on integer sensor samples needs \NumFxMfROneSave{} fewer cycles than the
+float one on the Cortex-M4F with unchanged predictions, and q15 front ends are \NumFxNofpuRFourSpeedQ{}--\NumFxNofpuROneSpeedQ{}$\times$
+faster on a core without an FPU. A detect-then-diagnose cascade, whose always-on gate uses only those integer
+features, lowers the energy per window of the most accurate unseen-bearing model from \NumCasBestESingle{} to
+\NumCasBestEOne{}\,$\mu$J at 1\,\% fault prevalence, for a mean macro-F1 change of \NumCasPThreeEitherDFOne{}. Energies
+here are chip-level estimates; INA219 measurements replace them in the final version.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -97,7 +103,9 @@ statistics, a battery-life model and a first selection rubric;
 \item three deployment pitfalls, each found by the pipeline's own gates and fixed;
 \item a physics-informed envelope front end (R4) for unseen bearings, verified in C against the Python reference;
 \item a virtual measurement campaign, run through the logger's own C code, that sizes the rig's error budget and the
-campaign duration before the hardware arrives, and an interactive model selector built from the results.
+campaign duration before the hardware arrives, and an interactive model selector built from the results;
+\item two front-end-level energy reductions: fixed-point and hybrid front ends, evaluated bit-exactly on three core
+classes, and a detect-then-diagnose cascade, scored over all \NumRuns{} stored runs.
 \end{itemize}
 The code, data manifests, trained models and all results are available at
 \url{https://github.com/agnibha11/TinyML-Pareto}.
@@ -250,6 +258,39 @@ parser reads the resulting lines. Energy per inference is then recovered as the 
 $\Delta E = (\bar P_\text{RUN} - \bar P_\text{IDLE})\,T_\text{RUN}/N$, over three sessions and 30 Monte-Carlo replications,
 and compared with the injected truth. The power-model values are assumptions; the first rig sessions (gate M3) replace
 them. What the simulation establishes is which effects dominate the error, and how long the campaign will take.
+
+\subsection{Fixed-point and hybrid front ends}
+\label{sec:fxm}
+Sensors deliver integers. A $\pm$8\,g, 16-bit vibration accelerometer gives int16 samples (here 4096\,LSB/g; the
+largest $|x|$ in the dataset is 6.8\,g, so nothing saturates), which a float front end must first convert. A second C
+front end, \texttt{frontend\_fx.c}, computes R1, R2 and R4 from the int16 samples and returns features in the float
+front end's units, so trained models run on them unchanged. R1 uses exact integer moments: one pass with dual 16-bit
+SIMD instructions for the sum, $\sum|x|$, maximum and minimum, then central moments around the integer mean in 64-bit
+accumulators (SMLAL/UMLAL). R2 and R4 have q15 and q31 versions built on CMSIS-DSP's fixed-point FFTs, with
+block-floating-point rescaling between stages, and a \emph{hybrid} version that keeps the integer R1 and runs the FFT
+stages in float, fed straight from int16. Each front end is built from the same source for three core classes:
+Cortex-M4F (the Nano~33~BLE), Cortex-M4 without an FPU (DSP instructions, software float; a stand-in for M3- and
+M33-class parts) and Cortex-M0+ (neither). All three run on the virtual MCU; the M0+ code runs on the emulated M4, so
+its counts are exact instructions with M4 timing. The features of all \NumWindows{} windows are computed by the M4F
+machine code itself, which reads the windows over semihosting, and the accuracy study uses those outputs:
+\NumFxRuns{} paired runs of the 30 tree and forest configurations on R1, R2 and R4, trained on float features and
+tested on each front end (drop-in), retraining on the fixed-point features, and the class agreement of the deployed
+MLPs.
+
+\subsection{Detect-then-diagnose cascade}
+\label{sec:casm}
+In service a machine is healthy almost all the time, yet a single-stage model pays its full cost on every window. In
+the cascade, an always-on first stage computes the integer R1 features and a \emph{gate}; the diagnosis model (any of
+the \NumConfigs{} configurations) runs only when the gate raises an alarm, and the window is otherwise labelled
+healthy. Missed faults cost accuracy and false alarms cost energy, so each gate is tuned on the validation split for
+recall. The \emph{supervised} gate is a depth-2 tree (normal versus fault) with its threshold at the lowest fault
+probability seen on validation faults. The \emph{healthy-only} gate needs no fault data, only what a newly installed
+sensor can record: the Mahalanobis distance of nine R1 features to the training split's healthy windows, with the
+alarm above the 99th percentile of validation healthy distances. The headline gate fires when either does. Because
+every host run stored its per-window predictions, the cascade is scored for all models, folds and seeds without
+retraining. With gate rates TPR and FPR, the energy per window at fault prevalence $\pi$ is
+$E(\pi) = E_1 + [\pi\,\mathrm{TPR} + (1-\pi)\,\mathrm{FPR}]\,E_2$, where $E_1$ is the first stage on the virtual
+M4F and $E_2$ the model's end-to-end cost.
 
 \input{results_section}
 

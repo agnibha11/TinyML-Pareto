@@ -136,6 +136,13 @@ footer { font-size: 12.5px; color: var(--muted); max-width: 95ch; display: flex;
         <select id="sleep"></select>
         <div class="hint">Chip-level sleep is the nRF52840 floor. The Nano board as shipped draws far more; the rig will measure it.</div>
       </div>
+      <div class="ctl">
+        <label class="toggle" style="margin-top:0;color:var(--ink)"><input type="checkbox" id="gate"> Detect-then-diagnose gate</label>
+        <div class="hint">A cheap integer-feature gate runs on every window; the chosen model runs only when it raises an alarm.</div>
+        <label for="pi">Share of windows from a faulty machine</label>
+        <input type="range" id="pi" min="-3" max="0" step="0.125" value="-2" disabled>
+        <div class="readout" id="pi-out"></div>
+      </div>
     </form>
 
     <div class="results">
@@ -192,7 +199,16 @@ function years(y) { return !isFinite(y) ? "∞" : y >= 1 ? `${fmt(y, 1)} y` : `$
 
 function state() {
   const r = Math.pow(10, +$("rate").value);
-  return { r, ram: +$("ram").value, flash: +$("flash").value, batt: +$("batt").value, life: +$("life").value, ps: +$("sleep").value };
+  return { r, ram: +$("ram").value, flash: +$("flash").value, batt: +$("batt").value, life: +$("life").value, ps: +$("sleep").value,
+           gate: $("gate").checked && lens !== "P1" && !!DATA.cascade, pi: Math.pow(10, +$("pi").value) };
+}
+
+// Energy and accuracy of a model as deployed: alone, or behind the gate (ml/cascade.py: stage 1 = integer R1 + gate,
+// escalation reuses R1 for feature models; rates are the gate's mean TPR/FPR on the chosen protocol's test folds).
+function deployed(m, s) {
+  if (!s.gate || !m.cas) return { e: m.e2e, f1: m.f1[lens][0], sd: m.f1[lens][1], esc: 1 };
+  const g = DATA.cascade.rate[lens], esc = s.pi * g.tpr + (1 - s.pi) * g.fpr;
+  return { e: DATA.cascade.E1 + esc * m.esc, f1: m.cas[lens][0], sd: m.cas[lens][1], esc };
 }
 
 function evaluate(s) {
@@ -202,11 +218,12 @@ function evaluate(s) {
     if (m.ram > s.ram) why.push("RAM");
     if (m.flash > s.flash) why.push("flash");
     if (m.lat * 1e-6 > 1 / s.r) why.push("too slow");
-    if (!(m.e2e <= Emax)) why.push("energy");
-    const lifeY = s.batt / (s.r * m.e2e * 1e-6 + s.ps) / YEAR;
-    return { m, why, lifeY, f1: m.f1[lens][0], sd: m.f1[lens][1] };
+    const d = deployed(m, s);
+    if (!(d.e <= Emax)) why.push("energy");
+    const lifeY = s.batt / (s.r * d.e * 1e-6 + s.ps) / YEAR;
+    return { m, why, lifeY, f1: d.f1, sd: d.sd, e: d.e, esc: d.esc };
   });
-  rows.sort((a, b) => (a.why.length > 0) - (b.why.length > 0) || b.f1 - a.f1 || a.m.e2e - b.m.e2e);
+  rows.sort((a, b) => (a.why.length > 0) - (b.why.length > 0) || b.f1 - a.f1 || a.e - b.e);
   return { rows, Emax, best: rows.find((x) => x.why.length === 0) || null };
 }
 
@@ -231,11 +248,12 @@ function renderPick(s, ev) {
     <div class="kv">
       <div><span>macro-F1 (${lens})</span><b>${fmt(b.f1, 3)} ± ${fmt(b.sd, 3)}</b></div>
       <div><span>Battery life</span><b>${years(b.lifeY)}</b></div>
-      <div><span>Energy per window</span><b>${sig(m.e2e)} µJ</b></div>
+      <div><span>Energy per window</span><b>${sig(b.e)} µJ</b></div>
       <div><span>Latency per window</span><b>${sig(m.lat / 1000)} ms</b></div>
       <div><span>Peak RAM</span><b>${kb(m.ram)}</b></div>
       <div><span>Model flash</span><b>${kb(m.flash)}</b></div>
-      <div><span>Front end share of energy</span><b>${fmt(100 * m.fe / m.e2e, 0)} %</b></div>
+      ${s.gate ? `<div><span>Model runs on</span><b>${fmt(100 * b.esc, 1)} % of windows</b></div><div><span>Alone it would cost</span><b>${sig(m.e2e)} µJ</b></div>`
+               : `<div><span>Front end share of energy</span><b>${fmt(100 * m.fe / m.e2e, 0)} %</b></div>`}
       <div><span>Energy budget per window</span><b>${ev.Emax > 0 ? sig(ev.Emax) + " µJ" : "none"}</b></div>
     </div>`;
 }
@@ -251,9 +269,9 @@ function tightest(rows) {
 
 function renderPlot(s, ev) {
   const W = 760, H = 330, L = 52, R = 14, T = 12, B = 40;
-  const xs = DATA.models.map((m) => m.e2e);
+  const xs = ev.rows.map((r) => r.e).concat(DATA.models.map((m) => m.e2e));
   const x0 = Math.floor(Math.log10(Math.min(...xs))), x1 = Math.ceil(Math.log10(Math.max(...xs)));
-  const f1s = DATA.models.map((m) => m.f1[lens][0]);
+  const f1s = ev.rows.map((r) => r.f1);
   const yLo = Math.max(0, Math.floor((Math.min(...f1s) - 0.02) * 10) / 10), yHi = 1;
   const X = (e) => L + (Math.log10(e) - x0) / (x1 - x0) * (W - L - R);
   const Y = (f) => T + (yHi - f) / (yHi - yLo) * (H - T - B);
@@ -279,8 +297,8 @@ function renderPlot(s, ev) {
   }
   const shape = { fp32: "c", int8: "s", int8qat: "t", int8ref: "x" };
   for (const r of ev.rows.slice().reverse()) {
-    const m = r.m, cx = X(m.e2e), cy = Y(r.f1), col = `var(--${m.fam})`, op = r.why.length ? 0.22 : 0.95;
-    const t = `<title>${m.id} · F1 ${fmt(r.f1, 3)} · ${sig(m.e2e)} µJ · ${kb(m.ram)} RAM${r.why.length ? " · ruled out: " + r.why.join(", ") : ""}</title>`;
+    const m = r.m, cx = X(r.e), cy = Y(r.f1), col = `var(--${m.fam})`, op = r.why.length ? 0.22 : 0.95;
+    const t = `<title>${m.id} · F1 ${fmt(r.f1, 3)} · ${sig(r.e)} µJ · ${kb(m.ram)} RAM${r.why.length ? " · ruled out: " + r.why.join(", ") : ""}</title>`;
     const k = shape[m.prec];
     if (k === "c") g += `<circle class="pt" cx="${cx}" cy="${cy}" r="5" style="fill:${col}" opacity="${op}">${t}</circle>`;
     else if (k === "s") g += `<rect class="pt" x="${cx - 4.5}" y="${cy - 4.5}" width="9" height="9" style="fill:${col}" opacity="${op}">${t}</rect>`;
@@ -288,7 +306,7 @@ function renderPlot(s, ev) {
     else g += `<path d="M${cx - 4} ${cy - 4} L${cx + 4} ${cy + 4} M${cx + 4} ${cy - 4} L${cx - 4} ${cy + 4}" style="stroke:${col}" stroke-width="2" fill="none" opacity="${op}">${t}</path>`;
   }
   if (ev.best) {
-    const cx = X(ev.best.m.e2e), cy = Y(ev.best.f1);
+    const cx = X(ev.best.e), cy = Y(ev.best.f1);
     g += `<circle cx="${cx}" cy="${cy}" r="10" fill="none" style="stroke:var(--ink)" stroke-width="2"/>`;
     g += `<text x="${cx + 13}" y="${cy - 8}" style="fill:var(--ink)">pick</text>`;
   }
@@ -309,7 +327,7 @@ function renderTable(s, ev) {
     const m = r.m, cls = r.why.length ? "out" : (ev.best && r === ev.best ? "best" : "");
     const st = r.why.length ? `<span class="status no">${r.why.join(" · ")}</span>` : `<span class="status ok">fits</span>`;
     h += `<tr class="${cls}"><td>${i + 1}</td><td><span class="dot" style="background:var(--${m.fam})"></span>${m.id}</td>
-      <td>${fmt(r.f1, 3)} ± ${fmt(r.sd, 3)}</td><td>${fmt(m.f1.P1[0], 3)}</td><td>${sig(m.e2e)}</td><td>${sig(m.lat / 1000)}</td>
+      <td>${fmt(r.f1, 3)} ± ${fmt(r.sd, 3)}</td><td>${fmt(m.f1.P1[0], 3)}</td><td>${sig(r.e)}</td><td>${sig(m.lat / 1000)}</td>
       <td>${kb(m.ram)}</td><td>${kb(m.flash)}</td><td>${years(r.lifeY)}</td><td>${st}</td></tr>`;
   });
   $("tbl").innerHTML = h + "</tbody>";
@@ -319,6 +337,10 @@ function render() {
   const s = state();
   $("rate-out").textContent = `${s.r >= 1 ? fmt(s.r, s.r < 10 ? 1 : 0) : s.r.toPrecision(2)} windows / s · one every ${period(s.r)}`;
   $("lens-hint").textContent = LENS[lens];
+  $("pi").disabled = !$("gate").checked;
+  $("pi-out").textContent = !$("gate").checked ? "Gate off: every window runs the model."
+    : lens === "P1" ? "The gate is evaluated on P2 and P3 only; pick one of those to apply it."
+    : `${s.pi < 0.01 ? fmt(100 * s.pi, 2) : fmt(100 * s.pi, 1)} % · gate catches ${fmt(100 * DATA.cascade.rate[lens].tpr, 1)} % of faults, ${fmt(100 * DATA.cascade.rate[lens].fpr, 1)} % false alarms on this protocol`;
   const ev = evaluate(s);
   renderPick(s, ev); renderPlot(s, ev); renderTable(s, ev);
 }
@@ -328,7 +350,7 @@ document.querySelectorAll("#lens button").forEach((b) => b.addEventListener("cli
   document.querySelectorAll("#lens button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
   render();
 }));
-["ram", "flash", "rate", "batt", "life", "sleep", "hide"].forEach((id) => $(id).addEventListener("input", render));
+["ram", "flash", "rate", "batt", "life", "sleep", "hide", "gate", "pi"].forEach((id) => $(id).addEventListener("input", render));
 $("form").addEventListener("submit", (e) => e.preventDefault());
 $("meta").textContent = `${DATA.models.length} configurations · ${DATA.n_runs.toLocaleString("en-US")} host training runs · costs from the virtual Cortex-M4`;
 $("built").textContent = `Built ${DATA.built} by tools/make_selector.py from results/prehw_costs.csv and results/host_summary.csv.`;

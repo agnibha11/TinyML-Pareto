@@ -35,6 +35,7 @@ firmware/tests/host_sim/bench_sim
 firmware/bench/bundle_gen.cpp
 firmware/bench/models/
 firmware/bench/hann_1024.h
+firmware/bench/hann_fx.h
 firmware/bench/norm_constants.h
 logs/
 

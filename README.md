@@ -18,16 +18,18 @@ requirements.txt       direct dependencies (pinned)
 requirements-lock.txt  full pip freeze; install from this
 data/raw/              CWRU .mat files          (git-ignored)
 data/processed/        windows.npy, manifest.parquet (git-ignored)
-ml/                    prepare_data.py, splits.py, features.py, train.py, export.py, evaluate.py, stats.py
+ml/                    prepare_data.py, splits.py, features.py, train.py, export.py, evaluate.py, stats.py,
+                       fixed_point.py (fixed-point front-end accuracy), cascade.py (detect-then-diagnose cascade)
 configs/               one YAML per model config
 models/                registry.csv + models/<model_id>/
 handoff/               classes.json, feature spec, constants, test vectors (Agnibha -> Abhinav)
 firmware/              VERSIONS.md, bench/ (benchmark sketch), tests/
 tools/                 dut.py (board wrapper), measure.py (campaign), bundle.py, build_flash.py,
-                       vmcu/ (virtual Cortex-M4), demo_sim.py (simulated-board dry run)
+                       vmcu/ (virtual Cortex-M4), fxfe/ (fixed-point front ends on three core classes),
+                       vrig/ (simulated INA219 rig), demo_sim.py (simulated-board dry run)
 logger/                ESP32 INA219 logger firmware
 results/               script-written outputs only
-docs/                  related-work gap table, notes for the paper
+docs/                  related-work gap table, notes for the paper, midsem/ and sprint2/ status pages, selector/
 tests/                 host-side tests (pytest)
 ```
 
@@ -55,7 +57,11 @@ python ml/train.py --families mlp cnn --seeds 0 1 2 3 4 --shard 0/2 &    # NNs: 
 python ml/train.py --families mlp cnn --seeds 0 1 2 3 4 --shard 1/2
 python ml/export.py                     # models/<id>/, registry.csv, handoff/ norm constants, test vectors, ops
 python ml/stats.py                      # host_summary.csv, Pareto/HV/tau, rubric, battery model, figures
+python ml/cascade.py                    # detect-then-diagnose cascade over every stored run (docs/sprint2)
 ```
+
+Sprint 2 added a fixed-point/hybrid front end (`firmware/bench/frontend_fx.c`, `tools/fxfe/`, `ml/fixed_point.py`)
+and the detect-then-diagnose cascade; see [docs/sprint2/README.md](docs/sprint2/README.md).
 
 Every NN score comes from the exported `.tflite` run in the TFLite interpreter. Random-forest scores use the deployed
 emlearn rule (hard majority vote), not scikit-learn's soft vote. See `ml/train.py::rf_hard_predict`.
