@@ -15,16 +15,19 @@
   --page: #f3f4f6; --bg: #ffffff; --ink: #1f2329; --muted: #69717c; --faint: #c3c8cf; --line: #e3e6ea; --rule: #cfd4da;
   --soft: #f4f5f7; --inv-bg: #2b3038; --inv-ink: #ffffff; --shadow: 0 1px 2px rgba(17, 24, 39, .05), 0 1px 1px rgba(17, 24, 39, .03);
   --r: 14px; --r-s: 9px;
+  --dt: #2f6db0; --rf: #c4552f; --mlp: #23936a; --cnn: #7457c2;
   --f-sans: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
   --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --page: #131518; --bg: #1b1e22; --ink: #e7e9ec; --muted: #9aa2ad; --faint: #4a5059; --line: #2c3036; --rule: #3a3f46;
-  --soft: #23272c; --inv-bg: #e7e9ec; --inv-ink: #1b1e22; --shadow: none; color-scheme: dark } }
+  --soft: #23272c; --inv-bg: #e7e9ec; --inv-ink: #1b1e22; --shadow: none;
+  --dt: #6aa3e6; --rf: #ec8a62; --mlp: #4fc897; --cnn: #a38df0; color-scheme: dark } }
 :root[data-theme="dark"] {
   --page: #131518; --bg: #1b1e22; --ink: #e7e9ec; --muted: #9aa2ad; --faint: #4a5059; --line: #2c3036; --rule: #3a3f46;
-  --soft: #23272c; --inv-bg: #e7e9ec; --inv-ink: #1b1e22; --shadow: none; color-scheme: dark }
+  --soft: #23272c; --inv-bg: #e7e9ec; --inv-ink: #1b1e22; --shadow: none;
+  --dt: #6aa3e6; --rf: #ec8a62; --mlp: #4fc897; --cnn: #a38df0; color-scheme: dark }
 * { box-sizing: border-box }
 body { margin: 0; background: var(--page); color: var(--ink); font: 14px/1.5 var(--f-sans);
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
@@ -323,23 +326,23 @@ function renderPlot(s, ev) {
     g += `<text x="${x + 6}" y="${T + 13}" style="fill:var(--ink)">budget ${sig(ev.Emax)} µJ</text>`;
   }
   for (const r of ev.rows.slice().reverse()) {
-    const m = r.m, col = r.why.length ? "var(--faint)" : "var(--ink)";
+    const m = r.m, col = `var(--${m.fam})`, op = r.why.length ? 0.2 : 0.95;
     const t = `<title>${m.id} · F1 ${fmt(r.f1, 3)} · ${sig(r.e)} µJ · ${kb(m.ram)} RAM${r.why.length ? " · exceeds: " + r.why.join(", ") : ""}</title>`;
-    g += marker(m.fam, m.prec, X(r.e), Y(r.f1), 4.2, col) + `>${t}</${SHAPE[m.fam] === "circle" ? "circle" : SHAPE[m.fam] === "square" ? "rect" : "path"}>`;
+    g += marker(m.fam, m.prec, X(r.e), Y(r.f1), 4.2, col, `opacity="${op}"`) + `>${t}</${SHAPE[m.fam] === "circle" ? "circle" : SHAPE[m.fam] === "square" ? "rect" : "path"}>`;
   }
   if (ev.best) {
     const cx = X(ev.best.e), cy = Y(ev.best.f1);
     g += `<circle cx="${cx}" cy="${cy}" r="10" fill="none" style="stroke:var(--ink)" stroke-width="1.6"/>`;
     g += `<text x="${cx + 13}" y="${cy - 8}" style="fill:var(--ink);font-weight:500">selected</text>`;
   }
-  $("plot").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Accuracy against energy per window for every configuration; configurations that fit are black, the others grey">${g}</svg>`;
+  $("plot").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Accuracy against energy per window for every configuration; configurations that fit are solid, the others faded">${g}</svg>`;
 }
 
 function renderLegend() {
   const fams = Object.keys(FAM).filter((f) => DATA.models.some((m) => m.fam === f));
-  const ico = (f, p) => `<svg viewBox="-6 -6 12 12">${marker(f, p, 0, 0, 4.2, "var(--ink)")}/></svg>`;
+  const ico = (f, p) => `<svg viewBox="-6 -6 12 12">${marker(f, p, 0, 0, 4.2, `var(--${f})`)}/></svg>`;
   $("legend").innerHTML = fams.map((f) => `<span>${ico(f, "fp32")}${FAM[f]}</span>`).join("")
-    + `<span>solid float32 · hollow int8</span><span>grey: exceeds a constraint</span>`;
+    + `<span>solid float32 · hollow int8</span><span>faded: exceeds a constraint</span>`;
 }
 
 function renderTable(s, ev) {
@@ -348,7 +351,7 @@ function renderTable(s, ev) {
   ev.rows.forEach((r, i) => {
     if (hide && r.why.length) return;
     const m = r.m, cls = r.why.length ? "out" : (ev.best && r === ev.best ? "best" : "");
-    h += `<tr class="${cls}"><td>${i + 1}</td><td><span class="glyph">${GLYPH[m.fam]}</span>${m.id}</td>
+    h += `<tr class="${cls}"><td>${i + 1}</td><td><span class="glyph" style="color:var(--${m.fam})">${GLYPH[m.fam]}</span>${m.id}</td>
       <td>${fmt(r.f1, 3)} ± ${fmt(r.sd, 3)}</td><td>${fmt(m.f1.P1[0], 3)}</td><td>${sig(r.e)}</td><td>${sig(m.lat / 1000)}</td>
       <td>${kb(m.ram)}</td><td>${kb(m.flash)}</td><td>${years(r.lifeY)}</td><td>${r.why.length ? r.why.join(", ") : "—"}</td></tr>`;
   });
