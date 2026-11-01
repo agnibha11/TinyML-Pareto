@@ -9,86 +9,89 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-/* Monochrome engineering datasheet: black on white (white on black in dark mode), square corners, hairline rules.
+/* Neutral engineering palette: soft grey page, white cards, charcoal ink, rounded corners.
    Model families are told apart by marker shape, precision by fill; nothing depends on colour. */
 :root {
-  --bg: #ffffff; --ink: #0b0b0b; --muted: #5c5c5c; --faint: #b8b8b8; --line: #d9d9d9; --rule: #0b0b0b;
-  --soft: #f3f3f3; --inv-bg: #0b0b0b; --inv-ink: #ffffff;
+  --page: #f3f4f6; --bg: #ffffff; --ink: #1f2329; --muted: #69717c; --faint: #c3c8cf; --line: #e3e6ea; --rule: #cfd4da;
+  --soft: #f4f5f7; --inv-bg: #2b3038; --inv-ink: #ffffff; --shadow: 0 1px 2px rgba(17, 24, 39, .05), 0 1px 1px rgba(17, 24, 39, .03);
+  --r: 14px; --r-s: 9px;
   --f-sans: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
   --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --bg: #0b0b0b; --ink: #f2f2f2; --muted: #a3a3a3; --faint: #4d4d4d; --line: #2e2e2e; --rule: #f2f2f2;
-  --soft: #171717; --inv-bg: #f2f2f2; --inv-ink: #0b0b0b; color-scheme: dark } }
+  --page: #131518; --bg: #1b1e22; --ink: #e7e9ec; --muted: #9aa2ad; --faint: #4a5059; --line: #2c3036; --rule: #3a3f46;
+  --soft: #23272c; --inv-bg: #e7e9ec; --inv-ink: #1b1e22; --shadow: none; color-scheme: dark } }
 :root[data-theme="dark"] {
-  --bg: #0b0b0b; --ink: #f2f2f2; --muted: #a3a3a3; --faint: #4d4d4d; --line: #2e2e2e; --rule: #f2f2f2;
-  --soft: #171717; --inv-bg: #f2f2f2; --inv-ink: #0b0b0b; color-scheme: dark }
+  --page: #131518; --bg: #1b1e22; --ink: #e7e9ec; --muted: #9aa2ad; --faint: #4a5059; --line: #2c3036; --rule: #3a3f46;
+  --soft: #23272c; --inv-bg: #e7e9ec; --inv-ink: #1b1e22; --shadow: none; color-scheme: dark }
 * { box-sizing: border-box }
-body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 var(--f-sans);
+body { margin: 0; background: var(--page); color: var(--ink); font: 14px/1.5 var(--f-sans);
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
   padding-block: 0 40px }
-.wrap { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px }
-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 8px 24px; flex-wrap: wrap;
-  border-bottom: 2px solid var(--rule); padding: 28px 0 12px }
+.wrap { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px }
+header { display: flex; justify-content: space-between; align-items: flex-end; gap: 8px 24px; flex-wrap: wrap; padding: 30px 2px 4px }
 h1 { font-weight: 600; font-size: clamp(22px, 3vw, 28px); letter-spacing: -0.01em; line-height: 1.15; margin: 0 }
-.sub { font-family: var(--f-mono); font-size: 12px; color: var(--muted); margin-top: 4px }
+.sub { font-size: 13px; color: var(--muted); margin-top: 4px }
 .meta { font-family: var(--f-mono); font-size: 12px; color: var(--muted); text-align: right }
-.grid { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 24px; align-items: start }
+.grid { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 20px; align-items: start }
 @media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr) } }
-.block { border: 1px solid var(--line); background: var(--bg) }
-.bh { font: 600 11px var(--f-sans); letter-spacing: .12em; text-transform: uppercase; padding: 9px 14px;
-  border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 12px }
-.bb { padding: 14px }
+.block { border: 1px solid var(--line); background: var(--bg); border-radius: var(--r); box-shadow: var(--shadow); overflow: hidden }
+.bh { font: 600 12px var(--f-sans); letter-spacing: .04em; color: var(--muted); padding: 12px 16px 0;
+  display: flex; justify-content: space-between; align-items: center; gap: 12px }
+.bb { padding: 12px 16px 16px }
 .controls { position: sticky; top: calc(12px + env(safe-area-inset-top, 0px)) }
 @media (max-width: 860px) { .controls { position: static } }
-.controls .bb { display: flex; flex-direction: column; gap: 16px }
+.controls .bb { display: flex; flex-direction: column; gap: 15px }
 .ctl { display: flex; flex-direction: column; gap: 6px }
-.ctl > label, .ctl > .lab { font-size: 12px; font-weight: 500; color: var(--muted) }
+.ctl > label, .ctl > .lab { font-size: 12.5px; font-weight: 500 }
 .hint { font-size: 12px; color: var(--muted); line-height: 1.4 }
 select, input[type=range] { width: 100%; font: inherit; color: var(--ink) }
-select { background: var(--bg); border: 1px solid var(--line); border-radius: 0; padding: 7px 8px; appearance: auto }
+select { background: var(--bg); border: 1px solid var(--rule); border-radius: var(--r-s); padding: 7px 10px; appearance: auto }
 select:hover { border-color: var(--muted) }
-select:focus-visible, input:focus-visible, button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px }
-input[type=range] { accent-color: var(--ink) }
-input[type=checkbox] { accent-color: var(--ink); width: 15px; height: 15px; margin: 0 }
-.readout { font: 12px var(--f-mono); color: var(--ink) }
-.seg { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--rule) }
-.seg button { font: 500 12px var(--f-sans); border: 0; background: var(--bg); color: var(--ink); padding: 7px 2px; cursor: pointer }
-.seg button + button { border-left: 1px solid var(--rule) }
+select:focus-visible, input:focus-visible, button:focus-visible { outline: 2px solid var(--muted); outline-offset: 2px }
+input[type=range] { accent-color: var(--inv-bg) }
+input[type=checkbox] { accent-color: var(--inv-bg); width: 15px; height: 15px; margin: 0 }
+.readout { font: 12px var(--f-mono); color: var(--muted) }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; padding: 3px; background: var(--soft);
+  border: 1px solid var(--line); border-radius: var(--r-s) }
+.seg button { font: 500 12.5px var(--f-sans); border: 0; border-radius: 6px; background: transparent; color: var(--muted);
+  padding: 6px 2px; cursor: pointer }
+.seg button:hover { color: var(--ink) }
 .seg button[aria-pressed="true"] { background: var(--inv-bg); color: var(--inv-ink) }
 .check { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer }
 hr.sep { border: 0; border-top: 1px solid var(--line); margin: 0 }
-.results { display: flex; flex-direction: column; gap: 24px; min-width: 0 }
+.results { display: flex; flex-direction: column; gap: 20px; min-width: 0 }
 .pick { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 20px }
 @media (max-width: 720px) { .pick { grid-template-columns: minmax(0, 1fr) } }
-.mid { font: 500 clamp(18px, 2.4vw, 22px) var(--f-mono); overflow-wrap: anywhere; margin: 0 0 6px }
+.mid { font: 500 clamp(18px, 2.4vw, 22px) var(--f-mono); overflow-wrap: anywhere; margin: 2px 0 6px }
 .desc { font-size: 13px; color: var(--muted); margin: 0 }
 .why { margin: 10px 0 0; font-size: 13px; color: var(--muted); max-width: 56ch }
-.kv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 20px; align-content: start }
-.kv div { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; border-bottom: 1px solid var(--line);
-  padding: 6px 0; min-width: 0 }
+.kv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-content: start }
+.kv div { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; background: var(--soft);
+  border-radius: var(--r-s); padding: 7px 11px; min-width: 0 }
 .kv span { font-size: 12px; color: var(--muted) }
 .kv b { font: 500 14px var(--f-mono); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap }
 .kv b.warn { text-decoration: underline; text-underline-offset: 3px }
 .none { font-weight: 600; margin: 0 }
-.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--muted); padding: 10px 14px 0 }
-.legend svg { width: 12px; height: 12px; vertical-align: -1px; margin-right: 5px; overflow: visible }
-#plot { padding: 4px 14px 14px }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--muted); padding: 10px 16px 0 }
+.legend svg { display: inline-block; width: 12px; height: 12px; vertical-align: -1px; margin-right: 5px; overflow: visible }
+#plot { padding: 4px 16px 16px }
 svg { display: block; width: 100%; height: auto; overflow: visible }
 #plot svg text { font-family: var(--f-mono); font-size: 10.5px; fill: var(--muted) }
-.tablewrap { overflow-x: auto }
+.tablewrap { overflow-x: auto; margin-top: 8px }
 table { border-collapse: collapse; width: 100%; font-size: 12.5px; font-variant-numeric: tabular-nums }
-th { font: 600 11.5px var(--f-sans); text-align: right; color: var(--muted);
-  padding: 8px 10px; border-bottom: 1px solid var(--rule); white-space: nowrap; position: sticky; top: 0; background: var(--bg) }
-td { text-align: right; padding: 5px 10px; border-bottom: 1px solid var(--line); font-family: var(--f-mono); white-space: nowrap }
+th { font: 500 12px var(--f-sans); text-align: right; color: var(--muted);
+  padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; position: sticky; top: 0; background: var(--bg) }
+td { text-align: right; padding: 6px 10px; border-bottom: 1px solid var(--line); font-family: var(--f-mono); white-space: nowrap }
+tr:last-child td { border-bottom: 0 }
+th:first-child, td:first-child { padding-left: 16px }
 th:nth-child(2), td:nth-child(2) { text-align: left }
-th:last-child, td:last-child { text-align: left }
+th:last-child, td:last-child { text-align: left; padding-right: 16px }
 tr.out td { color: var(--faint) }
 tr.best td { background: var(--soft); font-weight: 500 }
-tr.best td:first-child { box-shadow: inset 3px 0 0 var(--ink) }
 .glyph { display: inline-block; width: 1.4em; font-family: var(--f-mono) }
-footer { border-top: 1px solid var(--line); padding-top: 12px; font-size: 12px; color: var(--muted);
+footer { padding: 4px 2px 0; font-size: 12px; color: var(--muted);
   display: flex; justify-content: space-between; gap: 6px 24px; flex-wrap: wrap }
 footer a { color: var(--ink) }
 </style>
@@ -170,7 +173,7 @@ footer a { color: var(--ink) }
       </section>
       <section class="block">
         <div class="bh"><span>All configurations</span>
-          <label class="check" style="font:400 12px var(--f-sans);letter-spacing:0;text-transform:none"><input type="checkbox" id="hide"> Fitting only</label></div>
+          <label class="check" style="font:400 12px var(--f-sans);letter-spacing:0;color:var(--ink)"><input type="checkbox" id="hide"> Fitting only</label></div>
         <div class="tablewrap"><table id="tbl"></table></div>
       </section>
     </div>
@@ -299,7 +302,7 @@ function renderPlot(s, ev) {
   const yLo = Math.max(0, Math.floor((Math.min(...f1s) - 0.02) * 10) / 10), yHi = 1;
   const X = (e) => L + (Math.log10(e) - x0) / (x1 - x0) * (W - L - R);
   const Y = (f) => T + (yHi - f) / (yHi - yLo) * (H - T - B);
-  let g = `<rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" style="fill:none;stroke:var(--rule)" stroke-width="1"/>`;
+  let g = `<rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" style="fill:none;stroke:var(--rule)" stroke-width="1" rx="6"/>`;
   for (let d = x0; d <= x1; d++) {
     const x = X(Math.pow(10, d));
     if (d > x0 && d < x1) g += `<line x1="${x}" x2="${x}" y1="${T}" y2="${H - B}" style="stroke:var(--line)" stroke-width="1"/>`;
