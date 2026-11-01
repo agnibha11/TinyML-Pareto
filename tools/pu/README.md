@@ -12,14 +12,7 @@ python tools/pu/run_pu.py --status               # what is done so far
 
 ## One-time setup
 
-| Need | Command |
-|---|---|
-| A RAR extractor | `sudo apt install libarchive-tools` (bsdtar); `unrar` or `p7zip-full` also work |
-| NVIDIA GPU for TensorFlow 2.18 | `pip install "tensorflow[and-cuda]==2.18.1"` |
-| Check that TensorFlow sees the GPU | `python -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"` |
-
-If TensorFlow sees no GPU, the script says why and asks before training the CNNs on the CPU (`--no-gpu` accepts CPU
-training without asking).
+See the main [README](../../README.md#second-dataset-paderborn-real-bearing-damage): Python 3.11 venv, a RAR extractor (`sudo apt install libarchive-tools`) and, for the GPU, `pip install "tensorflow[and-cuda]==2.18.1"` with a working NVIDIA driver. If TensorFlow sees no GPU, the script says why and asks before training the CNNs on the CPU (`--no-gpu` accepts CPU training without asking).
 
 ## What it runs
 

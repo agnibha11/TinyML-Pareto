@@ -35,6 +35,17 @@ tests/                 host-side tests (pytest)
 
 ## Quick start
 
+TensorFlow 2.18 supports Python 3.9-3.12. If your system Python is newer (Ubuntu 26.04 ships 3.14, and its pip
+refuses system-wide installs), let [uv](https://docs.astral.sh/uv/) fetch Python 3.11 for the venv:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh          # once; then open a new terminal
+uv venv --python 3.11 .venv && source .venv/bin/activate
+uv pip install -r requirements-lock.txt
+```
+
+Otherwise:
+
 ```bash
 python3.11 -m venv .venv && source .venv/bin/activate
 pip install -r requirements-lock.txt
@@ -63,11 +74,84 @@ python ml/cascade.py                    # detect-then-diagnose cascade over ever
 Sprint 2 added a fixed-point/hybrid front end (`firmware/bench/frontend_fx.c`, `tools/fxfe/`, `ml/fixed_point.py`)
 and the detect-then-diagnose cascade; see [docs/sprint2/README.md](docs/sprint2/README.md).
 
-Second dataset (Paderborn, real bearing damage): `python tools/pu/run_pu.py` downloads, prepares and trains all
-88 model IDs on it (CNNs on the GPU, live dashboard, resumable); see [tools/pu/README.md](tools/pu/README.md).
+The second dataset (Paderborn) has its own section below.
 
 Every NN score comes from the exported `.tflite` run in the TFLite interpreter. Random-forest scores use the deployed
 emlearn rule (hard majority vote), not scikit-learn's soft vote. See `ml/train.py::rf_hard_predict`.
+
+## Second dataset: Paderborn (real bearing damage)
+
+The [Paderborn KAt bearing dataset](https://mb.uni-paderborn.de/kat/datacenter) (Lessmeier et al., PHM Europe 2016)
+has 32 separate physical bearings: 6 healthy, 12 with artificial damage and 14 with real damage from accelerated
+lifetime tests, each recorded at 4 operating conditions. It is prepared exactly like CWRU (12 kHz, 5 kHz low-pass,
+1024-sample windows, R0-R4) and all 88 model IDs are trained on it with the same `ml/train.py` recipe.
+
+**Data is not in the repository** (5.4 GB of archives, owned by the dataset authors). The script below downloads
+it from the KAt server and rebuilds the same windows and splits: every archive is size-checked, splits use fixed
+seeds, and the library versions are pinned in `requirements-lock.txt`.
+
+### 1. One-time setup
+
+```bash
+source .venv/bin/activate                         # the environment from Quick start
+sudo apt install libarchive-tools                 # RAR extractor (bsdtar); unrar or p7zip-full also work
+```
+
+### 2. GPU (optional, NVIDIA only)
+
+CNNs train on an NVIDIA GPU if TensorFlow can see one; otherwise they train on the CPU (several times slower).
+TensorFlow 2.18 brings its own CUDA 12 and cuDNN 9 libraries as pip packages, so no system CUDA toolkit is needed,
+only the NVIDIA driver:
+
+```bash
+nvidia-smi                                        # must list the GPU; if not: sudo ubuntu-drivers install, reboot
+uv pip install "tensorflow[and-cuda]==2.18.1"     # or: pip install ... ; inside the activated venv
+python -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"   # must not be []
+```
+
+- `lspci | grep -iE "vga|3d|nvidia"` shows which GPUs the machine has. Intel (Iris Xe) and AMD GPUs are not used
+  by this TensorFlow build; the CNNs then run on the CPU.
+- An NVIDIA card in `lspci` but a failing `nvidia-smi` means the driver is missing (`sudo ubuntu-drivers install`).
+- `nvidia-smi` works but TensorFlow prints `[]`: the `[and-cuda]` extra is missing from the venv (step above).
+- Tested on a GeForce MX450 (2 GB): the CNNs fit; TensorFlow memory growth is on, so the card is shared politely.
+- The script checks all of this at start-up, says what is missing, and asks before training CNNs on the CPU
+  (`--no-gpu` skips the question).
+
+### 3. Run
+
+```bash
+python tools/pu/run_pu.py --bearings smoke --recordings 2 --seeds 0   # optional 10-minute trial on 6 bearings
+rm -rf results/pu splits/pu data/processed/pu                         # discard the trial before the real run
+
+python tools/pu/run_pu.py                         # download -> prepare -> features -> splits -> train everything
+python tools/pu/run_pu.py --status                # progress from another terminal
+```
+
+- Trees and MLPs run on CPU worker processes (`--workers`, default cores - 2, at most 6), CNNs on the GPU.
+- Every CNN checkpoints after each epoch (`build/pu/ckpt/`). Ctrl-C, a crash or a reboot loses at most one epoch:
+  run the same command again to resume. Finished models are never retrained.
+- Jobs run seed-major (seeds 0-4), so a stopped run still holds complete seeds. `--seeds 0 1 2` shortens it.
+- Reference run (ThinkPad T14 Gen 2i, 4-core Intel CPU + GeForce MX450): trees and MLPs finished within 3 h on
+  6 CPU workers; the 400 CNN jobs are the long part (about 16 h on the MX450, estimated from the first 70).
+- `--data-only` stops after the splits (to share or inspect the prepared data).
+
+### What it produces
+
+| Path | Content |
+|---|---|
+| `data/raw/pu/*.rar` | the 32 archives (git-ignored) |
+| `data/processed/pu/` | `windows.npy`, `manifest.parquet`, `feat_r1..r4.npy`, `prepare.json` (git-ignored) |
+| `splits/pu/` | P1-P4 split files (ids git-ignored), `protocols.json`, `README.md` with the definitions and sizes |
+| `results/pu/host/*.json` | one file per model, protocol, fold and seed (same format as `results/host/`) |
+| `results/pu/data_counts.csv`, `split_counts.csv`, `run_config.json` | data and split counts, the run's settings |
+| `results/pu/logs/`, `results/pu/progress.json` | worker logs and the live status (git-ignored) |
+
+Protocols: **P1** leaky random split; **P2** leave one operating condition out (4 folds); **P3** bearing-disjoint
+(4 folds, about a quarter of the healthy, inner-race and outer-race bearings held out each time); **P4** train on
+artificial damage, test on real damage. Classes: healthy, inner race, outer race; the three bearings with damage on
+both rings (KB23/24/27) are prepared but kept out of the classification splits. Details: `ml/pu_data.py`,
+[tools/pu/README.md](tools/pu/README.md). The same code runs on either dataset, selected with `TINYML_DATASET`
+(`cwru` by default, `pu` for Paderborn; see `ml/dataset.py`); nothing in the Paderborn run touches CWRU files.
 
 ## Virtual Cortex-M4 (pre-hardware latency, memory and gates)
 
