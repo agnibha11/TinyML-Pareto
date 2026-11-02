@@ -269,8 +269,13 @@ def prepare_bearing(code: str, recs: list[int], progress: Progress | None = None
             except Exception as e:  # noqa: BLE001
                 skipped.append(f"{mem}: {e}")
                 continue
-            if not SAMPLES_RANGE[0] <= len(x) <= SAMPLES_RANGE[1] or not np.isfinite(x).all():
-                skipped.append(f"{mem}: {len(x)} samples / non-finite")
+            if not SAMPLES_RANGE[0] <= len(x) <= SAMPLES_RANGE[1]:
+                # Kept as used for the published run (13 of 640 recordings are 4.3-4.6 s long and were excluded);
+                # widening the range changes the windows and requires retraining.
+                skipped.append(f"{mem}: {len(x)} samples, outside {SAMPLES_RANGE}")
+                continue
+            if not np.isfinite(x).all():
+                skipped.append(f"{mem}: non-finite samples")
                 continue
             w, starts = to_windows(x)
             rpm, tq, fr = CONDITIONS[cond]

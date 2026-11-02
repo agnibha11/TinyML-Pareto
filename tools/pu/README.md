@@ -33,6 +33,11 @@ Jobs run seed-major: all of seed 0 finishes before seed 1 starts, so a run stopp
 Every CNN writes a checkpoint after each epoch to `build/pu/ckpt/`, so an interrupted job loses at most one epoch.
 The live state goes to `results/pu/progress.json` and the worker logs to `results/pu/logs/`.
 
+## Analysis
+
+After the run, `python ml/pu_analysis.py` writes `results/pu/summary.json`, `host_summary.csv`, `kendall_tau.csv`,
+`per_bearing_P3.csv`, the cascade results and the `fig_pu_*` figures used by the paper (section "Second data set").
+
 ## Useful options
 
 | Option | Effect |

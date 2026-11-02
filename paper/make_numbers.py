@@ -291,6 +291,7 @@ def build() -> dict[str, str]:
     m["NumExSleepLife"] = f"{batt / ps / year:.1f}"
     m.update(fixed_point_numbers())
     m.update(cascade_numbers())
+    m.update(pu_numbers())
     return m
 
 
@@ -379,6 +380,101 @@ def cascade_numbers() -> dict[str, str]:
     m["NumCasSaveFamMin"] = f"{min(v['saving_pi0.01'] for v in fam.values()):.1f}"
     m["NumCasSaveFamMax"] = f"{max(v['saving_pi0.01'] for v in fam.values()):.1f}"
     m["NumCasMlpFOneSingle"], m["NumCasMlpFOneCascade"] = f3(fam["mlp"]["f1_single"]), f3(fam["mlp"]["f1_cascade"])
+    return m
+
+
+def pu_numbers() -> dict[str, str]:
+    """Macros for the second dataset, Paderborn (ml/pu_analysis.py -> results/pu/summary.json)."""
+    m: dict[str, str] = {}
+    p = RES / "pu" / "summary.json"
+    if not p.exists():
+        return m
+    s = json.loads(p.read_text())
+    tex = lambda x: "\\texttt{" + x + "}"  # noqa: E731
+    sgn = lambda x: f"{x:+.3f}".replace("-", "$-$")  # noqa: E731
+    m["NumPuResults"] = f"{s['n_results']:,}".replace(",", "{,}")
+    names = {"P1": "POne", "P2": "PTwo", "P3": "PThree", "P4": "PFour"}
+    for pr, pn in names.items():
+        d = s[pr]
+        m[f"NumPu{pn}Best"], m[f"NumPu{pn}Median"] = f3(d["best_f1"]), f3(d["median_f1"])
+        m[f"NumPu{pn}BestStd"] = f3(d["best_std"])
+        m[f"NumPu{pn}BestModel"] = tex(d["best_model"])
+        for fam, fn_ in (("dt", "Dt"), ("rf", "Rf"), ("mlp", "Mlp"), ("cnn", "Cnn")):
+            m[f"NumPu{pn}{fn_}"] = f3(d["families"][fam]["f1"])
+        for rep in ("r0", "r1", "r2", "r3", "r4"):
+            m[f"NumPu{pn}Rep{rep.upper().replace('R', 'R')}"] = f3(d["reps"][rep])
+    p3 = s["P3"]
+    m["NumPuPThreeFoldMin"], m["NumPuPThreeFoldMax"] = f3(min(p3["best_fold_f1"])), f3(max(p3["best_fold_f1"]))
+    m["NumPuPThreeBestE"] = f"{p3['best_E_uJ']:.1f}"
+    m["NumPuPThreeBestSnrZero"] = f3(p3["best_snr0"])
+    tau = s["tau"]
+    for k, n in (("PU P1|PU P3", "NumPuTauPOnePThree"), ("PU P1|PU P4", "NumPuTauPOnePFour"),
+                 ("PU P1|PU P2", "NumPuTauPOnePTwo"), ("CWRU P3|PU P3", "NumPuTauCwruPThree"),
+                 ("CWRU P1|PU P1", "NumPuTauCwruPOne"), ("PU P3|PU P4", "NumPuTauPThreePFour")):
+        m[n] = f"{tau[k]:.2f}".replace("-", "$-$")
+    tr = s["transfer"]
+    m["NumPuCwruBestModel"] = tex(tr["cwru_P3_best"])
+    m["NumPuCwruBestOnPu"] = f3(tr["cwru_P3_best_f1_pu_P3"])
+    m["NumPuCwruBestRank"] = str(tr["cwru_P3_best_rank_pu_P3"])
+    m["NumPuBestOnCwru"] = f3(tr["pu_P3_best_f1_cwru_P3"])
+    m["NumPuBestRankCwru"] = str(tr["pu_P3_best_rank_cwru_P3"])
+    pd_ = s["precision_delta"]["P3"]
+    m["NumPuIntEightMean"] = sgn(pd_["int8"]["mean"])
+    m["NumPuIntEightWorst"] = sgn(pd_["int8"]["worst"])
+    m["NumPuQatWorst"] = sgn(pd_["int8qat"]["worst"])
+    fr = {r["model"]: r for r in s["frontier"]["P3"]["frontier"]}
+    tiers = {"r1": [], "r2": [], "r4": []}
+    for r in s["frontier"]["P3"]["frontier"]:
+        rp = r["model"].split("-")[1]
+        if rp in tiers:
+            tiers[rp].append(r)
+    for rp, lab in (("r1", "ROne"), ("r2", "RTwo"), ("r4", "RFour")):
+        if tiers[rp]:
+            b = max(tiers[rp], key=lambda r: r["f1"])
+            m[f"NumPuFront{lab}FOne"], m[f"NumPuFront{lab}E"] = f3(b["f1"]), f"{b['E_uJ']:.1f}"
+            m[f"NumPuFront{lab}Model"] = tex(b["model"])
+    c = s["cascade"]
+    m["NumPuCasEitherFpr"], m["NumPuCasEitherTpr"] = pct(c["P3_either"]["fpr"]), pct(c["P3_either"]["tpr"])
+    m["NumPuCasSupFpr"] = pct(c["P3_sup"]["fpr"])
+    m["NumPuCasHealthyTpr"], m["NumPuCasHealthyFpr"] = pct(c["P3_healthy"]["tpr"]), pct(c["P3_healthy"]["fpr"])
+    m["NumPuCasHealthyFOne"] = f3(c["P3_healthy"]["best_f1_cascade"])
+    m["NumPuCasEitherSave"] = f"{c['P3_either']['best_E_single'] / c['P3_either']['best_E_pi0.01']:.2f}"
+    m["NumPuCasHealthyN"] = str(c["P3_healthy"]["n_healthy_test"])
+    d = s.get("deep")
+    if d:
+        ga = d["group_acc"] if "group_acc" in d else d["P3"]["group_acc"]
+        for k, n in (("N_healthy", "Healthy"), ("IR_artificial", "IrArt"), ("IR_real", "IrReal"),
+                     ("OR_artificial", "OrArt"), ("OR_real", "OrReal")):
+            m[f"NumPuAcc{n}"] = pct(d["P3"]["group_acc"][k], 0)
+        ba = d["P3"]["bearing_acc"]
+        hb = {b: v for b, v in ba.items() if b.startswith("K0")}
+        m["NumPuHealthyMin"], m["NumPuHealthyMax"] = pct(min(hb.values()), 0), pct(max(hb.values()), 0)
+        m["NumPuHealthyWorst"] = min(hb, key=hb.get)
+        m["NumPuAccKAfifteen"], m["NumPuAccKAthirty"] = pct(ba["KA15"], 0), pct(ba["KA30"], 0)
+        conf = d["P3"]["confusion"]
+        m["NumPuConfNIr"], m["NumPuConfNOr"] = pct(conf["N"]["IR"], 0), pct(conf["N"]["OR"], 0)
+        m["NumPuConfIrOr"], m["NumPuConfOrIr"] = pct(conf["IR"]["OR"], 0), pct(conf["OR"]["IR"], 0)
+        m["NumPuPFourHealthyAcc"] = pct(d["P4"]["group_acc"]["N_healthy"], 0)
+        ca = d["P3"]["condition_acc"]
+        m["NumPuCondNineAcc"], m["NumPuCondFifteenAcc"] = pct(ca["N09_M07_F10"], 0), pct(ca["N15_M07_F10"], 0)
+        fb = d["P2_fold_best"]
+        m["NumPuPTwoNineBest"] = f3(fb["N09_M07_F10"])
+        m["NumPuPTwoOtherMin"] = f3(min(v for k, v in fb.items() if k != "N09_M07_F10"))
+        m["NumPuPTwoOtherMax"] = f3(max(v for k, v in fb.items() if k != "N09_M07_F10"))
+        cc = d["cnn_capacity"]
+        for mid, n in (("cnn-r0-w025d2-fp32", "Small"), ("cnn-r0-w100d4-fp32", "Big")):
+            for pr, pn in (("P1", "POne"), ("P3", "PThree"), ("P4", "PFour")):
+                m[f"NumPuCnn{n}{pn}"] = f3(cc[mid][pr])
+        fm = d["family_mean"]
+        for f_, n in (("dt", "Dt"), ("rf", "Rf"), ("mlp", "Mlp"), ("cnn", "Cnn")):
+            for pr, pn in (("P1", "POne"), ("P2", "PTwo"), ("P3", "PThree"), ("P4", "PFour")):
+                m[f"NumPuMean{n}{pn}"] = f3(fm[f_][pr])
+            m[f"NumPuGap{n}"] = f3(fm[f_]["P1"] - fm[f_]["P3"])
+        g = d["gate_auc"]
+        m["NumPuGateAucPu"], m["NumPuGateAucCwru"] = f"{np.mean(g['pu']):.2f}", f"{np.mean(g['cwru']):.2f}"
+        m["NumPuGateAucPuMin"], m["NumPuGateAucPuMax"] = f"{min(g['pu']):.2f}", f"{max(g['pu']):.2f}"
+        r5 = d["gate_recall_at_fpr"]["0.05"]
+        m["NumPuGateRecallFivePu"], m["NumPuGateRecallFiveCwru"] = pct(r5["pu"], 0), pct(r5["cwru"], 1)
     return m
 
 

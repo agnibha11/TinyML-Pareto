@@ -295,6 +295,134 @@ IDLE window immediately before every measured window is therefore the important 
 to about \NumVrigHoursAdaptive{} hours.
 
 
+\subsection{Second data set: real damage (Paderborn)}
+\label{sec:pu}
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.92\columnwidth]{fig_pu_protocols}
+\caption{Leakage on both data sets: median (bars) and best (ticks) macro-F1 of the \NumConfigs{} configurations per
+protocol. Paderborn P4 trains on artificial and tests on real damage; dotted: chance for its three classes.}
+\label{fig:pu_protocols}
+\end{figure}
+
+\begin{table}[t]
+\centering
+\caption{Paderborn macro-F1 per family: mean over the family's configurations, folds and seeds, and the best
+configuration (chance 0.333).}
+\label{tab:pu}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lccccc}
+\toprule
+Family & P1 leaky & P2 condition & P3 bearing & P4 art.$\to$real & P1$-$P3 \\
+\midrule
+DT  & \NumPuMeanDtPOne{}  & \NumPuMeanDtPTwo{}  & \NumPuMeanDtPThree{}  & \NumPuMeanDtPFour{}  & \NumPuGapDt{} \\
+RF  & \NumPuMeanRfPOne{}  & \NumPuMeanRfPTwo{}  & \NumPuMeanRfPThree{}  & \NumPuMeanRfPFour{}  & \NumPuGapRf{} \\
+MLP & \NumPuMeanMlpPOne{} & \NumPuMeanMlpPTwo{} & \NumPuMeanMlpPThree{} & \NumPuMeanMlpPFour{} & \NumPuGapMlp{} \\
+CNN & \NumPuMeanCnnPOne{} & \NumPuMeanCnnPTwo{} & \NumPuMeanCnnPThree{} & \NumPuMeanCnnPFour{} & \NumPuGapCnn{} \\
+\midrule
+Best & \NumPuPOneBest{} & \NumPuPTwoBest{} & \NumPuPThreeBest{} & \NumPuPFourBest{} & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{The leakage collapse replicates on real damage} (Fig.~\ref{fig:pu_protocols}, Table~\ref{tab:pu}). The best
+Paderborn model scores \NumPuPOneBest{} under P1, \NumPuPTwoBest{} on an unseen operating condition,
+\NumPuPThreeBest{} on unseen bearings (\NumPuPThreeBestModel{}, folds \NumPuPThreeFoldMin{}--\NumPuPThreeFoldMax{})
+and \NumPuPFourBest{} when trained on artificial and tested on real damage, against a chance level of 0.333. The
+medians fall from \NumPuPOneMedian{} to \NumPuPThreeMedian{} and \NumPuPFourMedian{}. The leaky ranking says almost
+nothing about the deployable one: Kendall $\tau$ between the P1 and P3 rankings of all configurations is
+\NumPuTauPOnePThree{}, and \NumPuTauPOnePFour{} between P1 and P4. Training on artificial damage does not prepare a
+model for real damage, as the data set's authors also found \cite{lessmeier2016condition}; under P4 a depth-4 tree on
+R1 (\NumPuPFourDt{}) is within 0.02 of the best MLP, and the best model labels only \NumPuPFourHealthyAcc{} of the
+held-out healthy windows correctly.
+
+\textbf{More capacity memorises bearings.} The CNNs have the highest leaky score of any family and the largest
+leakage gap (\NumPuGapCnn{} against \NumPuGapDt{} for trees). Within the CNN sweep, growing from
+\texttt{cnn-r0-w025d2} to \texttt{cnn-r0-w100d4} raises P1 from \NumPuCnnSmallPOne{} to \NumPuCnnBigPOne{} but lowers
+P3 from \NumPuCnnSmallPThree{} to \NumPuCnnBigPThree{} and P4 from \NumPuCnnSmallPFour{} to \NumPuCnnBigPFour{}: the
+extra capacity fits the training bearings, not the fault.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.9\textwidth]{fig_pu_bearings}
+\caption{Where the errors are: share of correctly classified windows for each Paderborn bearing while it is held
+out (P3, the best configuration, all folds and seeds), coloured by damage origin.}
+\label{fig:pu_bearings}
+\end{figure*}
+
+\textbf{Where the errors are} (Fig.~\ref{fig:pu_bearings}). The difficulty is set by the individual bearing, not by
+the class. Held-out healthy bearings range from \NumPuHealthyMin{} (\NumPuHealthyWorst{}) to \NumPuHealthyMax{}
+correct; \NumPuConfNIr{} of healthy windows are called inner-race and \NumPuConfNOr{} outer-race faults, and inner
+and outer race are confused in \NumPuConfIrOr{} and \NumPuConfOrIr{} of their windows. By damage origin, real
+inner-race damage is recognised more often than artificial (\NumPuAccIrReal{} against \NumPuAccIrArt{}), while real
+outer-race damage is the hardest group (\NumPuAccOrReal{} against \NumPuAccOrArt{} for artificial); two real
+outer-race bearings, KA15 and KA30, are classified correctly in only \NumPuAccKAfifteen{} and \NumPuAccKAthirty{} of
+their windows. The operating condition matters as much: with the 900\,rpm condition held out, the best P2 model
+reaches \NumPuPTwoNineBest{}, against \NumPuPTwoOtherMin{}--\NumPuPTwoOtherMax{} for the three 1500\,rpm
+conditions, and under P3 the best model is right on \NumPuCondNineAcc{} of 900\,rpm windows against
+\NumPuCondFifteenAcc{} at the nominal condition. Fault frequencies scale with shaft speed, and R4's envelope bins are
+fixed in hertz; a speed-normalised envelope (order tracking) would need a speed input that the sensor does not have.
+
+\textbf{The physics-informed front end transfers; the model choice does not.} R4 is again the best input for unseen
+bearings (best P3 macro-F1 per input: R0 \NumPuPThreeRepRZero{}, R1 \NumPuPThreeRepROne{}, R2 \NumPuPThreeRepRTwo{},
+R3 \NumPuPThreeRepRThree{}, R4 \NumPuPThreeRepRFour{}), although it is the weakest input under P1 and P2
+(\NumPuPOneRepRFour{}, \NumPuPTwoRepRFour{}): the envelope spectrum trades in-distribution accuracy for robustness to an
+unseen bearing. The winning family changes, however (Fig.~\ref{fig:pu_transfer}). The best CWRU configuration,
+\NumPuCwruBestModel{}, is ranked \NumPuCwruBestRank{} of \NumConfigs{} on Paderborn P3 (\NumPuCwruBestOnPu{}); the best
+Paderborn one is ranked \NumPuBestRankCwru{} on CWRU; and $\tau$ between the two P3 rankings is
+\NumPuTauCwruPThree{}. A model chosen on one test rig must be re-validated on the target machine; the front end can be
+chosen once.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.9\columnwidth]{fig_pu_transfer}
+\caption{Does a model ranking transfer between data sets? Bearing-disjoint macro-F1 of every configuration on CWRU
+(P3) and Paderborn (P3).}
+\label{fig:pu_transfer}
+\end{figure}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.84\textwidth]{fig_pu_pareto}
+\caption{Paderborn accuracy against estimated end-to-end energy per window (virtual Cortex-M4), P3 and P4; black:
+non-dominated frontier; dotted: chance.}
+\label{fig:pu_pareto}
+\end{figure*}
+
+\textbf{The cost structure is the same} (Fig.~\ref{fig:pu_pareto}). The P3 frontier steps through the three
+front-end tiers: \NumPuFrontROneModel{} reaches \NumPuFrontROneFOne{} at \NumPuFrontROneE{}\,$\mu$J,
+\NumPuFrontRTwoModel{} \NumPuFrontRTwoFOne{} at \NumPuFrontRTwoE{}\,$\mu$J, and \NumPuFrontRFourModel{}
+\NumPuFrontRFourFOne{} at \NumPuFrontRFourE{}\,$\mu$J. No CNN is on either frontier: the best reaches
+\NumPuPThreeCnn{} on P3 at 10 to 10,000 times the energy. Int8 post-training quantization costs \NumPuIntEightMean{}
+macro-F1 on average (worst \NumPuIntEightWorst{}).
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.86\columnwidth]{fig_pu_gate_roc}
+\caption{Why the cascade does not transfer: ROC of the healthy-only R1 gate on unseen bearings (P3), pooled over
+folds; dots: the validation-tuned operating point of each fold.}
+\label{fig:pu_gate}
+\end{figure}
+
+\textbf{The cascade does not transfer} (Fig.~\ref{fig:pu_gate}). The healthy-only gate scores R1 features by their
+distance to the training split's healthy windows. On CWRU P3 it separates faults almost perfectly (mean AUC
+\NumPuGateAucCwru{}), but there the single healthy bearing appears in training at other loads. On Paderborn the
+healthy test bearings are themselves unseen, the AUC falls to \NumPuGateAucPu{} (folds
+\NumPuGateAucPuMin{}--\NumPuGateAucPuMax{}), and at a 5\,\% false-alarm rate the gate catches \NumPuGateRecallFivePu{}
+of fault windows, against \NumPuGateRecallFiveCwru{} on CWRU. Bearing-to-bearing differences in the R1 statistics are
+as large as the fault signatures. In the cascade this leaves two bad options: tuned for recall as on CWRU, the
+supervised gate alarms on every window (FPR \NumPuCasSupFpr{}) and saves nothing (\NumPuCasEitherSave{}$\times$ for the
+best model, from skipping its own R1 statistics); the healthy-only gate flags \NumPuCasHealthyTpr{} of fault windows
+(FPR \NumPuCasHealthyFpr{}) and drops the best model's P3 macro-F1 from \NumPuPThreeBest{} to \NumPuCasHealthyFOne{}.
+The CWRU saving therefore depends on a gate that knows the monitored bearing's healthy state; in a deployment it
+must be commissioned on that bearing.
+
+\textbf{What carries over.} Across the two data sets four conclusions hold: leaky evaluation is uninformative, the
+envelope front end is the best input for unseen bearings, the front end sets the energy tiers, and int8 costs almost
+nothing. Two do not: the best model and the cascade's benefit are specific to the test rig, and models trained on
+artificial damage do not recognise real damage.
+
+
 % =====================================================================================================================
 \section{Toward a Selection Rubric}
 \begin{figure}[t]
@@ -331,15 +459,17 @@ and integer-heavy code. The board's DWT counts (\texttt{LAT}) will calibrate the
 the board-level overheads (regulator, USB PHY) that the chip-level estimate omits. The virtual MCU uses current
 tflite-micro and GCC~13, while the board uses Chirale's TFLM build and GCC~7, a difference the calibration will
 quantify. CWRU has a single bearing per fault class and an
-artificially seeded fault, and in P3 the normal class can only be split by load. Paderborn is the planned
-generalisation check. R4's 2--5\,kHz demodulation band was chosen for the CWRU test rig's resonances, and another
+artificially seeded fault, and in P3 the normal class can only be split by load. Paderborn (Section~\ref{sec:pu})
+answers part of this, but it has only six healthy bearings, its P3 folds range from \NumPuPThreeFoldMin{} to
+\NumPuPThreeFoldMax{} for the best model, and 13 of its 640 recordings were excluded by a too-strict length check. R4's 2--5\,kHz demodulation band was chosen for the CWRU test rig's resonances, and another
 machine may need a different band. The board noise, baseline drift and INA219 offsets in the virtual campaign are
 assumptions, not measurements of this board; the rig will measure them, and the campaign will be re-run with the
 measured values. The fixed-point comparison across cores uses one cycle model; for the M0+ (two-stage pipeline, two-cycle
 loads) it is an approximation, and energy per cycle differs between cores. The cascade's saving depends on how often
-the machine is faulty, which the study treats as a parameter, and its gate needs healthy data from every operating
-condition.
+the machine is faulty, which the study treats as a parameter; its gate needs healthy data from every operating
+condition and, as Paderborn shows, from the machine it will monitor.
 
+\FloatBarrier
 \section{Conclusion}
 Before any hardware arrived, the full pipeline was built and gated in emulation: data, leakage-checked splits,
 \NumConfigs{} deployable configurations, a virtual Cortex-M4 that runs the exact deployable code, and firmware bundles
@@ -349,5 +479,8 @@ the front end, not the classifier, sets the energy cost, and a physics-informed 
 accuracy that leakage-free evaluation removes. The simulated campaign shows that the rig can resolve these effects if
 the board's baseline stays stable between windows. Two front-end-level changes cut the energy further without
 retraining any model: integer statistics on the sensor's own samples, and a gate that lets the diagnosis model sleep
-while the machine is healthy. The hardware campaign now has to confirm them with measured energy.
+while the machine is healthy. A second data set with real damage confirms the leakage collapse and the value of the
+envelope front end, but it also shows that the best model, and the gate's benefit, are specific to the test rig: a
+deployment must re-validate the model on its own machine. The hardware campaign now has to confirm the energy
+results with measurements.
 

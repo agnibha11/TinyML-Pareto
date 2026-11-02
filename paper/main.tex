@@ -60,12 +60,17 @@ it in two ways. A fixed-point R1 front end on integer sensor samples needs \NumF
 float one on the Cortex-M4F with unchanged predictions, and q15 front ends are \NumFxNofpuRFourSpeedQ{}--\NumFxNofpuROneSpeedQ{}$\times$
 faster on a core without an FPU. A detect-then-diagnose cascade, whose always-on gate uses only those integer
 features, lowers the energy per window of the most accurate unseen-bearing model from \NumCasBestESingle{} to
-\NumCasBestEOne{}\,$\mu$J at 1\,\% fault prevalence, for a mean macro-F1 change of \NumCasPThreeEitherDFOne{}. Energies
-here are chip-level estimates; INA219 measurements replace them in the final version.
+\NumCasBestEOne{}\,$\mu$J at 1\,\% fault prevalence, for a mean macro-F1 change of \NumCasPThreeEitherDFOne{}. A second
+data set with real damage, Paderborn (32 physical bearings, \NumPuResults{} further runs), confirms the leakage
+collapse (best macro-F1 \NumPuPOneBest{} leaky, \NumPuPThreeBest{} on unseen bearings, \NumPuPFourBest{} from
+artificial to real damage) and that the envelope front end is the best input for unseen bearings, but the model
+ranking does not transfer between the data sets (Kendall $\tau$ = \NumPuTauCwruPThree{}) and the cheap gate finds no
+operating point that saves energy without losing faults. Energies here are chip-level estimates; INA219
+measurements replace them in the final version.
 \end{abstract}
 
 \begin{IEEEkeywords}
-TinyML, bearing fault diagnosis, CWRU, data leakage, Pareto frontier, microcontroller, energy, TensorFlow Lite Micro
+TinyML, bearing fault diagnosis, CWRU, Paderborn, data leakage, Pareto frontier, microcontroller, energy, TensorFlow Lite Micro
 \end{IEEEkeywords}
 
 % =====================================================================================================================
@@ -105,7 +110,9 @@ statistics, a battery-life model and a first selection rubric;
 \item a virtual measurement campaign, run through the logger's own C code, that sizes the rig's error budget and the
 campaign duration before the hardware arrives, and an interactive model selector built from the results;
 \item two front-end-level energy reductions: fixed-point and hybrid front ends, evaluated bit-exactly on three core
-classes, and a detect-then-diagnose cascade, scored over all \NumRuns{} stored runs.
+classes, and a detect-then-diagnose cascade, scored over all \NumRuns{} stored runs;
+\item a replication on a second data set with real, naturally grown damage (Paderborn), with a fourth protocol that
+trains on artificial and tests on real damage, and a cross-data-set test of which conclusions transfer.
 \end{itemize}
 The code, data manifests, trained models and all results are available at
 \url{https://github.com/agnibha11/TinyML-Pareto}.
@@ -164,6 +171,24 @@ P3 bearing-disjoint & 4 & 3 & \NumPThreeTrain{} / \NumPThreeVal{} & \NumPThreeTe
 \bottomrule
 \end{tabular}
 \end{table}
+
+\subsection{Second data set: Paderborn}
+\label{sec:pum}
+CWRU's faults are machined into one bearing per class. The Paderborn KAt data set \cite{lessmeier2016condition} has
+32 separate type-6203 bearings: 6 healthy, 12 with artificial damage (EDM, engraving, drilling) and 14 with real
+damage grown in accelerated lifetime tests, each recorded at four operating conditions (speed, load torque and radial
+force) with a \SI{64}{kHz} housing accelerometer. We take 5 of the 20 four-second recordings per bearing and condition,
+resample them to \SI{12}{kHz}, apply the same \SI{5}{kHz} low-pass and cut non-overlapping 1024-sample windows, so
+every front end and model runs unchanged; 13 of the 640 recordings, longer than our 4.2\,s acceptance bound, were
+excluded. The task has three classes (healthy, inner race, outer race); the three bearings damaged on both rings are
+left out. Four protocols, all with assertions on overlap: \textbf{P1} leaky (random 70/15/15); \textbf{P2} leave one
+operating condition out (4 folds, the same bearings on both sides); \textbf{P3} bearing-disjoint (4 folds, each holding
+out about a quarter of the healthy, inner-race and outer-race bearings); and \textbf{P4} artificial to real (train on
+artificial damage and three healthy bearings, test on real damage and the other three), the data set authors'
+own benchmark question. Test sets keep at most 46 windows per bearing and condition (about 1,300 per fold). All
+\NumConfigs{} configurations are trained with the CWRU recipe over 10 folds and 5 seeds. Costs carry over from the
+virtual M4: they depend on the architecture and input, not on the data set (only the last layer shrinks to three
+outputs).
 
 \subsection{Input representations}
 \textbf{R0} is the raw window, normalised by two global training-set scalars (amplitude carries fault-size

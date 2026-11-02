@@ -64,6 +64,37 @@ Results on unseen bearings (P3), with the headline gate:
 The Model Selector (<https://agnibha11.github.io/TinyML-Pareto/selector/>) has a **detect-then-diagnose gate** switch
 with a fault-prevalence slider.
 
+## 3. Second dataset: Paderborn, real damage (`tools/pu/`, `ml/pu_data.py`, `ml/pu_analysis.py`)
+
+We expanded the study to the Paderborn KAt bearing dataset: 32 separate physical bearings (6 healthy, 12 with
+artificial damage, 14 with damage grown in accelerated lifetime tests) at four operating conditions. It is prepared
+exactly like CWRU (12 kHz, 5 kHz low-pass, 1024-sample windows; 28,914 windows, 3 classes), and all 88 model IDs were
+retrained over 10 folds and 5 seeds (4,400 runs) with `python tools/pu/run_pu.py` (CNNs on a laptop GPU).
+Protocols: P1 leaky, P2 leave one operating condition out, P3 bearing-disjoint, P4 artificial → real damage.
+
+What holds (results/pu/summary.json):
+
+- **Leakage collapse:** best macro-F1 0.967 (P1), 0.822 (P2), 0.599 (P3), 0.479 (P4); chance 0.333. Kendall τ between
+  the P1 and P3 rankings is 0.13.
+- **R4 is the best input on unseen bearings** (P3 0.599 vs 0.513–0.584), although it is the weakest under P1/P2.
+- **Same cost tiers:** the P3 frontier steps through R1 (0.513 at 5.6 µJ), R2 (0.573 at 19.6 µJ) and R4 (0.599 at
+  32.4 µJ); no CNN is on a frontier. int8 PTQ costs −0.002 F1 on average.
+
+Where the errors are: held-out healthy bearings range from 5 % to 94 % correct; real outer-race damage is the hardest
+group (49 %); an unseen 900 rpm condition is much harder than unseen 1500 rpm ones (best F1 0.657 vs 0.846–0.956);
+growing the CNN 16× raises P1 from 0.804 to 0.955 but lowers P3 from 0.517 to 0.483.
+
+What does not transfer:
+
+- **The best model:** τ between the CWRU-P3 and Paderborn-P3 rankings is 0.11; the best CWRU configuration is ranked
+  52 of 88 on Paderborn.
+- **The cascade:** the healthy-only R1 gate has ROC AUC 1.00 on CWRU P3 (whose one healthy bearing is seen in training
+  at other loads) but 0.58 on Paderborn P3; at 5 % false alarms it catches 17 % of faults, so the cascade saves
+  nothing without losing faults. The gate must be commissioned on the monitored bearing.
+
+Figures: `results/figs/fig_pu_protocols`, `fig_pu_bearings`, `fig_pu_transfer`, `fig_pu_pareto`, `fig_pu_gate_roc`.
+Paper: section "Second data set: real damage (Paderborn)".
+
 ## Reproduce
 
 ```bash
@@ -72,7 +103,9 @@ python ml/fixed_point.py            # fidelity, drop-in/retrain accuracy, MLP ag
 python ml/cascade.py                # gates, cascade over all stored runs, fig_cascade_*
 python tools/make_selector.py       # selector with the gate switch
 python paper/make_numbers.py && (cd paper && latexmk -pdf main.tex)
-python -m pytest tests/             # includes tests/test_sprint2.py
+python tools/pu/run_pu.py           # Paderborn: download, prepare, train all 88 models (GPU for CNNs)
+python ml/pu_analysis.py            # Paderborn analysis and figures
+python -m pytest tests/             # includes tests/test_sprint2.py and tests/test_pu.py
 ```
 
 ## Next, with the board
