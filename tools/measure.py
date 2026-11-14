@@ -3,10 +3,11 @@
 
 One call = one session over every model in the flashed bundle (CONTRACT.md 6.4, 7.2-7.4):
 
-    for each model k:   SEL k -> LAT -> N from latency (window >= --window-s)
+    for each model k:   SEL k -> LAT -> N from the fastest input's latency x 1.05 (window >= --window-s)
       for each stored input j = 0..4:   INPUT j -> IDLE -> RUN N -> FRONT N_fe -> E2E N_e2e
     each window: board reply (n, us) is paired with the logger's next "W ..." line;
-                 rejected if durations differ by > 0.1 % or ovf > 0, then retried once.
+                 rejected if durations differ by > 0.1 %, ovf > 0, or the window is shorter than --window-s
+                 (then N is scaled up); up to 3 attempts per window.
 
 Usage:
     python tools/measure.py --dry-run                       # fake board + fake logger -> results/dryrun/
@@ -39,6 +40,11 @@ N_INPUTS = 5
 W_LINE = re.compile(r"^W rise_us=(\d+) fall_us=(\d+) n=(\d+) E_uJ=(-?[0-9.]+) Pmean_uW=(-?[0-9.]+) "
                     r"Pstd_uW=([0-9.]+) Vbus_mV=([0-9.]+) ovf=(\d+)$")
 W_DEADLINE_S = 3.0   # logger must print the W line within this time after the board's reply
+# N is sized from LAT's FASTEST stored input (*_min_us), times this margin: the timed loop runs slightly faster than
+# LAT's per-call timing (FRONT -0.3 %, E2E -1.4 % on the rig, 14 Nov 2026), and sizing from the median left 21 of
+# 62 windows under 10 s (forests: input-dependent latency, 29.5-69.8 us for one model).
+WINDOW_MARGIN = 1.05
+MAX_ATTEMPTS = 3     # per window: logger rejections, duration mismatches and too-short windows all count
 
 
 # ------------------------------------------------------------------------------------------------------------------
@@ -104,7 +110,7 @@ class FakeDUT:
               ("cnn-r0-w050d4-int8", "tflm-cmsis", 2100.0, 2.0)]   # (id, runtime, inference us, front-end us)
 
     def __init__(self, rng: random.Random):
-        self.rng, self.k, self.lat_us, self.fe_us, self.last_us = rng, None, None, None, 0
+        self.rng, self.k, self.lat_us, self.fe_us, self.last_us, self.j = rng, None, None, None, 0, 0
 
     def ping(self):
         return {"bench": "DRYRUN", "n_models": len(self.MODELS)}
@@ -117,12 +123,16 @@ class FakeDUT:
         return {"k": k, "arena_used": [0, 1480, 23120][k]}
 
     def input(self, j):
+        self.j = j
         return {"j": j}
 
     def lat(self):
         _, _, inf, fe = self.MODELS[self.k]
         self.lat_us, self.fe_us = inf, fe
-        return {"inf_med_us": inf, "fe_med_us": fe}
+        # stored input 2 is the fastest (like a forest's shortest tree path): min over inputs < median
+        return {"inf_med_us": inf, "fe_med_us": fe, "inf_min_us": inf * self.FAST[2], "fe_min_us": fe * self.FAST[2]}
+
+    FAST = (1.0, 1.0, 0.8, 1.0, 1.0)   # per-input speed factor of the fake board
 
     def _window(self, us):
         self.last_us = int(us * self.rng.uniform(0.999, 1.001))
@@ -135,13 +145,13 @@ class FakeDUT:
         return {"us": self._window(ms * 1000)}
 
     def run(self, n):
-        return {"n": n, "us": self._window(n * self.lat_us), "cls": 3}
+        return {"n": n, "us": self._window(n * self.lat_us * self.FAST[self.j]), "cls": 3}
 
     def front(self, n):
-        return {"n": n, "us": self._window(n * self.fe_us)}
+        return {"n": n, "us": self._window(n * self.fe_us * self.FAST[self.j])}
 
     def e2e(self, n):
-        return {"n": n, "us": self._window(n * (self.lat_us + self.fe_us)), "cls": 3}
+        return {"n": n, "us": self._window(n * (self.lat_us + self.fe_us) * self.FAST[self.j]), "cls": 3}
 
     @staticmethod
     def n_for(window_s, per_call_us):
@@ -195,15 +205,24 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
 
 
-def measure_window(dut, logger, out: CsvAppender, base: dict, mode: str, n: int, call, p_idle_uw):
-    """Run one windowed command, pair it with the logger, write the row; retry once if rejected (CONTRACT.md 7.4).
+def resize_n(n: int, t_us: int, min_us: float) -> int:
+    """N for the next attempt after a window of t_us came out shorter than min_us (same per-call time, plus margin)."""
+    return max(n + 1, math.ceil(n * min_us / max(t_us, 1) * WINDOW_MARGIN))
 
-    A missing or malformed W line counts as a rejection (row written with empty logger fields). After a second
-    rejection the window is left rejected and the campaign continues; such windows are re-measured later.
+
+def measure_window(dut, logger, out: CsvAppender, base: dict, mode: str, n: int, call, p_idle_uw,
+                   min_us: float | None = None):
+    """Run one windowed command call(n), pair it with the logger, write the row (CONTRACT.md 7.4).
+
+    Up to MAX_ATTEMPTS attempts; every attempt writes one row (rows are never edited). An attempt is rejected when
+    the W line is missing or malformed (empty logger fields), when board and logger durations differ by more than
+    MAX_DURATION_MISMATCH or ovf > 0, or when the window is shorter than min_us (energy windows must last >= 10 s,
+    CONTRACT.md 7.3): then N is scaled up for the next attempt. Still rejected after the last attempt: the window
+    is left for re-measurement and the campaign continues.
     """
-    for attempt in (1, 2):
+    for attempt in range(1, MAX_ATTEMPTS + 1):
         logger.arm()
-        reply = call()
+        reply = call(n)
         t_dut = reply["us"]
         row = {**base, "mode": mode, "N": n, "t_window_us_dut": t_dut,
                "P_idle_uW": "" if p_idle_uw is None else f"{p_idle_uw:.3f}", "timestamp": now_iso()}
@@ -211,17 +230,24 @@ def measure_window(dut, logger, out: CsvAppender, base: dict, mode: str, n: int,
             w = logger.next_window()
         except (TimeoutError, ValueError) as e:
             out.write({**row, "rejected": 1})
-            print(f"    {mode} rejected (logger: {e}), attempt {attempt}/2")
+            print(f"    {mode} rejected (logger: {e}), attempt {attempt}/{MAX_ATTEMPTS}")
             continue
         mismatch = abs(w.duration_us - t_dut) / max(t_dut, 1)
-        rejected = int(mismatch > MAX_DURATION_MISMATCH or w.ovf > 0)
+        short = min_us is not None and t_dut < min_us
+        rejected = int(mismatch > MAX_DURATION_MISMATCH or w.ovf > 0 or short)
         out.write({**row, "t_window_us_logger": w.duration_us, "E_window_uJ": f"{w.E_uJ:.3f}",
                    "P_mean_uW": f"{w.Pmean_uW:.3f}", "P_std_uW": f"{w.Pstd_uW:.3f}", "V_bus_mV": f"{w.Vbus_mV:.1f}",
                    "n_samples": w.n, "ovf": w.ovf, "rejected": rejected})
         if not rejected:
             return w
-        print(f"    {mode} rejected (duration mismatch {mismatch:.4%}, ovf={w.ovf}), attempt {attempt}/2")
-    print(f"    {mode} still rejected after 2 attempts: left for re-measurement")
+        if short:
+            n_new = resize_n(n, t_dut, min_us)
+            print(f"    {mode} rejected (window {t_dut / 1e6:.2f} s < {min_us / 1e6:.0f} s), N {n} -> {n_new}, "
+                  f"attempt {attempt}/{MAX_ATTEMPTS}")
+            n = n_new
+        else:
+            print(f"    {mode} rejected (duration mismatch {mismatch:.4%}, ovf={w.ovf}), attempt {attempt}/{MAX_ATTEMPTS}")
+    print(f"    {mode} still rejected after {MAX_ATTEMPTS} attempts: left for re-measurement")
     return None
 
 
@@ -240,26 +266,32 @@ def run_session(dut, logger, out: CsvAppender, session: int, window_s: float, mo
         t0 = time.monotonic()
         dut.sel(e.k)
         lat = dut.lat()
-        n_inf = dut.n_for(window_s, lat["inf_med_us"])
-        n_fe = dut.n_for(window_s, lat["fe_med_us"])
-        n_e2e = dut.n_for(window_s, lat["inf_med_us"] + lat["fe_med_us"])
-        print(f"  [{e.k}] {e.model_id}: inf {lat['inf_med_us']:.1f} us, fe {lat['fe_med_us']:.1f} us "
-              f"-> N={n_inf}, N_fe={n_fe}, N_e2e={n_e2e}")
+        # size from the fastest stored input (LAT's min over the 5 per-input medians) so every input's window is
+        # >= window_s; slower inputs just get longer windows
+        inf_us = lat.get("inf_min_us", lat["inf_med_us"])
+        fe_us = lat.get("fe_min_us", lat["fe_med_us"])
+        target_s = window_s * WINDOW_MARGIN
+        n_inf = dut.n_for(target_s, inf_us)
+        n_fe = dut.n_for(target_s, fe_us)
+        n_e2e = dut.n_for(target_s, inf_us + fe_us)
+        print(f"  [{e.k}] {e.model_id}: inf {lat['inf_med_us']:.1f} us (min {inf_us:.1f}), "
+              f"fe {lat['fe_med_us']:.1f} us (min {fe_us:.1f}) -> N={n_inf}, N_fe={n_fe}, N_e2e={n_e2e}")
+        min_us = window_s * 1e6
         for j in range(N_INPUTS):
             dut.input(j)
             base = {"model_id": e.model_id, "session": session, "input_j": j, "fw_hash": fw,
                     "logger_hash": logger.hash}
             w_idle = measure_window(dut, logger, out, {**base, "input_j": ""}, "IDLE", 0,
-                                    lambda: dut.idle(window_ms), None)
+                                    lambda _n: dut.idle(window_ms), None)
             p_idle = w_idle.Pmean_uW if w_idle else None
-            measure_window(dut, logger, out, base, "RUN", n_inf, lambda: dut.run(n_inf), p_idle)
-            measure_window(dut, logger, out, base, "FRONT", n_fe, lambda: dut.front(n_fe), p_idle)
-            measure_window(dut, logger, out, base, "E2E", n_e2e, lambda: dut.e2e(n_e2e), p_idle)
+            measure_window(dut, logger, out, base, "RUN", n_inf, dut.run, p_idle, min_us)
+            measure_window(dut, logger, out, base, "FRONT", n_fe, dut.front, p_idle, min_us)
+            measure_window(dut, logger, out, base, "E2E", n_e2e, dut.e2e, p_idle, min_us)
         print(f"      done in {time.monotonic() - t0:.0f} s")
 
     if sleep_ms:
         base = {"model_id": "", "session": session, "input_j": "", "fw_hash": fw, "logger_hash": logger.hash}
-        measure_window(dut, logger, out, base, "SLEEP", 0, lambda: dut.sleep(sleep_ms), None)
+        measure_window(dut, logger, out, base, "SLEEP", 0, lambda _n: dut.sleep(sleep_ms), None)
 
 
 def main() -> int:

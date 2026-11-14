@@ -147,13 +147,53 @@ def test_measure_dry_run_matches_contract(tmp_path):
     assert {r["rejected"] for r in rows} <= {"0", "1"}
     ok = [r for r in rows if r["rejected"] == "0"]
     assert {r["mode"] for r in ok} == {"IDLE", "RUN", "FRONT", "E2E"}
-    # every (model, input, mode) window: exactly one accepted row, or two rejected attempts (left for re-measurement)
+    # every (model, input, mode) window: at most one accepted row and at most MAX_ATTEMPTS rows per input
+    from tools.measure import MAX_ATTEMPTS
     groups = {}
     for r in rows:
         groups.setdefault((r["model_id"], r["mode"]), []).append(r["rejected"])
     for (mid, mode), flags in groups.items():
-        assert flags.count("0") <= 5 and len(flags) <= 10, (mid, mode, flags)
+        assert flags.count("0") <= 5 and len(flags) <= 5 * MAX_ATTEMPTS, (mid, mode, flags)
     assert len({r["model_id"] for r in ok}) == 3
+    # energy windows last >= 10 s on every input, including the fake board's fastest one (input 2)
+    energy = [r for r in ok if r["mode"] in ("RUN", "FRONT", "E2E")]
+    assert {r["input_j"] for r in energy} == {"0", "1", "2", "3", "4"}
+    assert min(int(r["t_window_us_dut"]) for r in energy) >= 10_000_000
+
+
+def test_measure_short_window_rejected_and_resized():
+    """A window shorter than the minimum is written rejected=1 and re-measured with a larger N."""
+    from tools.measure import CsvAppender, HW_COLUMNS as COLS, Window, measure_window  # noqa: F401
+
+    class Board:                     # the timed loop runs 20 % faster than LAT said: 1 us per call -> 0.8 us
+        def run(self, n):
+            self.last = int(n * 0.8)
+            return {"n": n, "us": self.last}
+
+    class Log:
+        def __init__(self, board):
+            self.board = board
+
+        def arm(self):
+            pass
+
+        def next_window(self, timeout_s=3.0):
+            us = self.board.last
+            return Window(0, us, us // 1060, 24.0 * us / 1e6, 24_000.0, 100.0, 5000.0, 0)
+
+    class Rows:
+        def __init__(self):
+            self.rows = []
+
+        def write(self, row):
+            self.rows.append(row)
+
+    board, out = Board(), Rows()
+    w = measure_window(board, Log(board), out, {"model_id": "m", "session": 1, "input_j": 0}, "RUN",
+                       10_000_000, board.run, 20_000.0, min_us=10_000_000)
+    assert w is not None and w.duration_us >= 10_000_000
+    assert [r["rejected"] for r in out.rows] == [1, 0]
+    assert out.rows[0]["t_window_us_dut"] == 8_000_000 and out.rows[1]["N"] > out.rows[0]["N"]
 
 
 def test_load_mat_uses_explicit_key(tmp_path):
