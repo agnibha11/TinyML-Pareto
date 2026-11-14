@@ -1,0 +1,10 @@
+session 12: firmware 42eaab5, 4 of 5 models, window >= 10.0 s
+  [0] mlp-r3-h128-fp32: inf 6355.4 us (min 6354.6), fe 7341.3 us (min 7330.8) -> N=1653, N_fe=1433, N_e2e=768
+      done in 216 s
+  [1] mlp-r3-h128-int8: inf 3104.0 us (min 3070.1), fe 7341.4 us (min 7330.8) -> N=3421, N_fe=1433, N_e2e=1010
+      done in 215 s
+  [2] mlp-r4-h64-int8: inf 531.3 us (min 521.2), fe 3837.0 us (min 3834.2) -> N=20146, N_fe=2739, N_e2e=2411
+      done in 212 s
+  [4] cnn-r0-w200d4-int8qat: inf 742432.9 us (min 742392.7), fe 156.9 us (min 156.8) -> N=15, N_fe=66959, N_e2e=15
+      done in 605 s
+wrote /home/hridayesh/Desktop/Projects/ML_project/Tiny_ML/TinyML-Pareto/results/hw_measurements.csv
