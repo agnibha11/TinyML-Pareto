@@ -1,0 +1,27 @@
+[PASS] 1 USB: ESP32: /dev/ttyUSB0 (CP210x)
+[PASS] 3 Logger: logger dev, built with shunt_ohm=0.1000
+[WARN] 3 Logger: 7 unexpected lines, e.g. 'configsip: 0, SPIWP:0xee'
+        -> Garbage on the logger port: wrong baud, ESP32 rebooting (brown-out), or a different sketch.
+== Calibration: Nano UNPLUGGED from the measured cable, sync wire moved by hand ==
+Each window: plug the sync wire into the 3V3 rail for >= 10 s, then pull it out.
+Step 1/2 - NO load in the VIN- row. Press Enter, then make one window (>= 3 s) ... [PASS] cal zero: offset 138 uW at 5136 mV (n=10885)
+Step 2/2 - put the 100.0 ohm resistor from the VIN- row to GND. Press Enter, then make 2 windows (>= 10 s each) ... Traceback (most recent call last):
+  File "/home/hridayesh/Desktop/Projects/ML_project/Tiny_ML/TinyML-Pareto/tools/rig_check.py", line 693, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/home/hridayesh/Desktop/Projects/ML_project/Tiny_ML/TinyML-Pareto/tools/rig_check.py", line 668, in main
+    run_cal(rep, log, a.cal, shunt, a.cal_windows, 120)
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/hridayesh/Desktop/Projects/ML_project/Tiny_ML/TinyML-Pareto/tools/rig_check.py", line 433, in run_cal
+    w = log.next_window(wait_s)
+  File "/home/hridayesh/Desktop/Projects/ML_project/Tiny_ML/TinyML-Pareto/tools/rig_check.py", line 138, in next_window
+    for ln in self.lines(0.05):
+              ~~~~~~~~~~^^^^^^
+  File "/home/hridayesh/Desktop/Projects/ML_project/Tiny_ML/TinyML-Pareto/tools/rig_check.py", line 125, in lines
+    self._buf += self._ser.read(256)
+                 ~~~~~~~~~~~~~~^^^^^
+  File "/home/hridayesh/miniconda3/lib/python3.14/site-packages/serial/serialposix.py", line 595, in read
+    raise SerialException(
+        'device reports readiness to read but returned no data '
+        '(device disconnected or multiple access on port?)')
+serial.serialutil.SerialException: device reports readiness to read but returned no data (device disconnected or multiple access on port?)

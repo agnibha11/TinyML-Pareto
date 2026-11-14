@@ -1,0 +1,20 @@
+[PASS] 1 USB: ESP32: /dev/ttyUSB0 (CP210x)
+[PASS] 3 Logger: logger dev, built with shunt_ohm=0.1000
+[WARN] 3 Logger: 7 unexpected lines, e.g. 'configsip: 0, SPIWP:0xee'
+        -> Garbage on the logger port: wrong baud, ESP32 rebooting (brown-out), or a different sketch.
+== Calibration: Nano UNPLUGGED from the measured cable, sync wire moved by hand ==
+Each window: plug the sync wire into the 3V3 rail for >= 10 s, then pull it out.
+Step 1/2 - NO load in the VIN- row. Press Enter, then make one window (>= 3 s) ... [PASS] cal zero: offset 152 uW at 5136 mV (n=232)
+Step 2/2 - put the 1000.0 ohm resistor from the VIN- row to GND. Press Enter, then make 3 windows (>= 10 s each) ... [PASS] cal load 1: 4.939 s, n=4938, Vbus 5136 mV, I 0.03 mA, P 0.14 mW (std 0.23 mW)
+        window 1: 4.9 s, P 0.137 mW, expected V^2/R 26.377 mW, ratio 0.0052
+[PASS] cal load 2: 10.508 s, n=10507, Vbus 5129 mV, I 5.87 mA, P 30.12 mW (std 0.23 mW)
+        window 2: 10.5 s, P 30.115 mW, expected V^2/R 26.309 mW, ratio 1.1447
+[PASS] cal load 3: 10.244 s, n=10244, Vbus 5130 mV, I 5.87 mA, P 30.12 mW (std 0.23 mW)
+        window 3: 10.2 s, P 30.125 mW, expected V^2/R 26.313 mW, ratio 1.1449
+[FAIL] cal gain: gain 0.7649 (-23.51%), CV 70.23%; implied shunt 0.0765 ohm (logger built for 0.1000)
+        -> Use the DMM value of the load resistor in --cal, and rebuild the logger with the measured shunt.
+[WARN] cal repeat: window-to-window CV 70.23%
+        -> Loose resistor leg or screw - re-seat and repeat.
+
+6 passed, 2 warnings, 1 failed, 0 skipped
+Fix the FAIL items in the order listed (later checks depend on earlier ones), then run again.
