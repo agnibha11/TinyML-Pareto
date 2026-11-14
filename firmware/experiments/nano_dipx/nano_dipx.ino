@@ -1,4 +1,4 @@
-// nano_dipx.ino - experiment sketch for the ~42 s idle-current dip (firmware/experiments/wfi_dip/README.md).
+// nano_dipx.ino - experiment sketch for the ~42 s idle-current dip (firmware/experiments/README.md).
 // NOT the bench firmware: flash firmware/bench back afterwards.
 //
 // Same idle conditions as firmware/bench (LEDs, sensor rail and I2C pull-ups off, D2 LOW at rest, HFXO on), plus:

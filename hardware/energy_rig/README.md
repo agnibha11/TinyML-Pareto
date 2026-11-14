@@ -5,6 +5,11 @@ INA219 module, an ESP32 DevKit and four resistors (1 Ω, 100 Ω, 1 kΩ, 100 kΩ)
 cable whose VBUS wire runs through the shunt. The INA219 measures the shunt, and the ESP32 logs it. Owner: Hridayesh
 Kundu (measurement). The design implements CONTRACT.md v1.0-rc4 §7.3/§7.4 and the pin map of `logger/logger.ino`.
 
+> **As built (14 Nov 2026): option B.** No 1 Ω fitted; the module's R100 is the shunt. The cut cable's golden wire
+> is VBUS (not red). The sync network is Nano D2 → female-male dupont → empty row → 100 Ω (brown-black-brown) → SYNC
+> row; 100 kΩ (brown-black-yellow) SYNC row → GND; ESP32 P4 in the SYNC row. Calibrated effective shunt 0.1139 Ω,
+> logger built with `SHUNT_OHM_MEASURED=0.1139`. Details: `docs/energy_rig_bringup.md`.
+
 ```
 laptop USB port 1 ──W1, red VBUS wire cut──► U1 VIN+ ─R1 1 Ω─ U1 VIN- ──W1──► W2 ──► Nano 33 BLE (A1)
                                                (all in U1's screw terminal)            │ D2

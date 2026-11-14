@@ -23,13 +23,17 @@ ml/                    prepare_data.py, splits.py, features.py, train.py, export
 configs/               one YAML per model config
 models/                registry.csv + models/<model_id>/
 handoff/               classes.json, feature spec, constants, test vectors (Agnibha -> Abhinav)
-firmware/              VERSIONS.md, bench/ (benchmark sketch), tests/
+firmware/              VERSIONS.md, bench/ (benchmark sketch), tests/, experiments/ (rig experiment sketches)
 tools/                 dut.py (board wrapper), measure.py (campaign), bundle.py, build_flash.py,
-                       vmcu/ (virtual Cortex-M4), fxfe/ (fixed-point front ends on three core classes),
-                       vrig/ (simulated INA219 rig), demo_sim.py (simulated-board dry run)
+                       rig_check.py (rig pre-flight / calibration / wiggle test), summarise_hw.py (campaign quick
+                       look), run_dip.py (idle-current experiment), vmcu/ (virtual Cortex-M4), fxfe/ (fixed-point
+                       front ends on three core classes), vrig/ (simulated INA219 rig), demo_sim.py (simulated-board
+                       dry run)
 logger/                ESP32 INA219 logger firmware
-results/               script-written outputs only
-docs/                  related-work gap table, notes for the paper, midsem/ and sprint2/ status pages, selector/
+hardware/energy_rig/   KiCad project, BOM and wiring of the INA219/ESP32 energy rig
+results/               script-written outputs only (results/rig/: rig calibration and idle-current experiments)
+docs/                  related-work gap table, notes for the paper, midsem/ and sprint2/ status pages, selector/,
+                       energy_rig_bringup.md (rig bring-up, calibration, idle-dip finding)
 tests/                 host-side tests (pytest)
 ```
 

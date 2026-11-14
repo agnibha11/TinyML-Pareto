@@ -1,10 +1,11 @@
-"""Run one experiment window and analyse it for the ~42 s dip.
+"""Run one experiment window and analyse it for the ~42 s idle-current dip (docs/energy_rig_bringup.md).
 
-Needs: ESP32 running inastream/ (10 Hz INA219 stream on /dev/ttyUSB0), Nano running nano_dipx/ (or firmware/bench
-with --bench, which sends "IDLE <ms>" / "SLEEP <ms>").
+Needs: ESP32 running firmware/experiments/inastream (10 Hz INA219 stream on /dev/ttyUSB0) instead of logger/, and
+the Nano running firmware/experiments/nano_dipx (or firmware/bench with --bench, which sends "IDLE <ms>" /
+"SLEEP <ms>"). Reflash logger/ and firmware/bench afterwards. Writes results/rig/wfi_dip/<time>_<label>.csv.
 
-    python firmware/experiments/wfi_dip/run_dip.py --label usb_off --ms 130000 --flags 1
-    python firmware/experiments/wfi_dip/run_dip.py --label info --info
+    python tools/run_dip.py --label usb_off --ms 130000 --flags 1
+    python tools/run_dip.py --label info --info
 """
 from __future__ import annotations
 
@@ -16,7 +17,8 @@ from pathlib import Path
 import numpy as np
 import serial
 
-HERE = Path(__file__).resolve().parent
+REPO = Path(__file__).resolve().parents[1]
+OUT_DIR = REPO / "results" / "rig" / "wfi_dip"
 
 
 def analyse(csv: Path) -> str:
@@ -65,7 +67,8 @@ def main() -> None:
         print(n.readline().decode().strip())
         return
 
-    out_path = HERE / "results" / f"{time.strftime('%m%d_%H%M%S')}_{a.label}.csv"
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    out_path = OUT_DIR / f"{time.strftime('%m%d_%H%M%S')}_{a.label}.csv"
     out = open(out_path, "w")
     out.write("esp_ms,I_uA,Vbus_mV,sync_pct\n")
     esp = serial.Serial()
@@ -116,7 +119,7 @@ def main() -> None:
     th.join()
     out.close()
     print(f"[{a.label}] Nano: {reply}; {state['n']} stream lines; reader error: {state['err']}")
-    print(f"[{a.label}] {out_path.relative_to(HERE)}")
+    print(f"[{a.label}] {out_path.relative_to(REPO)}")
     print(analyse(out_path))
 
 

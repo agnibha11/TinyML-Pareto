@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Summarise rig_lab/campaign/hw_measurements.csv: per model and mode, dynamic energy per operation.
+"""Quick look at results/hw_measurements.csv: per model and mode, dynamic energy per operation.
 
 E_op = (P_mean - P_idle) * t_window / N   (energy above the idle baseline, per inference / front end / end-to-end)
-Also prints the spread over the 5 stored inputs and the rejected-window count.
+Also prints the spread over the 5 stored inputs and the rejected-window count. Writes <csv dir>/hw_summary.csv.
+A check for a running campaign, not the paper analysis (that uses the last accepted row per window, CONTRACT.md 1).
 
-    python rig_lab/tools/summarise.py [csv]
+    python tools/summarise_hw.py [csv]
 """
 from __future__ import annotations
 
@@ -13,11 +14,11 @@ from pathlib import Path
 
 import pandas as pd
 
-LAB = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[1]
 
 
 def main() -> None:
-    p = Path(sys.argv[1]) if len(sys.argv) > 1 else LAB / "campaign" / "hw_measurements.csv"
+    p = Path(sys.argv[1]) if len(sys.argv) > 1 else REPO / "results" / "hw_measurements.csv"
     d = pd.read_csv(p)
     rej = int(d.rejected.sum())
     d = d[d.rejected == 0].copy()
@@ -38,7 +39,7 @@ def main() -> None:
         max_dt_mismatch=("dt_mismatch", "max"))
     with pd.option_context("display.width", 160, "display.float_format", lambda v: f"{v:.4g}"):
         print(g.to_string())
-    out = p.with_name("summary.csv")
+    out = p.with_name("hw_summary.csv")
     g.to_csv(out)
     print(f"wrote {out}")
 
