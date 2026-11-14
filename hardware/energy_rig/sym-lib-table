@@ -1,0 +1,4 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "TinyML_Rig")(type "KiCad")(uri "${KIPRJMOD}/TinyML_Rig.kicad_sym")(options "")(descr "TinyML-Pareto energy rig symbols"))
+)

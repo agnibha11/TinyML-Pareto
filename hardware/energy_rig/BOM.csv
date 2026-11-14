@@ -1,0 +1,14 @@
+Ref,Qty,Value,Role,Status,Notes
+A1,1,Arduino Nano 33 BLE,DUT running the bench firmware,have,"On the breadboard; powered only from its micro-USB (W2); pins 17, 27, 30 unwired"
+U1,1,INA219 module,"Current/voltage monitor, I2C 0x40",have,"Option A: desolder its R100 (0.1 ohm); R1 and the cut VBUS ends go in its screw terminal"
+U2,1,ESP32 DevKit,Logger running logger/logger.ino,have,"Off the breadboard; IO21 SDA, IO22 SCL, IO4 SYNC, 3V3, GND"
+R1,1,1R,Shunt (option A),have,Measure with a DMM every session
+R6,1,100R,Series resistor on the sync line,have,
+R7,1,100k,Pull-down on ESP32 IO4 (CONTRACT 7.3),have,
+R9,1,1k,"Calibration load, 5.0 mA at 5 V",have,Plug in only during calibration
+W1,1,USB-A male to female extension,"Measured cable, red VBUS wire cut",needed,"Short (<= 0.5 m); label it MEASURED-1 (measure.py --cable)"
+W2,1,USB-A to micro-B cable,Into the Nano,needed (likely have),Data-capable
+-,1,USB cable for the ESP32,Laptop port 2,needed (likely have),
+-,1,Breadboard + dupont wires (male-male and female-male),Wiring,needed (likely have),
+-,1,Digital multimeter,"Shunt, R9 and VBUS measurements",needed,
+optional,2,470R and 220R (1/4 W),"Extra calibration points (10.6 / 22.7 mA)",nice to have,Lets you check linearity around the Nano's ~11 mA
