@@ -38,7 +38,8 @@ def first_code_list(sec: str) -> list[str]:
 
 # 1. Serial protocol ------------------------------------------------------------------------------------------------
 def contract_commands() -> list[str]:
-    return re.findall(r"^\| `([A-Z0-9]+)(?: <[A-Za-z]+>)?` \|", section("### 7.2"), re.M)
+    # `CMD`, `CMD <arg>` or `CMD [<arg>]` (optional argument, e.g. LAT [<reps>])
+    return re.findall(r"^\| `([A-Z0-9]+)(?: <[A-Za-z]+>| \[<[A-Za-z]+>\])?` \|", section("### 7.2"), re.M)
 
 
 def test_command_list_matches_code():

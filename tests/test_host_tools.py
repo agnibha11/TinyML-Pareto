@@ -161,6 +161,30 @@ def test_measure_dry_run_matches_contract(tmp_path):
     assert min(int(r["t_window_us_dut"]) for r in energy) >= 10_000_000
 
 
+def test_lat_takes_a_repetition_count(board):
+    """LAT [reps]: default 101, 1..101 accepted, the reply says how many were used (CONTRACT.md 7.2)."""
+    dut, _ = board
+    dut.sel(0)
+    assert dut.lat()["reps"] == 101                      # plain LAT is unchanged
+    assert dut.lat(11)["reps"] == 11
+    kv, _ = dut.command("LAT 11")
+    assert kv["reps"] == "11"
+    for bad in ("LAT 0", "LAT 102"):
+        with pytest.raises(DUTError, match=r"ERR ARG reps must be 1\.\.101"):
+            dut.command(bad)
+
+
+def test_lat_reps_and_timeouts_scale_with_latency():
+    from tools.dut import DUT
+    from tools.measure import lat_reps
+    assert lat_reps(5.0) == 101                          # a 5 us tree: full 101 repetitions
+    assert lat_reps(742_433) == 81                       # cnn-r0-w200d4-int8qat on the board
+    assert lat_reps(20.9e6) == 11                        # cnn-r0-w200d4-fp32: floor of 11, LAT ~21 min not 2.9 h
+    # LAT timeout follows the real duration: 5 x (11 + 1) x 20.9 s x 1.5 + 30 s
+    # windowed commands include the warm-up call: N = 1 of a 20.9 s model is two calls (~42 s), not one
+    assert DUT._window_timeout(None, 1, 20.9e6) >= 2 * 20.9 * 1.5
+
+
 def test_measure_short_window_rejected_and_resized():
     """A window shorter than the minimum is written rejected=1 and re-measured with a larger N."""
     from tools.measure import CsvAppender, HW_COLUMNS as COLS, Window, measure_window  # noqa: F401

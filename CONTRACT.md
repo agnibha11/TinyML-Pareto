@@ -269,12 +269,14 @@ All CSVs: UTF-8, comma-separated, header row, `.` decimal point, no index column
 | `RUN <N>` | front end once (outside the window); 1 warm-up inference; D2 HIGH; N inferences; D2 LOW | `OK n=<N> us=<window_us> cls=<class>` |
 | `FRONT <N>` | 1 warm-up; D2 HIGH; N front-end calls; D2 LOW | `OK n=<N> us=<window_us>` |
 | `E2E <N>` | 1 warm-up; D2 HIGH; N × (front end + inference); D2 LOW | `OK n=<N> us=<window_us> cls=<class>` |
-| `LAT` | for each stored window: 101 timed inferences and 101 timed front-end calls (DWT) | `OK inf_med_cyc=<> inf_min_cyc=<> inf_max_cyc=<> fe_med_cyc=<> fe_min_cyc=<> fe_max_cyc=<>` |
+| `LAT [<reps>]` | for each stored window: `reps` timed inferences and `reps` timed front-end calls (DWT); `reps` 1..101, default 101 | `OK inf_med_cyc=<> inf_min_cyc=<> inf_max_cyc=<> fe_med_cyc=<> fe_min_cyc=<> fe_max_cyc=<> reps=<reps>` |
 | `VERIFY` | board sends `RDY 4096`; the host sends the 4096 bytes (1024 × float32 LE) only after `RDY`; the board waits ≤ 2 s for them, otherwise it discards input for ≥ 1 s and until 50 ms of silence, then replies `ERR IO`; then front end + inference | `OK cls=<k> out=<v0>,<v1>,…` |
 
 - `N` is a 32-bit unsigned integer ≥ 1. `ms` is 1..600000.
 - `<window_us>` = `micros()` read just after D2 goes LOW minus `micros()` read just before D2 goes HIGH.
-- `LAT` statistics: for each of the 5 stored windows take the median of 101 runs, then report the median of the 5 medians
+- `LAT` statistics: for each of the 5 stored windows take the median of `reps` runs (the host sends
+  `reps = clamp(ceil(60 s / t), 11, 101)`, `t` = one front end + inference from an `E2E 1` probe; one call must stay
+  below 2^32 cycles = 67.1 s), then report the median of the 5 medians
   (`*_med_cyc`) and the min/max over the 5 medians (`*_min_cyc`, `*_max_cyc`). µs = cycles / 64.
 - **VERIFY outputs:**
   - Contents: the model's output tensor, dequantized `(q − zero_point) × scale` for int8. NN models end in **Softmax**,
@@ -286,10 +288,10 @@ All CSVs: UTF-8, comma-separated, header row, `.` decimal point, no index column
     absolute (fp32).
 - **Host timeouts** (`tools/dut.py`):
   - 2 s for `PING`, `LIST`, `SEL` and `INPUT`.
-  - 600 s for `LAT`.
+  - `LAT`: 600 s, or 1.5 × 5 × (reps + 1) × t + 30 s when the probe time `t` is known, whichever is larger.
   - 10 s for `VERIFY`.
-  - Windowed commands: 1.5 × the expected window + 5 s, where the expected window = N × the latency from the last
-    `LAT`. Before any `LAT`, 605 s.
+  - Windowed commands: 1.5 × the expected command time + 5 s, where the expected command time = (N + 1) × the
+    latency from the last `LAT` (N calls in the window plus the warm-up call before it). Before any `LAT`, 605 s.
   - `IDLE`/`SLEEP`: 1.5 × ms + 5 s.
 
 ### 7.3 Sync pin (D2)
@@ -413,6 +415,11 @@ Version history:
     inference time from the virtual Cortex-M4. With 101 repetitions, LAT alone is about 10 h of the 16 h campaign,
     mostly for a few float and reference-kernel CNNs; with the cap the campaign takes about 8 h. Not yet applied to
     §7.2: it needs the firmware's `LAT` to take a repetition count.
+- v1.0-rc4 addendum (14 Nov 2026), §7.2 `LAT [<reps>]` (backward compatible: plain `LAT` = 101, reply gains
+  `reps=`): the rc3 proposal above is applied, with `t` from an on-board `E2E 1` probe instead of the virtual
+  Cortex-M4. Needed because `cnn-r0-w200d4-fp32` takes ~20.9 s per inference: 101 × 5 calls would be 2.9 h,
+  past the 600 s host timeout; with 11 it is ~21 min. Window timeouts now count the warm-up call. Energy windows
+  are unchanged. Proposed by Hridayesh; needs Abhinav's and Agnibha's sign-off.
 - v1.0-rc4 addendum (1 Nov 2026), no interface change: `handoff/hann_fx.h` (q15/q31 Hann tables) added to §5 for
   the optional fixed-point front end `firmware/bench/frontend_fx.c`. Same features and units as the float front end,
   so model IDs, VERIFY and the norm constants are unchanged; adopting it on the board is a firmware decision.

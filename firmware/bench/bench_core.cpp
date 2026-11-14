@@ -178,9 +178,14 @@ static void cmd_window(uint32_t n, int mode) {
   else reply("OK n=%lu us=%lu cls=%d", (unsigned long)n, (unsigned long)(t1 - t0), cls);
 }
 
-static void cmd_lat(void) {
+// LAT [reps]: reps timed repetitions per stored window (default and maximum BENCH_LAT_REPS = 101). Slow models need
+// fewer: 101 x 5 calls of a 20.9 s CNN would take 2.9 h. The host picks reps = clamp(ceil(60 s / t), 11, 101)
+// (CONTRACT.md 7.2). One call must stay below 2^32 cycles = 67.1 s at 64 MHz, or the DWT difference wraps.
+static void cmd_lat(uint32_t reps) {
+  if (reps < 1u || reps > BENCH_LAT_REPS) { reply("ERR ARG reps must be 1..%d", BENCH_LAT_REPS); return; }
   const bench_model_t *m = selected();
   if (!m) return;
+  const int nr = (int)reps;
   uint32_t med_inf[BENCH_N_INPUTS], med_fe[BENCH_N_INPUTS];
   int cls = -1;
   for (int j = 0; j < BENCH_N_INPUTS; ++j) {
@@ -188,26 +193,26 @@ static void cmd_lat(void) {
     m->frontend(x, s_feat);  // warm-up + features for the inference timing
     if (m->infer(s_feat, &cls) != 0) { reply("ERR INVOKE warm-up failed on input %d", j); return; }
     int err = 0;
-    for (int r = 0; r < BENCH_LAT_REPS; ++r) {
+    for (int r = 0; r < nr; ++r) {
       const uint32_t c0 = bhal_cycles();
       err |= m->infer(s_feat, &cls);
       s_reps[r] = bhal_cycles() - c0;
     }
     if (err) { reply("ERR INVOKE inference failed during LAT on input %d", j); return; }
-    med_inf[j] = median_u32(s_reps, BENCH_LAT_REPS);
-    for (int r = 0; r < BENCH_LAT_REPS; ++r) {
+    med_inf[j] = median_u32(s_reps, nr);
+    for (int r = 0; r < nr; ++r) {
       const uint32_t c0 = bhal_cycles();
       m->frontend(x, s_feat);
       s_reps[r] = bhal_cycles() - c0;
     }
-    med_fe[j] = median_u32(s_reps, BENCH_LAT_REPS);
+    med_fe[j] = median_u32(s_reps, nr);
   }
   sort_u32(med_inf, BENCH_N_INPUTS);
   sort_u32(med_fe, BENCH_N_INPUTS);
-  reply("OK inf_med_cyc=%lu inf_min_cyc=%lu inf_max_cyc=%lu fe_med_cyc=%lu fe_min_cyc=%lu fe_max_cyc=%lu",
+  reply("OK inf_med_cyc=%lu inf_min_cyc=%lu inf_max_cyc=%lu fe_med_cyc=%lu fe_min_cyc=%lu fe_max_cyc=%lu reps=%d",
         (unsigned long)med_inf[BENCH_N_INPUTS / 2], (unsigned long)med_inf[0],
         (unsigned long)med_inf[BENCH_N_INPUTS - 1], (unsigned long)med_fe[BENCH_N_INPUTS / 2],
-        (unsigned long)med_fe[0], (unsigned long)med_fe[BENCH_N_INPUTS - 1]);
+        (unsigned long)med_fe[0], (unsigned long)med_fe[BENCH_N_INPUTS - 1], nr);
 }
 
 static void cmd_verify(void) {
@@ -263,12 +268,16 @@ static void dispatch(char *line) {
   if (too_many) { reply("ERR ARG too many arguments"); return; }
   if (has_arg && !parse_u32(argv[1], &a)) { reply("ERR ARG not an unsigned integer: %s", argv[1]); return; }
 
+  // LAT takes an optional repetition count (default BENCH_LAT_REPS).
+  if (!strcmp(cmd, "LAT")) {
+    cmd_lat(has_arg ? a : (uint32_t)BENCH_LAT_REPS);
+    return;
+  }
   // Commands without an argument.
-  if (!strcmp(cmd, "PING") || !strcmp(cmd, "LIST") || !strcmp(cmd, "LAT") || !strcmp(cmd, "VERIFY")) {
+  if (!strcmp(cmd, "PING") || !strcmp(cmd, "LIST") || !strcmp(cmd, "VERIFY")) {
     if (has_arg) { reply("ERR ARG %s takes no argument", cmd); return; }
     if (!strcmp(cmd, "PING")) cmd_ping();
     else if (!strcmp(cmd, "LIST")) cmd_list();
-    else if (!strcmp(cmd, "LAT")) cmd_lat();
     else cmd_verify();
     return;
   }

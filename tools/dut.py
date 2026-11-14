@@ -214,7 +214,9 @@ class DUT:
     def _window_timeout(self, n: int, per_call_us: float | None) -> float:
         if per_call_us is None:
             return MAX_WINDOW_S + WINDOW_MARGIN_S  # latency unknown (no LAT yet)
-        return n * per_call_us / 1e6 * 1.5 + WINDOW_MARGIN_S
+        # n calls in the window + 1 warm-up call before it (the firmware always runs one, outside the window):
+        # negligible for fast models, but a 20.9 s CNN at N = 1 takes 2 calls, which n alone would time out
+        return (n + 1) * per_call_us / 1e6 * 1.5 + WINDOW_MARGIN_S
 
     def _windowed(self, cmd: str, n: int, per_call_us: float | None, keys: tuple[str, ...]) -> dict:
         kv, _ = self.command(f"{cmd} {int(n)}", timeout_s=self._window_timeout(n, per_call_us))
@@ -233,12 +235,21 @@ class DUT:
         per = None if self.lat_us is None or self.fe_us is None else self.lat_us + self.fe_us
         return self._windowed("E2E", n, per, ("n", "us", "cls"))
 
-    def lat(self) -> dict:
-        kv, _ = self.command("LAT", timeout_s=LAT_TIMEOUT_S)
+    def lat(self, reps: int | None = None, per_call_us: float | None = None) -> dict:
+        """LAT [reps]. Without reps the board uses 101. per_call_us (front end + inference, e.g. from an E2E 1 probe)
+        scales the timeout to the real duration, 5 stored windows x (reps + 1 warm-up) x per call, x 1.5 + 30 s;
+        without it the fixed LAT_TIMEOUT_S applies."""
+        cmd = "LAT" if reps is None else f"LAT {int(reps)}"
+        timeout = LAT_TIMEOUT_S
+        if per_call_us is not None:
+            n = (reps or 101) + 1
+            timeout = max(LAT_TIMEOUT_S, 5 * n * per_call_us / 1e6 * 1.5 + 30.0)
+        kv, _ = self.command(cmd, timeout_s=timeout)
         out = _ints(kv, "inf_med_cyc", "inf_min_cyc", "inf_max_cyc", "fe_med_cyc", "fe_min_cyc", "fe_max_cyc",
                     line="LAT")
         for k in list(out):
             out[k.replace("_cyc", "_us")] = out[k] * 1e6 / CPU_HZ
+        out["reps"] = int(kv["reps"]) if "reps" in kv else (reps or 101)   # older firmware has no reps field
         self.lat_us, self.fe_us = out["inf_med_us"], out["fe_med_us"]
         return out
 

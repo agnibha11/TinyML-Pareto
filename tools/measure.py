@@ -3,7 +3,8 @@
 
 One call = one session over every model in the flashed bundle (CONTRACT.md 6.4, 7.2-7.4):
 
-    for each model k:   SEL k -> LAT -> N from the fastest input's latency x 1.05 (window >= --window-s)
+    for each model k:   SEL k -> E2E 1 probe -> LAT reps (11..101 by latency)
+                        -> N from the fastest input's latency x 1.05 (window >= --window-s)
       for each stored input j = 0..4:   INPUT j -> IDLE -> RUN N -> FRONT N_fe -> E2E N_e2e
     each window: board reply (n, us) is paired with the logger's next "W ..." line;
                  rejected if durations differ by > 0.1 %, ovf > 0, or the window is shorter than --window-s
@@ -45,6 +46,16 @@ W_DEADLINE_S = 3.0   # logger must print the W line within this time after the b
 # 62 windows under 10 s (forests: input-dependent latency, 29.5-69.8 us for one model).
 WINDOW_MARGIN = 1.05
 MAX_ATTEMPTS = 3     # per window: logger rejections, duration mismatches and too-short windows all count
+# LAT repetitions per stored window: clamp(ceil(60 s / t), 11, 101) with t = front end + inference from an E2E 1
+# probe (CONTRACT.md 7.2). Fast models keep 101; cnn-r0-w200d4-fp32 (20.9 s per call) gets 11 instead of 101,
+# so LAT takes ~21 min instead of 2.9 h.
+LAT_TARGET_S, LAT_REPS_MIN, LAT_REPS_MAX = 60.0, 11, 101
+LAT_MAX_CALL_S = 60.0   # one call must stay below 2^32 DWT cycles = 67.1 s at 64 MHz, or the cycle count wraps
+
+
+def lat_reps(per_call_us: float) -> int:
+    """Repetitions per stored window for LAT, from one front end + inference call in microseconds."""
+    return int(min(LAT_REPS_MAX, max(LAT_REPS_MIN, math.ceil(LAT_TARGET_S * 1e6 / max(per_call_us, 1.0)))))
 
 
 # ------------------------------------------------------------------------------------------------------------------
@@ -126,11 +137,13 @@ class FakeDUT:
         self.j = j
         return {"j": j}
 
-    def lat(self):
+    def lat(self, reps=None, per_call_us=None):
         _, _, inf, fe = self.MODELS[self.k]
         self.lat_us, self.fe_us = inf, fe
+        self.last_reps = reps
         # stored input 2 is the fastest (like a forest's shortest tree path): min over inputs < median
-        return {"inf_med_us": inf, "fe_med_us": fe, "inf_min_us": inf * self.FAST[2], "fe_min_us": fe * self.FAST[2]}
+        return {"inf_med_us": inf, "fe_med_us": fe, "inf_min_us": inf * self.FAST[2], "fe_min_us": fe * self.FAST[2],
+                "reps": reps or 101}
 
     FAST = (1.0, 1.0, 0.8, 1.0, 1.0)   # per-input speed factor of the fake board
 
@@ -151,7 +164,8 @@ class FakeDUT:
         return {"n": n, "us": self._window(n * self.fe_us * self.FAST[self.j])}
 
     def e2e(self, n):
-        return {"n": n, "us": self._window(n * (self.lat_us + self.fe_us) * self.FAST[self.j]), "cls": 3}
+        _, _, inf, fe = self.MODELS[self.k]   # from the model table: e2e(1) is also the probe before LAT
+        return {"n": n, "us": self._window(n * (inf + fe) * self.FAST[self.j]), "cls": 3}
 
     @staticmethod
     def n_for(window_s, per_call_us):
@@ -265,7 +279,13 @@ def run_session(dut, logger, out: CsvAppender, session: int, window_s: float, mo
     for e in todo:
         t0 = time.monotonic()
         dut.sel(e.k)
-        lat = dut.lat()
+        # probe: one front end + inference (E2E 1) to size LAT; its D2 window is dropped by the next logger.arm()
+        t_call = dut.e2e(1)["us"]
+        if t_call > LAT_MAX_CALL_S * 1e6:
+            print(f"  [{e.k}] {e.model_id}: SKIPPED, one call takes {t_call / 1e6:.1f} s > {LAT_MAX_CALL_S:.0f} s "
+                  "(the DWT cycle counter would wrap during LAT)")
+            continue
+        lat = dut.lat(lat_reps(t_call), t_call)
         # size from the fastest stored input (LAT's min over the 5 per-input medians) so every input's window is
         # >= window_s; slower inputs just get longer windows
         inf_us = lat.get("inf_min_us", lat["inf_med_us"])
@@ -275,7 +295,8 @@ def run_session(dut, logger, out: CsvAppender, session: int, window_s: float, mo
         n_fe = dut.n_for(target_s, fe_us)
         n_e2e = dut.n_for(target_s, inf_us + fe_us)
         print(f"  [{e.k}] {e.model_id}: inf {lat['inf_med_us']:.1f} us (min {inf_us:.1f}), "
-              f"fe {lat['fe_med_us']:.1f} us (min {fe_us:.1f}) -> N={n_inf}, N_fe={n_fe}, N_e2e={n_e2e}")
+              f"fe {lat['fe_med_us']:.1f} us (min {fe_us:.1f}) -> N={n_inf}, N_fe={n_fe}, N_e2e={n_e2e}"
+              f" (LAT reps {lat.get('reps', 101)})")
         min_us = window_s * 1e6
         for j in range(N_INPUTS):
             dut.input(j)

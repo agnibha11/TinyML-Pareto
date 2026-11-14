@@ -54,13 +54,13 @@ python tools/dut.py /dev/ttyACM0 PING      # -> OK bench=dev n_models=1
 | Board | ESP32 NodeMCU-32S (ESP-32S v1.1, 38 pins, CP2102 `10c4:ea60`) | |
 | FQBN | `esp32:esp32:nodemcu-32s` | |
 | Core | `esp32:esp32@3.3.12` | first compiled 14 Nov 2026; uses only the core's bundled `Wire` 3.3.12 |
-| Shunt | INA219 on-board R100, nominal 0.100 Ω (no external shunt) | passed as `-DSHUNT_OHM_MEASURED=0.100`; replace with the DMM value |
+| Shunt | INA219 on-board R100; effective **0.1139 Ω** from the no-DMM calibration (results/rig/calibration/) | passed as `-DSHUNT_OHM_MEASURED=0.1139`; nominal R100 is 0.100 Ω but the rig read 13.9 % high with it. Update after a DMM check of the 1 kΩ reference |
 
 ```bash
 arduino-cli compile --fqbn esp32:esp32:nodemcu-32s \
-  --build-property "compiler.cpp.extra_flags=-DSHUNT_OHM_MEASURED=0.100" logger
+  --build-property "compiler.cpp.extra_flags=-DSHUNT_OHM_MEASURED=0.1139" logger
 arduino-cli upload  --fqbn esp32:esp32:nodemcu-32s -p /dev/ttyUSB0 logger
-# banner at 115200 after EN: "# logger <hash> shunt_ohm=0.1000 period_us=1000"
+# banner at 115200 after EN: "# logger <hash> shunt_ohm=0.1139 period_us=1000"
 ```
 
 ## Linux host note
@@ -95,4 +95,6 @@ every row (`fw_hash`).
 | 2026-10-01 | Initial pins | | n/a |
 | 2026-10-29 | arduino-cli and core gcc versions recorded from the first bundle link checks; `frontend.c`, `tflm_glue.cpp` and the generated `bundle_gen.cpp` added to the sketch | Agnibha (for Abhinav's review) | n/a (no board yet) |
 | 2026-11-14 | ESP32 logger core pinned (`esp32:esp32@3.3.12`); rig on R100 0.100 Ω shunt | Hridayesh | n/a (rig bring-up, M3) |
+| 2026-11-14 | Logger rebuilt with `SHUNT_OHM_MEASURED=0.1139` (1 kΩ ±1 % calibration, no DMM; docs/energy_rig_bringup.md) | Hridayesh | yes: energy rows logged with 0.100 read 13.9 % high |
+| 2026-11-14 | `bench_core.cpp`: `LAT [reps]` (1..101, default 101; reply adds `reps=`), CONTRACT.md 7.2 addendum | Hridayesh (Abhinav to review) | no: energy windows unchanged; LAT stays 101 reps for any model under 0.59 s per call |
 | 2026-11-14 | `hal_nano33ble.cpp`: start HFXO in `bhal_init()` (Nano vs ESP32 window length now agree to 3 ppm, was 0.77 %); idle 20.29 → 21.32 mW | Hridayesh (Abhinav to review) | yes: any board timing or energy taken before this |
