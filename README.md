@@ -31,7 +31,7 @@ tools/                 dut.py (board wrapper), measure.py (campaign), bundle.py,
                        dry run)
 logger/                ESP32 INA219 logger firmware
 hardware/energy_rig/   KiCad project, BOM and wiring of the INA219/ESP32 energy rig
-results/               script-written outputs only (results/rig/: rig calibration and idle-current experiments)
+results/               script-written outputs only
 docs/                  related-work gap table, notes for the paper, midsem/ and sprint2/ status pages, selector/,
                        energy_rig_bringup.md (rig bring-up, calibration, idle-dip finding)
 tests/                 host-side tests (pytest)

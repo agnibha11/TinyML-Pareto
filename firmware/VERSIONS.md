@@ -54,7 +54,7 @@ python tools/dut.py /dev/ttyACM0 PING      # -> OK bench=dev n_models=1
 | Board | ESP32 NodeMCU-32S (ESP-32S v1.1, 38 pins, CP2102 `10c4:ea60`) | |
 | FQBN | `esp32:esp32:nodemcu-32s` | |
 | Core | `esp32:esp32@3.3.12` | first compiled 14 Nov 2026; uses only the core's bundled `Wire` 3.3.12 |
-| Shunt | INA219 on-board R100; effective **0.1139 Ω** from the no-DMM calibration (results/rig/calibration/) | passed as `-DSHUNT_OHM_MEASURED=0.1139`; nominal R100 is 0.100 Ω but the rig read 13.9 % high with it. Update after a DMM check of the 1 kΩ reference |
+| Shunt | INA219 on-board R100; effective **0.1139 Ω** from the no-DMM calibration (docs/energy_rig_bringup.md) | passed as `-DSHUNT_OHM_MEASURED=0.1139`; nominal R100 is 0.100 Ω but the rig read 13.9 % high with it. Update after a DMM check of the 1 kΩ reference |
 
 ```bash
 arduino-cli compile --fqbn esp32:esp32:nodemcu-32s \

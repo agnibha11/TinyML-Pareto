@@ -50,3 +50,8 @@ paper/*.log
 
 # --- Paderborn run: live status file (rewritten every few seconds) ---
 results/pu/progress.json
+
+# --- internal rig data and run logs (kept locally, never published) ---
+results/rig/
+results/measure_s*.txt
+results/hw_summary.csv

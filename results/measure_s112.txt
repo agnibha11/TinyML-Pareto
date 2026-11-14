@@ -1,4 +1,0 @@
-session 112: firmware 42eaab5, 1 of 5 models, window >= 10.0 s
-  [3] cnn-r0-w200d4-fp32: inf 2620264.6 us (min 2618576.8), fe 157.0 us (min 156.8) -> N=5, N_fe=66953, N_e2e=5 (LAT reps 23)
-      done in 584 s
-wrote /home/hridayesh/Desktop/Projects/ML_project/Tiny_ML/TinyML-Pareto/results/hw_measurements.csv

@@ -2,7 +2,7 @@
 
 Needs: ESP32 running firmware/experiments/inastream (10 Hz INA219 stream on /dev/ttyUSB0) instead of logger/, and
 the Nano running firmware/experiments/nano_dipx (or firmware/bench with --bench, which sends "IDLE <ms>" /
-"SLEEP <ms>"). Reflash logger/ and firmware/bench afterwards. Writes results/rig/wfi_dip/<time>_<label>.csv.
+"SLEEP <ms>"). Reflash logger/ and firmware/bench afterwards. Writes results/rig/wfi_dip/<time>_<label>.csv (local, git-ignored).
 
     python tools/run_dip.py --label usb_off --ms 130000 --flags 1
     python tools/run_dip.py --label info --info

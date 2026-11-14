@@ -1,4 +1,0 @@
-date,run,load,load_tolerance,current_exit,zero_uW,P_load_mW,Vbus_mV,P_expected_mW,gain_zero_corrected,windows_used,log,notes
-2026-11-14,cal1,1000 ohm (brown-black-black-brown-brown),1%,Vin- header row,134,30.116,5130,26.313,1.1394,3,cal_1k_nominal.txt,Nano unplugged; nominal resistor value (no DMM)
-2026-11-14,cal2,100 ohm (brown-black-brown),unknown,Vin- header row,135,291.16,5075,257.56,1.1300,2,cal_100r_nano_return.txt,57 mA; resistor at 0.29 W (self-heating); tolerance band not read
-2026-11-14,cal3,1000 ohm (brown-black-black-brown-brown),1%,Vin- screw terminal,152,30.120,5130,26.311,1.1390,2,cal_1k_screw.txt,window 1 discarded (taken before the resistor was clamped: 0.137 mW)

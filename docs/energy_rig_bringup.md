@@ -18,12 +18,11 @@ NodeMCU-32S logger (`logger/`, `esp32:esp32@3.3.12`). **Calibrated without a DMM
 | `tools/summarise_hw.py` | quick look at a campaign CSV: energy per inference / front end / end-to-end |
 | `tools/run_dip.py` | runs one idle-dip experiment window and analyses it |
 | `firmware/experiments/` | experiment sketches: `nano_dipx/` (Nano), `inastream/` (ESP32 10 Hz INA219 stream) |
-| `results/rig/calibration/` | `calibration.csv` + raw `rig_check --cal` output |
-| `results/rig/wfi_dip/` | idle-dip experiment data (idle current only, no models) |
+| `results/rig/` (local only, git-ignored) | raw calibration runs and idle-dip experiment data; summarised in this document |
 
 ## Calibration (14 Nov 2026, no multimeter)
 
-Data: `results/rig/calibration/calibration.csv` (one row per run) and the raw `rig_check --cal` output next to it.
+Raw data (one row per run plus the `rig_check --cal` output) is kept locally in `results/rig/calibration/`, not in the repo.
 Nano unplugged, known resistor from Vin− to GND, sync window made by hand (3V3 jumper into the SYNC row, with the
 100 Ω from D2 lifted out of the SYNC row so no current can reach the unpowered Nano).
 
@@ -66,7 +65,7 @@ With 1 and 2 fixed, **all 4 bundles link**:
 
 Back-to-back `IDLE` windows showed a −3 % dip (~0.12 mA, ~4 s long) every 42.0–43.1 s, with nobody near the rig.
 Measured with the 10 Hz INA219 stream (`firmware/experiments/inastream`), sync-independent; data in
-`results/rig/wfi_dip/`:
+`results/rig/wfi_dip/`, kept locally:
 
 | Run | Nano state | Median current | 42 s pattern |
 |---|---|---|---|
