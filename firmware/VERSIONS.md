@@ -11,6 +11,7 @@ IDE or `arduino-cli` update prompt during the study. Changing any line below mea
 | FQBN | `arduino:mbed_nano:nano33ble` | |
 | Core | `arduino:mbed_nano@4.6.0` | Mbed OS-based. Do **not** install or mix in the Zephyr core |
 | CPU clock | 64 MHz (default) | never changed |
+| HFCLK source | 32 MHz crystal (HFXO), started in `bhal_init()` | without it the core stays on HFINT: +0.77 % on `micros()`/CPU clock measured 14 Nov 2026; HFXO adds ~1 mW at 5 V idle, a fixed condition stated in the paper |
 | Regulator | default (LDO; nRF52840 DC/DC left off by the Mbed config) | fixed condition, stated in the paper |
 | Optimization | `-Os` (the variant's default) | not changed; stated in the paper |
 | Float ABI | `-mfloat-abi=softfp -mfpu=fpv4-sp-d16` (variant `cflags.txt`) | FPU instructions, integer-register calling convention; `tools/vmcu` builds with the same ABI |
@@ -46,6 +47,22 @@ arduino-cli upload  --fqbn arduino:mbed_nano:nano33ble -p /dev/ttyACM0 firmware/
 python tools/dut.py /dev/ttyACM0 PING      # -> OK bench=dev n_models=1
 ```
 
+## Energy logger (ESP32)
+
+| Item | Value | Notes |
+|---|---|---|
+| Board | ESP32 NodeMCU-32S (ESP-32S v1.1, 38 pins, CP2102 `10c4:ea60`) | |
+| FQBN | `esp32:esp32:nodemcu-32s` | |
+| Core | `esp32:esp32@3.3.12` | first compiled 14 Nov 2026; uses only the core's bundled `Wire` 3.3.12 |
+| Shunt | INA219 on-board R100, nominal 0.100 Ω (no external shunt) | passed as `-DSHUNT_OHM_MEASURED=0.100`; replace with the DMM value |
+
+```bash
+arduino-cli compile --fqbn esp32:esp32:nodemcu-32s \
+  --build-property "compiler.cpp.extra_flags=-DSHUNT_OHM_MEASURED=0.100" logger
+arduino-cli upload  --fqbn esp32:esp32:nodemcu-32s -p /dev/ttyUSB0 logger
+# banner at 115200 after EN: "# logger <hash> shunt_ohm=0.1000 period_us=1000"
+```
+
 ## Linux host note
 
 ModemManager may probe `/dev/ttyACM*` with AT commands when the Nano enumerates. Those bytes would reach the bench
@@ -77,3 +94,5 @@ every row (`fw_hash`).
 |---|---|---|---|
 | 2026-10-01 | Initial pins | | n/a |
 | 2026-10-29 | arduino-cli and core gcc versions recorded from the first bundle link checks; `frontend.c`, `tflm_glue.cpp` and the generated `bundle_gen.cpp` added to the sketch | Agnibha (for Abhinav's review) | n/a (no board yet) |
+| 2026-11-14 | ESP32 logger core pinned (`esp32:esp32@3.3.12`); rig on R100 0.100 Ω shunt | Hridayesh | n/a (rig bring-up, M3) |
+| 2026-11-14 | `hal_nano33ble.cpp`: start HFXO in `bhal_init()` (Nano vs ESP32 window length now agree to 3 ppm, was 0.77 %); idle 20.29 → 21.32 mW | Hridayesh (Abhinav to review) | yes: any board timing or energy taken before this |

@@ -33,6 +33,15 @@ void bhal_init(void) {
   pinMode(kSyncPin, OUTPUT);
   digitalWrite(kSyncPin, LOW);
 
+  // Run HFCLK from the 32 MHz crystal (HFXO). Without BLE nothing starts it, so the core would stay on the internal
+  // RC oscillator (HFINT, +-1.5 %): measured +0.77 % on micros() and on the 64 MHz CPU clock (rig check, 14 Nov 2026).
+  // Costs ~0.25 mA at 3.3 V for the whole run, a fixed condition stated in the paper (firmware/VERSIONS.md).
+  NRF_CLOCK->EVENTS_HFCLKSTARTED = 0;
+  NRF_CLOCK->TASKS_HFCLKSTART = 1;
+  while (NRF_CLOCK->EVENTS_HFCLKSTARTED == 0) {
+  }
+  NRF_CLOCK->EVENTS_HFCLKSTARTED = 0;
+
   // DWT cycle counter for latency.
   CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
   DWT->CYCCNT = 0;
