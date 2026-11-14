@@ -12,7 +12,7 @@ TFLM_REF) and is not bundled yet.
 Writes (all generated, git-ignored, never edited by hand):
     firmware/bench/models/bundle_<b>.h        model data + front-end wrappers + the bench_model_t table
     firmware/bench/bundle_gen.cpp             selects bundle_<BUNDLE_ID>.h
-    firmware/bench/hann_1024.h, norm_constants.h   copies of handoff/
+    firmware/bench/hann_1024.h, hann_fx.h, norm_constants.h   copies of handoff/
     firmware/bench/models/bundles.json        plan: per bundle, models, TFLM yes/no, arena bytes
 and models/bundles.csv (the plan, committed).
 
@@ -144,7 +144,7 @@ def main() -> None:
         sel.append(f'#include "models/bundle_{b["id"]}.h"')
     sel += ["#else", '#error "unknown BUNDLE_ID: run tools/bundle.py"', "#endif", "#endif", ""]
     (BENCH / "bundle_gen.cpp").write_text("\n".join(sel))
-    for h in ("hann_1024.h", "norm_constants.h"):
+    for h in ("hann_1024.h", "hann_fx.h", "norm_constants.h"):   # hann_fx.h: frontend_fx.c (fixed-point front end)
         shutil.copy(REPO / "handoff" / h, BENCH / h)
     (OUT / "bundles.json").write_text(json.dumps(bundles, indent=1))
     rows = [{"bundle": b["id"], "k": k, "model_id": m, "runtime": b["runtime"], "est_flash_model_B": size[m],
