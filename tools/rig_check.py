@@ -4,8 +4,8 @@
 Run it after wiring and at the start of every session, before tools/measure.py. Every check prints PASS, WARN or
 FAIL with the most likely wiring cause. Exit code 0 = no FAIL.
 
-    python tools/rig_check.py --port /dev/ttyACM0 --logger /dev/ttyUSB0 --shunt-ohm 1.012
-    python tools/rig_check.py --logger /dev/ttyUSB0 --cal 998.7 --shunt-ohm 1.012   # Nano unplugged, 1k load
+    python tools/rig_check.py --port /dev/ttyACM0 --logger /dev/ttyUSB0 --shunt-ohm 0.1139
+    python tools/rig_check.py --logger /dev/ttyUSB0 --cal 1000 --shunt-ohm 0.1139   # Nano unplugged, 1k load
     python tools/rig_check.py --port /dev/ttyACM0 --logger /dev/ttyUSB0 --watch     # live wiggle test
     python tools/rig_check.py --simulate r100     # show what a given fault looks like (no hardware needed)
     python tools/rig_check.py --simulate list     # list the simulated faults

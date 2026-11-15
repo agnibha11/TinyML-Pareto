@@ -1,18 +1,19 @@
-# Energy rig hardware (KiCad project), rev B: breadboard build
+# Energy rig hardware (KiCad project), rev B1: breadboard build as built
 
 This is the schematic of the TinyML-Pareto measurement rig, built from the parts on hand: an Arduino Nano 33 BLE, an
-INA219 module, an ESP32 DevKit and four resistors (1 Ω, 100 Ω, 1 kΩ, 100 kΩ). The laptop powers the Nano through a USB
-cable whose VBUS wire runs through the shunt. The INA219 measures the shunt, and the ESP32 logs it. Owner: Hridayesh
+INA219 module (its on-board R100 is the shunt), an ESP32 NodeMCU-32S and three resistors (100 Ω, 1 kΩ, 100 kΩ). The
+laptop powers the Nano through a USB cable whose VBUS wire runs through the shunt. The INA219 measures the shunt, and
+the ESP32 logs it. Owner: Hridayesh
 Kundu (measurement). The design implements CONTRACT.md v1.0-rc4 §7.3/§7.4 and the pin map of `logger/logger.ino`.
 
-> **As built (14 Nov 2026): option B.** No 1 Ω fitted; the module's R100 is the shunt. The cut cable's golden wire
+> **As built (14 Nov 2026): option B.** No external shunt resistor; the module's R100 is the shunt. The cut cable's golden wire
 > is VBUS (not red). The sync network is Nano D2 → female-male dupont → empty row → 100 Ω (brown-black-brown) → SYNC
 > row; 100 kΩ (brown-black-yellow) SYNC row → GND; ESP32 P4 in the SYNC row. Calibrated effective shunt 0.1139 Ω,
 > logger built with `SHUNT_OHM_MEASURED=0.1139`. Details: `docs/energy_rig_bringup.md`.
 
 ```
-laptop USB port 1 ──W1, red VBUS wire cut──► U1 VIN+ ─R1 1 Ω─ U1 VIN- ──W1──► W2 ──► Nano 33 BLE (A1)
-                                               (all in U1's screw terminal)            │ D2
+laptop USB port 1 ──W1, VBUS wire cut──► U1 VIN+ ─R100, 0.1139 Ω eff.─ U1 VIN- ──W1──► W2 ──► Nano 33 BLE (A1)
+                                           (cut ends in U1's screw terminal; R100 is on U1)            │ D2
                                                   INA219 (U1) ── I2C 0x40 ──┐         R6 100 Ω
 laptop USB port 2 ──────────────────────────────────────► ESP32 (U2) IO21/IO22 ◄┘         │
                                                                    IO4 ◄──── SYNC row ──┴── R7 100 kΩ ── GND
@@ -22,13 +23,13 @@ laptop USB port 2 ────────────────────�
 
 | Resistor | Ref | Job |
 |---|---|---|
-| 1 Ω | R1 | Shunt. Matches `SHUNT_OHM_MEASURED = 1.000` in `logger.ino` |
+| (U1's R100) | R1 | Shunt, on the INA219 module; no external resistor. Effective 0.1139 Ω, logger built with `-DSHUNT_OHM_MEASURED=0.1139` (the 1.000 default in `logger.ino` is for option A) |
 | 100 kΩ | R7 | Sync pull-down on ESP32 IO4 (CONTRACT §7.3) |
 | 100 Ω | R6 | In series on the sync line; limits current if only one board is powered |
-| 1 kΩ | R9 | Calibration load: 5.0 mA, 25 mW at 5 V |
+| 1 kΩ ±1 % | R9 | Calibration load: 5.1 mA, 26 mW at 5.1 V |
 
-The 100 Ω can't be the calibration load. At 5 V it would draw 50 mA, which is beyond the INA219's 40 mA range with a
-1 Ω shunt.
+With R100 the range is 0–350 mA, so a 100 Ω load (51 mA) also works as a second calibration point; it was used as
+one (gain 1.1300 vs 1.139 at 1 kΩ, `docs/energy_rig_bringup.md`).
 
 ## Breadboard wiring
 
@@ -38,9 +39,9 @@ wide for a breadboard, so leave it beside the board and use female-to-male dupon
 
 | # | From | To | Note |
 |---|---|---|---|
-| 1 | W1 red wire, laptop end | INA219 screw terminal **VIN+** | Cut only the red wire of a USB-A male/female extension |
-| 2 | W1 red wire, Nano end | INA219 screw terminal **VIN−** | |
-| 3 | 1 Ω resistor (R1) | VIN+ and VIN− screws, one leg each | The current goes through the terminal, never the breadboard |
+| 1 | W1 VBUS wire, laptop end | INA219 screw terminal **VIN+** | Cut only the VBUS wire (golden on the Ubon cable used) |
+| 2 | W1 VBUS wire, Nano end | INA219 screw terminal **VIN−** | The current goes through the module's R100, never the breadboard |
+| 3 | (none) | | Option A only: a 1 Ω across VIN+/VIN− with R100 desoldered. Not used |
 | 4 | ESP32 **3V3** | 3V3 rail (+) | The only thing that feeds the 3V3 rail |
 | 5 | ESP32 **GND** | GND rail (−) | |
 | 6 | INA219 **VCC** | 3V3 rail | Never from the Nano's 3V3 pin |
@@ -68,33 +69,37 @@ per window and ignores bounces shorter than 100 ms.
 
 ## Shunt: option A or B
 
-- **Option A (default, needs a soldering iron).** Use your 1 Ω as R1 and **desolder the module's own shunt, marked
-  R100 (0.1 Ω)**. If R100 stays, the shunt is 0.091 Ω and every energy reads 11× low. With 1 Ω, the range is 0–40 mA.
-  The Nano needs about 11 mA, which is the simulated-rig assumption, not a measurement.
-- **Option B (no soldering).** Leave R1 out and keep R100. Build the logger with the measured value, about 0.100. The
-  range is 0–400 mA. The simulated rig found that shunt choice moves the error by only tenths of a percent.
+**Used: option B.** No external resistor; the module's own R100 is the shunt. Its nominal value is 0.100 Ω, but the
+rig read 13.9 % high with it, so the calibrated effective value is **0.1139 Ω (±~1.2 %)**, from a 1 kΩ ±1 % load
+without a multimeter (14 Nov 2026, `docs/energy_rig_bringup.md`). Range with PGA /1 (±40 mV): 0–350 mA. The Nano
+measured 3.6 mA idle (WFI, USB on) and 7.3–9.5 mA busy in repeat 1, i.e. 0.4–1.1 mV across the shunt.
 
-Measure the shunt with a DMM every session, across the screw-terminal screws with the Nano unplugged, and subtract
-the DMM lead resistance. Record it in `session_log.csv` (`shunt_ohm_measured`) and build the logger with it:
+- Option A (not used): a 1 Ω external shunt with R100 desoldered (range 0–40 mA). If R100 stays, the two are in
+  parallel (0.091 Ω).
+
+`session_log.csv` records `shunt_ohm_measured = 0.1139`, and the logger is built with it:
 
 ```bash
-arduino-cli compile --fqbn esp32:esp32:esp32 \
-  --build-property "compiler.cpp.extra_flags=-DSHUNT_OHM_MEASURED=1.012" logger
-arduino-cli upload --fqbn esp32:esp32:esp32 -p /dev/ttyUSB0 logger
+arduino-cli compile --fqbn esp32:esp32:nodemcu-32s \
+  --build-property "compiler.cpp.extra_flags=-DSHUNT_OHM_MEASURED=0.1139" logger
+arduino-cli upload --fqbn esp32:esp32:nodemcu-32s -p /dev/ttyUSB0 logger
 ```
+
+When a multimeter is available, measure the **same 1 kΩ** (a cheap DMM cannot resolve 0.1 Ω), repeat
+`rig_check.py --cal <its value>`, and correct the shunt by the difference.
 
 ## Bring-up
 
 1. **ESP32 alone.** Flash the logger, then open `/dev/ttyUSB0` at 115200 baud. Do a manual sync window with no load:
    you should get a `W` line with Pmean ≈ 0 (this checks the offset).
 2. **Calibration (gate M3).** With W2 unplugged, plug R9 (1 kΩ) from the VIN− screw side (any breadboard row wired to
-   VIN−) to GND. Run a few manual windows. Expect `Pmean_uW` ≈ V² / R9, about 25 000 µW, with V and R9 measured on a
-   DMM. Repeat to check the CV < 3 % gate, then **remove R9**.
+   VIN−) to GND. Run a few manual windows (`rig_check.py --cal 1000`). Expect `Pmean_uW` ≈ Vbus² / R9, about 26 000 µW
+   at 5.1 V. Repeat to check the CV < 3 % gate, then **remove R9**.
 3. **Nano.** Put wire #14 back and plug in W2. Flash the bench firmware, then run
    `python tools/dut.py /dev/ttyACM0 PING`, then `python tools/measure.py --dry-run`, then a real session.
 
-With one load you can check the offset (open circuit) and the gain at one point (5 mA). To check linearity near the
-Nano's 11 mA, buy a 470 Ω and a 220 Ω (¼ W is fine; 10.6 and 22.7 mA).
+The 1 kΩ (5.1 mA) and 100 Ω (51 mA) points gave gains of 1.139 and 1.130, so the rig is linear over 5–57 mA, which
+covers the Nano's 3.6–9.5 mA.
 
 ## The measured cable: which wire goes where
 
@@ -105,8 +110,8 @@ VBUS. Which data wire is D+ and which is D− doesn't matter as long as colours 
 
 | Cable | VBUS (5 V) | GND | Data |
 |---|---|---|---|
-| Red/black/green/yellow (use this one) | red, probably; confirm below | black, probably | green and yellow (D+ and D−; yellow stands in for the usual white) |
-| Ubon: black/green/yellowish/golden | unknown: find it with the test below | unknown | unknown |
+| Red/black/green/yellow (not used) | red, probably; confirm below | black, probably | green and yellow (D+ and D−; yellow stands in for the usual white) |
+| Ubon: black/green/yellowish/golden (**used**, MEASURED-1) | **golden** (found with the test below) | | |
 
 **Find VBUS for sure (any cable):** keep the four cut ends on the **USB-A half** apart and taped individually, then
 plug that half into a phone charger. Using a charger instead of the laptop means a slip can't short a laptop port.
@@ -124,8 +129,8 @@ Run this after wiring and before every session. It talks to the Nano (bench firm
 symptom into the most likely wire at fault:
 
 ```bash
-python tools/rig_check.py --shunt-ohm 1.012              # full check, ports auto-detected (~1 min)
-python tools/rig_check.py --cal 998.7 --shunt-ohm 1.012  # Nano unplugged, 1 kΩ (DMM value), manual sync windows
+python tools/rig_check.py --shunt-ohm 0.1139             # full check, ports auto-detected (~1 min)
+python tools/rig_check.py --cal 1000 --shunt-ohm 0.1139  # Nano unplugged, 1 kΩ (nominal; DMM value if you have one)
 python tools/rig_check.py --watch                        # live readout; wiggle each joint, watch for jumps
 python tools/rig_check.py --simulate list                # see what each fault looks like, no hardware
 ```
@@ -134,9 +139,9 @@ python tools/rig_check.py --simulate list                # see what each fault l
 |---|---|---|
 | 1 | USB enumeration | broken or swapped data joints, no 5 V at the Nano, charge-only cable, brltty |
 | 2 | 200 PINGs | intermittent data joint |
-| 3 | logger banner | logger built with a different shunt value than your DMM reading |
+| 3 | logger banner | logger built with a different shunt value than `--shunt-ohm` |
 | 4 | 10 s with D2 LOW | missing 100 kΩ pull-down, noisy SYNC row |
-| 5 | one IDLE window | no sync, INA219 not answering on I2C, Vin+/Vin− swapped, R100 still fitted, low Vbus |
+| 5 | one IDLE window | no sync, INA219 not answering on I2C, Vin+/Vin− swapped, wrong shunt value, low Vbus |
 | 6 | 5 IDLE windows | loose screws and joints (power jumps between windows) |
 | 7 | RUN vs IDLE | Nano powered around the shunt (5V pin, a second cable) |
 

@@ -13,7 +13,7 @@ One call = one session over every model in the flashed bundle (CONTRACT.md 6.4, 
 Usage:
     python tools/measure.py --dry-run                       # fake board + fake logger -> results/dryrun/
     python tools/measure.py --port /dev/ttyACM0 --logger /dev/ttyUSB0 --session 1 --cable MEASURED-1 \\
-                            --usb-port "left-rear" --shunt-ohm 1.012
+                            --usb-port "left-rear" --shunt-ohm 0.1139
 
 Rows are appended and flushed one at a time, so a crash never loses finished windows. Rows are never edited:
 a bad window is written with rejected=1 and measured again.
