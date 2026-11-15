@@ -417,8 +417,9 @@ Version history:
     §7.2: it needs the firmware's `LAT` to take a repetition count.
 - v1.0-rc4 addendum (14 Nov 2026), §7.2 `LAT [<reps>]` (backward compatible: plain `LAT` = 101, reply gains
   `reps=`): the rc3 proposal above is applied, with `t` from an on-board `E2E 1` probe instead of the virtual
-  Cortex-M4. Needed because `cnn-r0-w200d4-fp32` takes ~20.9 s per inference: 101 × 5 calls would be 2.9 h,
-  past the 600 s host timeout; with 11 it is ~21 min. Window timeouts now count the warm-up call. Energy windows
+  Cortex-M4. Needed because `cnn-r0-w200d4-fp32` takes 2.62 s per inference on the board (the virtual Cortex-M4
+  estimated ~20.9 s): 101 × 5 calls would be ~22 min, past the 600 s host timeout; with the 23 repetitions the
+  rule gives it is ~5 min (session 112). Window timeouts now count the warm-up call. Energy windows
   are unchanged. Proposed by Hridayesh; needs Abhinav's and Agnibha's sign-off.
 - v1.0-rc4 addendum (1 Nov 2026), no interface change: `handoff/hann_fx.h` (q15/q31 Hann tables) added to §5 for
   the optional fixed-point front end `firmware/bench/frontend_fx.c`. Same features and units as the float front end,
