@@ -220,6 +220,100 @@ def test_measure_short_window_rejected_and_resized():
     assert out.rows[0]["t_window_us_dut"] == 8_000_000 and out.rows[1]["N"] > out.rows[0]["N"]
 
 
+class _FlakySerial:
+    """Stands in for the ESP32 port: replays lines, and can 'leave the bus' like the 15 Nov 2026 drops."""
+
+    def __init__(self, lines, drop_on_read=False, drop_on_reset=False):
+        self.lines, self.drop_on_read, self.drop_on_reset = [x.encode() + b"\n" for x in lines], \
+            drop_on_read, drop_on_reset
+        self.rts = False
+
+    def reset_input_buffer(self):
+        if self.drop_on_reset:
+            raise OSError(5, "Input/output error")
+
+    def read(self, n):
+        if self.drop_on_read:
+            import serial
+            raise serial.SerialException("device reports readiness to read but returned no data")
+        return self.lines.pop(0) if self.lines else b""     # one line per read
+
+    def close(self):
+        pass
+
+
+def _flaky_logger(ports, reconnect_s=5.0):
+    """A Logger whose successive port opens return the given _FlakySerial objects (None = port not back yet)."""
+    from tools import measure as M
+    seq = iter(ports)
+
+    class L(M.Logger):
+        def _open(self):
+            p = next(seq)
+            if p is None:
+                raise FileNotFoundError(2, "No such file or directory: '/dev/serial/by-id/usb-Silicon_Labs...'")
+            return p
+    M_sleep = M.time.sleep
+    M.time.sleep = lambda s: None          # no real waiting in the test
+    try:
+        log = L("by-id-path", "dev", reconnect_s=reconnect_s)
+        log.banner_wait_s = 0.05
+        return log, M, M_sleep
+    except Exception:
+        M.time.sleep = M_sleep
+        raise
+
+
+def test_logger_drop_mid_window_is_a_rejected_attempt_then_retried():
+    """The ESP32 drops during a window: that attempt is written rejected=1, the port is reopened (after one failed
+    open while it re-enumerates, then one reopen without a banner), and the retry is accepted - the session goes on instead of crashing."""
+    w_line = "W rise_us=0 fall_us=10000000 n=10000 E_uJ=240000.0 Pmean_uW=24000.0 Pstd_uW=100.0 Vbus_mV=5130.0 ovf=0"
+    banner = "# logger dev shunt_ohm=0.1139 period_us=1000"
+    log, M, real_sleep = _flaky_logger([_FlakySerial([], drop_on_read=True), None,
+                                        _FlakySerial([]),                  # back, but stuck in the bootloader
+                                        _FlakySerial([banner, w_line])])
+    try:
+        class Board:
+            def run(self, n):
+                return {"n": n, "us": 10_000_000}
+
+        class Rows:
+            def __init__(self):
+                self.rows = []
+
+            def write(self, row):
+                self.rows.append(row)
+
+        out = Rows()
+        w = M.measure_window(Board(), log, out, {"model_id": "m", "session": 1, "input_j": 0}, "RUN",
+                             1000, Board().run, 20_000.0, min_us=10_000_000)
+    finally:
+        M.time.sleep = real_sleep
+    assert w is not None and w.duration_us == 10_000_000
+    assert [r["rejected"] for r in out.rows] == [1, 0] and log.drops == 1
+
+
+def test_logger_drop_before_a_window_reconnects_without_losing_an_attempt():
+    log, M, real_sleep = _flaky_logger([_FlakySerial([], drop_on_reset=True), _FlakySerial(["# logger dev"])])
+    try:
+        log.arm()
+    finally:
+        M.time.sleep = real_sleep
+    assert log.drops == 1
+
+
+def test_logger_that_never_comes_back_aborts():
+    import itertools
+    from tools import measure as M
+    log, M, real_sleep = _flaky_logger(itertools.chain([_FlakySerial([], drop_on_read=True)], itertools.repeat(None)),
+                                       reconnect_s=0.0)
+    try:
+        with pytest.raises(RuntimeError, match="did not come back"):
+            log.next_window()
+    finally:
+        M.time.sleep = real_sleep
+
+
 def test_load_mat_uses_explicit_key(tmp_path):
     """99.mat holds X098 (a copy of 98.mat) next to X099; only X099 may be read."""
     import scipy.io

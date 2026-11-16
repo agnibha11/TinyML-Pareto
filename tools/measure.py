@@ -46,6 +46,7 @@ W_DEADLINE_S = 3.0   # logger must print the W line within this time after the b
 # 62 windows under 10 s (forests: input-dependent latency, 29.5-69.8 us for one model).
 WINDOW_MARGIN = 1.05
 MAX_ATTEMPTS = 3     # per window: logger rejections, duration mismatches and too-short windows all count
+LOGGER_RECONNECT_S = 180.0   # after the ESP32 drops off USB, wait this long for it to come back before aborting
 # LAT repetitions per stored window: clamp(ceil(60 s / t), 11, 101) with t = front end + inference from an E2E 1
 # probe (CONTRACT.md 7.2). Fast models keep 101; cnn-r0-w200d4-fp32 (20.9 s per call) gets 11 instead of 101,
 # so LAT takes ~21 min instead of 2.9 h.
@@ -88,23 +89,86 @@ def parse_w_line(line: str) -> Window:
         raise ValueError(f"bad number in logger line {line!r}: {e}") from None
 
 
-class Logger:
-    """Reads 'W ...' lines from the ESP32 logger's USB serial port (format: CONTRACT.md 7.4)."""
+class LoggerDropped(Exception):
+    """The logger's USB serial link dropped during a window; it has been reopened, the window must be redone."""
 
-    def __init__(self, port: str, logger_hash: str):
+
+class Logger:
+    """Reads 'W ...' lines from the ESP32 logger's USB serial port (format: CONTRACT.md 7.4).
+
+    If the ESP32 drops off USB (seen on 15 Nov 2026: `error -71`, the port vanishing and coming back), the port is
+    reopened, waiting up to LOGGER_RECONNECT_S. A drop inside a window raises LoggerDropped, which measure_window
+    treats as a rejected attempt; a logger that does not come back aborts the session. Pass a stable path such as
+    /dev/serial/by-id/usb-Silicon_Labs_CP2102_..., because the kernel may rename ttyUSB0 to ttyUSB1 on re-enumeration.
+    """
+
+    def __init__(self, port: str, logger_hash: str, reconnect_s: float = LOGGER_RECONNECT_S):
+        self.port, self.hash, self.reconnect_s = port, logger_hash, reconnect_s
+        self.drops = 0
+        self.banner_wait_s = 5.0
+        self._ser = self._open()
+
+    def _open(self):
+        """Open with DTR and RTS released: setting them while the ESP32 is booting can hold IO0 low and leave it
+        in its ROM bootloader (no W lines), which is what happened after the first drop on 15 Nov 2026."""
         import serial
-        self._ser = serial.serial_for_url(port, baudrate=115_200, timeout=0.05)
-        self.hash = logger_hash
+        ser = serial.serial_for_url(self.port, baudrate=115_200, timeout=0.05, do_not_open=True)
+        ser.dtr = False
+        ser.rts = False
+        ser.open()
+        return ser
+
+    def _restart(self) -> bool:
+        """Reset the ESP32 through RTS (EN) with IO0 released and wait for its '# logger' banner."""
+        self._ser.rts = True
+        time.sleep(0.1)
+        self._ser.rts = False
+        deadline, buf = time.monotonic() + self.banner_wait_s, b""
+        while time.monotonic() < deadline:
+            buf += self._ser.read(256)
+            if b"# logger" in buf:
+                return True
+        return False
+
+    def _reconnect(self, why: Exception) -> None:
+        self.drops += 1
+        print(f"    logger link dropped ({why}); reopening {self.port}", flush=True)
+        try:
+            self._ser.close()
+        except Exception:  # noqa: BLE001 - the port is already gone
+            pass
+        deadline = time.monotonic() + self.reconnect_s
+        last: Exception = why
+        while time.monotonic() < deadline:
+            time.sleep(2.0)
+            try:
+                self._ser = self._open()
+                if not self._restart():
+                    self._ser.close()
+                    last = RuntimeError("port is back but no '# logger' banner after a reset")
+                    continue
+                print(f"    logger link back after drop {self.drops} (banner seen after a clean reset)", flush=True)
+                return
+            except Exception as e:  # noqa: BLE001 - not back yet
+                last = e
+        raise RuntimeError(f"logger did not come back within {self.reconnect_s:.0f} s: {last}")
 
     def arm(self) -> None:
-        """Drop anything older than the window about to be measured."""
-        self._ser.reset_input_buffer()
+        """Drop anything older than the window about to be measured (reopening the port first if it dropped)."""
+        try:
+            self._ser.reset_input_buffer()
+        except Exception as e:  # noqa: BLE001 - serial.SerialException / OSError: the ESP32 left the bus
+            self._reconnect(e)
 
     def next_window(self, timeout_s: float = W_DEADLINE_S) -> Window:
         deadline = time.monotonic() + timeout_s
         buf = b""
         while time.monotonic() < deadline:
-            buf += self._ser.read(256)
+            try:
+                buf += self._ser.read(256)
+            except Exception as e:  # noqa: BLE001 - serial.SerialException / OSError: the ESP32 left the bus
+                self._reconnect(e)
+                raise LoggerDropped(f"logger link dropped during the window ({e})") from None
             while b"\n" in buf:
                 line, buf = buf.split(b"\n", 1)
                 text = line.decode("ascii", errors="replace").strip()
@@ -242,7 +306,7 @@ def measure_window(dut, logger, out: CsvAppender, base: dict, mode: str, n: int,
                "P_idle_uW": "" if p_idle_uw is None else f"{p_idle_uw:.3f}", "timestamp": now_iso()}
         try:
             w = logger.next_window()
-        except (TimeoutError, ValueError) as e:
+        except (TimeoutError, ValueError, LoggerDropped) as e:
             out.write({**row, "rejected": 1})
             print(f"    {mode} rejected (logger: {e}), attempt {attempt}/{MAX_ATTEMPTS}")
             continue
@@ -319,7 +383,7 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--dry-run", action="store_true", help="fake board and logger; writes to results/dryrun/")
     p.add_argument("--port", help="Nano serial port, e.g. /dev/ttyACM0")
-    p.add_argument("--logger", help="ESP32 logger serial port, e.g. /dev/ttyUSB0")
+    p.add_argument("--logger", help="ESP32 logger serial port; prefer /dev/serial/by-id/usb-Silicon_Labs_CP2102_... (survives re-enumeration)")
     p.add_argument("--logger-hash", help="git hash of the flashed ESP32 logger firmware (required for real runs)")
     p.add_argument("--session", type=int, help="session number (required for real runs; must be new)")
     p.add_argument("--allow-nonconforming-ids", action="store_true",
@@ -366,7 +430,7 @@ def main() -> int:
                "fw_hash": dut.ping()["bench"], "notes": ("DRY RUN - fake data. " if a.dry_run else "") + a.notes})
     try:
         run_session(dut, logger, out, session, window_s, models, a.sleep_ms, a.allow_nonconforming_ids)
-    except (DUTError, ValueError) as e:
+    except (DUTError, ValueError, RuntimeError) as e:
         print(f"ABORTED: {e}", file=sys.stderr)
         return 1
     finally:

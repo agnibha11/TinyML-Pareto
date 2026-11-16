@@ -3,6 +3,8 @@
 
     python tools/build_flash.py --all --compile-only          # link-check every bundle -> results/fw_build.csv
     python tools/build_flash.py 2 --port /dev/ttyACM0          # compile + upload bundle 2
+    python tools/build_flash.py 2 --dataset pu --port ...       # Paderborn: sketch build/pu/sketch/bench (tools/bundle.py
+                                                                # --dataset pu), stamp <hash>-pu, results/pu/fw_build.csv
 
 Flags passed to arduino-cli (firmware/VERSIONS.md "Build stamping"): -DBENCH_GIT_HASH, -DBUNDLE_ID, -DARENA_BYTES and
 -DBUNDLE_TFLM for bundles with networks. A bundle is feasible (registry `feasible`, CONTRACT.md 6.1) when it links;
@@ -37,17 +39,18 @@ def git_hash() -> str:
     return r.stdout.strip() or "nogit"
 
 
-def compile_bundle(cli: str, b: dict, gh: str, upload_port: str | None) -> dict:
+def compile_bundle(cli: str, b: dict, gh: str, upload_port: str | None, sketch: Path = SKETCH,
+                   build_root: Path = REPO / "build" / "fw") -> dict:
     # arduino-cli splits the recipe on spaces and strips quotes: single quotes keep the inner "" of the string macro
     flags = f'-DBUNDLE_ID={b["id"]} -DARENA_BYTES={max(b["arena_bytes"], 16)} \'-DBENCH_GIT_HASH="{gh}"\''
     if b["tflm"]:
         flags += " -DBUNDLE_TFLM=1"
-    bp = REPO / "build" / "fw" / f"b{b['id']}"
+    bp = build_root / f"b{b['id']}"
     cmd = [cli, "compile", "--fqbn", FQBN, "--build-path", str(bp),
            "--build-property", f"compiler.cpp.extra_flags={flags}", "--build-property", f"compiler.c.extra_flags={flags}"]
     if upload_port:
         cmd += ["--upload", "--port", upload_port]
-    r = subprocess.run([*cmd, str(SKETCH)], capture_output=True, text=True)
+    r = subprocess.run([*cmd, str(sketch)], capture_output=True, text=True)
     out = r.stdout + r.stderr
     m1 = re.search(r"Sketch uses (\d+) bytes", out)
     m2 = re.search(r"Global variables use (\d+) bytes", out)
@@ -72,15 +75,19 @@ def main() -> None:
     ap.add_argument("--compile-only", action="store_true")
     ap.add_argument("--port")
     ap.add_argument("--arduino-cli", default=shutil.which("arduino-cli") or "arduino-cli")
+    ap.add_argument("--dataset", choices=("cwru", "pu"), default="cwru")
     a = ap.parse_args()
-    plan = json.loads((SKETCH / "models" / "bundles.json").read_text())
+    pu = a.dataset == "pu"
+    sketch = REPO / "build" / "pu" / "sketch" / "bench" if pu else SKETCH
+    build_root = REPO / "build" / ("pu/fw" if pu else "fw")
+    plan = json.loads((sketch / "models" / "bundles.json").read_text())
     todo = plan if a.all else [b for b in plan if b["id"] == a.bundle]
     if not todo:
         sys.exit("give a bundle id or --all (run tools/bundle.py first)")
-    gh = git_hash()
+    gh = git_hash() + ("-pu" if pu else "")   # PING then says bench=<hash>-pu: no mixing up the two datasets
     rows = []
     for b in todo:
-        res = compile_bundle(a.arduino_cli, b, gh, None if a.compile_only else a.port)
+        res = compile_bundle(a.arduino_cli, b, gh, None if a.compile_only else a.port, sketch, build_root)
         print(f"bundle {b['id']}: links={res['links']} flash={res['bundle_flash_B']} ram_static={res['bundle_ram_static_B']}"
               f" ({len(b['models'])} models)")
         if not res["links"]:
@@ -92,7 +99,7 @@ def main() -> None:
             rows.append({"bundle": b["id"], "model_id": m, "runtime": b["runtime"], "links": res["links"],
                          "bundle_flash_B": res["bundle_flash_B"], "bundle_ram_static_B": res["bundle_ram_static_B"],
                          "arena_B": b["arena_bytes"], "flash_model_B_board": fm, "git_hash": gh})
-    out = REPO / "results" / "fw_build.csv"
+    out = REPO / "results" / ("pu" if pu else "") / "fw_build.csv"
     new = pd.DataFrame(rows)
     if out.exists() and not a.all:
         old = pd.read_csv(out)
