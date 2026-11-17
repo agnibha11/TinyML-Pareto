@@ -6,6 +6,8 @@ board's output vector with <handoff>/test_vectors/outputs/<model_id>.npy:
     classes must agree on >= 99 % (int8) / 99.5 % (fp32) of the windows,
     outputs within one output quantization step (int8, registry output_scale) or 1e-4 absolute (fp32, trees).
 One row per model is appended to --out; a failing model is reported, never fatal (the energy campaign goes on).
+--dump DIR also saves every board output vector and class, DIR/<model_id>.npz (out, cls, fw_hash), for an
+element-by-element comparison with an emulator.
 
     python tools/verify_board.py --port /dev/ttyACM0 --handoff handoff/pu --registry models/pu/registry.csv \\
                                  --out results/pu/hardware/board_verify.csv
@@ -44,6 +46,7 @@ def main() -> int:
     ap.add_argument("--handoff", type=Path, default=REPO / "handoff")
     ap.add_argument("--registry", type=Path, default=REPO / "models" / "registry.csv")
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--dump", type=Path, metavar="DIR", help="save the board's outputs per model as DIR/<model_id>.npz")
     a = ap.parse_args()
 
     tv = a.handoff / "test_vectors"
@@ -64,11 +67,16 @@ def main() -> int:
                 exp = np.load(tv / "outputs" / f"{e.model_id}.npy").astype(np.float32)
                 tol, need = tolerance(reg.loc[e.model_id])
                 d.sel(e.k)
-                outs, agree = [], 0
+                outs, clss, agree = [], [], 0
                 for i, x in enumerate(raw):
                     cls, out = d.verify(x)
                     outs.append(out[:exp.shape[1]])
+                    clss.append(cls)
                     agree += int(cls == int(np.argmax(exp[i])))
+                if a.dump:
+                    a.dump.mkdir(parents=True, exist_ok=True)
+                    np.savez(a.dump / f"{e.model_id}.npz", out=np.stack(outs).astype(np.float32),
+                             cls=np.array(clss, dtype=np.int16), fw_hash=fw)
                 err = float(np.max(np.abs(np.stack(outs) - exp)))
                 ca = agree / len(raw)
                 row.update(class_agree=f"{ca:.4f}", max_abs_err=f"{err:.6g}", tol=f"{tol:.6g}",
