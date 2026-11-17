@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Quick look at results/hw_measurements.csv: per model and mode, dynamic energy per operation.
+"""Quick look at results/cwru/hardware/hw_measurements.csv (or any hw_measurements.csv given as argument): per model and mode, dynamic energy per operation.
 
 E_op = (P_mean - P_idle) * t_window / N   (energy above the idle baseline, per inference / front end / end-to-end)
 Also prints the spread over the 5 stored inputs and the rejected-window count. Writes <csv dir>/hw_summary.csv.
@@ -18,7 +18,7 @@ REPO = Path(__file__).resolve().parents[1]
 
 
 def main() -> None:
-    p = Path(sys.argv[1]) if len(sys.argv) > 1 else REPO / "results" / "hw_measurements.csv"
+    p = Path(sys.argv[1]) if len(sys.argv) > 1 else REPO / "results" / "cwru" / "hardware" / "hw_measurements.csv"
     d = pd.read_csv(p)
     rej = int(d.rejected.sum())
     d = d[d.rejected == 0].copy()

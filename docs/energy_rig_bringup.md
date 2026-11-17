@@ -2,7 +2,7 @@
 
 How the INA219/ESP32 energy rig was brought up, validated and calibrated, and what it showed about the Nano's idle
 current. The rig is described in `hardware/energy_rig/README.md`; the campaign itself is run with
-`tools/measure.py` and writes `results/hw_measurements.csv` (CONTRACT.md 6.4).
+`tools/measure.py` and writes `results/cwru/hardware/hw_measurements.csv` (Paderborn: `results/pu/hardware/`; CONTRACT.md 6.4).
 
 Rig: Nano 33 BLE on the cut Ubon cable (laptop port 1) → INA219 Vin+/Vin− with its on-board R100 → ESP32
 NodeMCU-32S logger (`logger/`, `esp32:esp32@3.3.12`). **Calibrated without a DMM** (below): effective shunt

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Host sweep: train every architecture on every protocol/fold/seed, score it, write results/host/*.json.
+"""Host sweep: train every architecture on every protocol/fold/seed, score it, write results/<dataset>/host/*.json.
 
 For each job (architecture, protocol, fold, seed):
   * inputs from ml/features.py, normalised with statistics of that fold's training windows only;
@@ -13,7 +13,7 @@ For each job (architecture, protocol, fold, seed):
     model sees the same noisy windows.
 The deployed instance (P2, fold 0, seed 0) also writes its artefacts to build/deploy/ for ml/export.py.
 
-Output per model ID (CONTRACT.md 6.2): results/host/<model_id>__<P>__f<fold>__s<seed>.json
+Output per model ID (CONTRACT.md 6.2): results/cwru/host/<model_id>__<P>__f<fold>__s<seed>.json (Paderborn: results/pu/host/)
     {model_id, protocol, fold, seed, snr_db, f1_macro, accuracy, confusion, n_test, y_pred, noise[], train{}}
 
 Usage:
@@ -46,7 +46,7 @@ import models as MD  # noqa: E402
 from splits import LABEL, PROTOCOLS, load_split  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
-HOST = DS.HOST                    # results/host (CWRU) or results/pu/host (TINYML_DATASET=pu)
+HOST = DS.HOST                    # results/cwru/host or results/pu/host (TINYML_DATASET=pu)
 DEPLOY = DS.DEPLOY
 SNRS = (20, 10, 5, 0)
 DEPLOYED = DS.DEPLOYED

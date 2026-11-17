@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Calibrate the virtual-MCU cycle model against the board (run once results/fw_metrics.csv exists).
+"""Calibrate the virtual-MCU cycle model against the board (run once results/cwru/hardware/fw_metrics.csv exists).
 
 The board's LAT command reports DWT cycle medians (CONTRACT.md 7.2; fw_metrics.csv stores them in us at 64 MHz).
 This script joins them with results/vmcu/vmcu_metrics.csv and reports, per runtime and phase:
@@ -32,9 +32,9 @@ def fit(est: np.ndarray, board: np.ndarray) -> dict:
 
 
 def main() -> None:
-    fw_p = REPO / "results" / "fw_metrics.csv"
+    fw_p = REPO / "results" / "cwru" / "hardware" / "fw_metrics.csv"
     if not fw_p.exists():
-        print("results/fw_metrics.csv not found: run the board's LAT campaign first (Abhinav, gate M4). Nothing to do.")
+        print("results/cwru/hardware/fw_metrics.csv not found: run the board's LAT campaign first (Abhinav, gate M4). Nothing to do.")
         return
     fw = pd.read_csv(fw_p)
     vm = pd.read_csv(REPO / "results" / "vmcu" / "vmcu_metrics.csv")

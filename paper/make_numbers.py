@@ -15,6 +15,8 @@ import pandas as pd
 
 REPO = Path(__file__).resolve().parents[1]
 RES = REPO / "results"
+CW = RES / "cwru"
+AN = CW / "analysis"
 PAPER = REPO / "paper"
 
 
@@ -36,13 +38,13 @@ def f3(x: float) -> str:
 
 
 def build() -> dict[str, str]:
-    h = json.loads((RES / "headline_numbers.json").read_text())
-    counts = pd.read_csv(RES / "data_counts.csv")
-    sc = pd.read_csv(RES / "split_counts.csv")
-    summ = pd.read_csv(RES / "host_summary.csv", keep_default_na=False)
-    costs = pd.read_csv(RES / "prehw_costs.csv")
-    hv = pd.read_csv(RES / "hv_table.csv")
-    tau = pd.read_csv(RES / "kendall_tau.csv")
+    h = json.loads((AN / "headline_numbers.json").read_text())
+    counts = pd.read_csv(CW / "data" / "data_counts.csv")
+    sc = pd.read_csv(CW / "data" / "split_counts.csv")
+    summ = pd.read_csv(AN / "host_summary.csv", keep_default_na=False)
+    costs = pd.read_csv(AN / "prehw_costs.csv")
+    hv = pd.read_csv(AN / "hv_table.csv")
+    tau = pd.read_csv(AN / "kendall_tau.csv")
     par = pd.read_csv(RES / "vmcu" / "vmcu_parity.csv")
     m: dict[str, str] = {}
     reg = pd.read_csv(REPO / "models" / "registry.csv")
@@ -144,7 +146,7 @@ def build() -> dict[str, str]:
         m[f"NumNFront{name}{en}{r.family}"] = str(r.n_frontier)
     # RF soft vs hard voting (pitfall 2)
     dis, df1 = [], []
-    for f in (RES / "host").glob("rf-*.json"):
+    for f in (CW / "host").glob("rf-*.json"):
         r = json.loads(f.read_text())
         t = r.get("train", {})
         if "soft_hard_disagree" in t:
@@ -156,7 +158,7 @@ def build() -> dict[str, str]:
         m["NumRfVoteFOneMax"] = f"{max(df1):.2f}"
         m["NumRfVoteRuns"] = str(len(dis))
     # TFLite default vs reference kernels (pitfall 3)
-    rk = RES / "ref_kernel_check.csv"
+    rk = AN / "ref_kernel_check.csv"
     if rk.exists():
         k = pd.read_csv(rk)
         cnn = k[k.model_id.str.startswith("cnn") & k.model_id.str.contains("int8")]
@@ -166,7 +168,7 @@ def build() -> dict[str, str]:
         if len(cnn):
             m["NumRefCnnAgreeMin"] = pct(float(cnn.class_agree.min()), 1)
     # real-board builds (arduino-cli, arduino:mbed_nano 4.6.0)
-    fb = RES / "fw_build.csv"
+    fb = CW / "hardware" / "fw_build.csv"
     if fb.exists():
         b = pd.read_csv(fb)
         g = b.groupby("bundle").agg(links=("links", "min"), flash=("bundle_flash_B", "first"),
@@ -207,13 +209,13 @@ def build() -> dict[str, str]:
             b = nonr4.sort_values("f1_macro_mean").iloc[-1]
             m[f"Num{name}NoRFourBest"], m[f"Num{name}NoRFourBestModel"] = f3(b.f1_macro_mean), "\\texttt{" + b.model_id + "}"
     # the window mean as a recording fingerprint (why R4 drops it): ablation runs and the z-score of the outlier
-    ab = RES / "ablation_r4_mean.csv"
+    ab = AN / "ablation_r4_mean.csv"
     if ab.exists():
         a = pd.read_csv(ab)
         a = a[(a.protocol == "P2") & (a.fold == 0) & a.model_id.str.startswith("mlp")]
         new = []
         for r in a.itertuples(index=False):
-            f = RES / "host" / f"{r.model_id}__P2__f0__s{r.seed}.json"
+            f = CW / "host" / f"{r.model_id}__P2__f0__s{r.seed}.json"
             if f.exists():
                 new.append(json.loads(f.read_text())["f1_macro"])
         m["NumAblMeanWith"] = f3(a.f1_macro_with_mean.mean())
@@ -302,7 +304,7 @@ def kc(x: float) -> str:
 def fixed_point_numbers() -> dict[str, str]:
     """Macros for the front-end arithmetic study (tools/fxfe/run_fxfe.py, ml/fixed_point.py)."""
     m: dict[str, str] = {}
-    fs = RES / "fixedpoint" / "fx_cost_summary.csv"
+    fs = CW / "fixedpoint" / "fx_cost_summary.csv"
     if not fs.exists():
         return m
     c = pd.read_csv(fs).set_index(["core", "region"]).cyc_med
@@ -327,13 +329,13 @@ def fixed_point_numbers() -> dict[str, str]:
     m["NumFxMfQRFourSlow"] = f"{c[('m4f', 'FX_R4_Q15')] / c[('m4f', 'F32_R4')]:.1f}"
     m["NumFxMfQtRTwoSlow"] = f"{c[('m4f', 'FX_R2_Q31')] / c[('m4f', 'F32_R2')]:.1f}"
     m["NumFxMfQtRFourSlow"] = f"{c[('m4f', 'FX_R4_Q31')] / c[('m4f', 'F32_R4')]:.1f}"
-    em = json.loads((RES / "headline_numbers.json").read_text())["energy_model"]
+    em = json.loads((AN / "headline_numbers.json").read_text())["energy_model"]
     uj = lambda cyc: cyc / (em["f_cpu_MHz"] * 1e6) * em["P_active_mW"] * 1e3  # noqa: E731
     m["NumFxMfROneFloatUj"] = f"{uj(c[('m4f', 'F32_R1')]):.1f}"
     m["NumFxMfROneIntUj"] = f"{uj(c[('m4f', 'FX_R1')]):.1f}"
-    u = pd.read_csv(RES / "fixedpoint" / "fx_cost_summary_loopunroll.csv").set_index(["core", "region"]).cyc_med
+    u = pd.read_csv(CW / "fixedpoint" / "fx_cost_summary_loopunroll.csv").set_index(["core", "region"]).cyc_med
     m["NumFxUnrollQRTwo"] = pct(1 - u[("m4f", "FX_R2_Q15")] / c[("m4f", "FX_R2_Q15")], 0)
-    s = json.loads((RES / "fixedpoint" / "fx_summary.json").read_text())
+    s = json.loads((CW / "fixedpoint" / "fx_summary.json").read_text())
     dep = s["deploy"]
     m["NumFxDeployMaxAbsMean"] = f"{max(abs(v['mean_dF1']) for v in dep.values()):.4f}"
     m["NumFxQfifteenMinRun"] = f"{min(dep['r2_q15']['min_dF1'], dep['r4_q15']['min_dF1']):.3f}"
@@ -345,7 +347,7 @@ def fixed_point_numbers() -> dict[str, str]:
     b = s["best_P3_deploy"]["r4"]
     m["NumFxBestModel"] = "\\texttt{" + b["model_id"] + "}"
     m["NumFxBestRef"], m["NumFxBestHyb"], m["NumFxBestQ"] = f3(b["ref"]), f3(b["hyb"]), f3(b["q15"])
-    fid = pd.read_csv(RES / "fixedpoint" / "fx_fidelity.csv").set_index(["rep", "front_end"])
+    fid = pd.read_csv(CW / "fixedpoint" / "fx_fidelity.csv").set_index(["rep", "front_end"])
     m["NumFxFidQRTwoPNN"] = f"{fid.loc[('r2', 'q15'), 'p99_abs_z']:.2f}"
     m["NumFxFidExactPNN"] = f"{max(fid.loc[(r, v), 'p99_abs_z'] for r, v in (('r1', 'int'), ('r2', 'q31'), ('r2', 'hyb'))):.3f}"
     return m
@@ -354,7 +356,7 @@ def fixed_point_numbers() -> dict[str, str]:
 def cascade_numbers() -> dict[str, str]:
     """Macros for the detect-then-diagnose cascade (ml/cascade.py)."""
     m: dict[str, str] = {}
-    p = RES / "cascade" / "summary.json"
+    p = CW / "cascade" / "summary.json"
     if not p.exists():
         return m
     s = json.loads(p.read_text())
@@ -384,9 +386,9 @@ def cascade_numbers() -> dict[str, str]:
 
 
 def pu_numbers() -> dict[str, str]:
-    """Macros for the second dataset, Paderborn (ml/pu_analysis.py -> results/pu/summary.json)."""
+    """Macros for the second dataset, Paderborn (ml/pu_analysis.py -> results/pu/analysis/summary.json)."""
     m: dict[str, str] = {}
-    p = RES / "pu" / "summary.json"
+    p = RES / "pu" / "analysis" / "summary.json"
     if not p.exists():
         return m
     s = json.loads(p.read_text())
@@ -480,8 +482,8 @@ def pu_numbers() -> dict[str, str]:
 
 def cost_table() -> str:
     """LaTeX table: per (family, input, precision) group, the configuration with the best P3 macro-F1."""
-    c = pd.read_csv(RES / "prehw_costs.csv")
-    summ = pd.read_csv(RES / "host_summary.csv", keep_default_na=False)
+    c = pd.read_csv(AN / "prehw_costs.csv")
+    summ = pd.read_csv(AN / "host_summary.csv", keep_default_na=False)
     clean = summ[summ.snr_db == ""]
     f1 = clean.pivot(index="model_id", columns="protocol", values="f1_macro_mean")
     c = c.join(f1, on="model_id")

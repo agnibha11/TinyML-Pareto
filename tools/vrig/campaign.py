@@ -3,7 +3,7 @@
 
 Before the hardware exists, this script replays the measurement campaign of CONTRACT.md 7 on a simulated board:
     * every model's window schedule (IDLE, RUN, FRONT, E2E; N chosen so each window lasts >= 10 s) is built from its
-      latency on the virtual Cortex-M4 (results/prehw_costs.csv);
+      latency on the virtual Cortex-M4 (results/cwru/analysis/prehw_costs.csv);
     * the board current during each window is synthesised from a stated power model (below) with noise and drift;
     * tools/vrig/vrig_sim.cpp quantises it exactly as the INA219 registers do and integrates it with the real
       ESP32 logger core (logger/logger_core.cpp); the W lines are parsed with tools/measure.py's parser;
@@ -224,7 +224,7 @@ def main() -> None:
         EXE.parent.mkdir(parents=True, exist_ok=True)
         subprocess.run(["g++", "-O2", "-std=c++17", f"-I{REPO / 'logger'}", str(REPO / "logger" / "logger_core.cpp"),
                         str(REPO / "tools" / "vrig" / "vrig_sim.cpp"), "-o", str(EXE)], check=True)
-    costs = pd.read_csv(REPO / "results" / "prehw_costs.csv")
+    costs = pd.read_csv(REPO / "results" / "cwru" / "analysis" / "prehw_costs.csv")
     n_bundles = pd.read_csv(REPO / "models" / "bundles.csv").bundle.nunique() + 1   # + the int8ref ablation build
     OUT.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(2026)

@@ -72,7 +72,7 @@ exactly like CWRU (12 kHz, 5 kHz low-pass, 1024-sample windows; 28,914 windows, 
 retrained over 10 folds and 5 seeds (4,400 runs) with `python tools/pu/run_pu.py` (CNNs on a laptop GPU).
 Protocols: P1 leaky, P2 leave one operating condition out, P3 bearing-disjoint, P4 artificial → real damage.
 
-What holds (results/pu/summary.json):
+What holds (results/pu/analysis/summary.json):
 
 - **Leakage collapse:** best macro-F1 0.967 (P1), 0.822 (P2), 0.599 (P3), 0.479 (P4); chance 0.333. Kendall τ between
   the P1 and P3 rankings is 0.13.

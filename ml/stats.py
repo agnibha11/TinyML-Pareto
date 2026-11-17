@@ -2,16 +2,17 @@
 """Everything after the sweep: host summary, pre-hardware cost table, Pareto analysis, figures, headline numbers.
 
 Inputs
-    results/host/*.json                 ml/train.py (one per model x protocol x fold x seed)
+    results/cwru/host/*.json            ml/train.py (one per model x protocol x fold x seed)
     results/vmcu/vmcu_metrics.csv       tools/vmcu/run_vmcu.py (virtual Cortex-M4: cycles, memory, VERIFY)
     models/registry.csv                 ml/export.py
 
 Outputs
-    results/host_summary.csv            CONTRACT.md 6.2 (mean +- std over folds x seeds; clean and SNR rows)
-    results/prehw_costs.csv             per model: flash, peak RAM, front-end / inference cycles, estimated energy
-    results/pareto_<P>_<inf|e2e>.csv    frontier membership (point and bootstrap probability) per protocol x energy
-    results/hv_table.csv, results/kendall_tau.csv, results/rubric_grid.csv, results/lifetime.csv
-    results/headline_numbers.json       every number the slides and the paper quote
+    results/cwru/analysis/:
+    host_summary.csv                    CONTRACT.md 6.2 (mean +- std over folds x seeds; clean and SNR rows)
+    prehw_costs.csv                     per model: flash, peak RAM, front-end / inference cycles, estimated energy
+    pareto_<P>_<inf|e2e>.csv            frontier membership (point and bootstrap probability) per protocol x energy
+    hv_table.csv, kendall_tau.csv, rubric_grid.csv, lifetime.csv
+    headline_numbers.json               every number the slides and the paper quote
     results/figs/*.png|pdf
 
 Energy here is a CHIP-LEVEL ESTIMATE, E = cycles / 64 MHz x P_active with P_active = 3 V x 52 uA/MHz x 64 MHz
@@ -38,6 +39,8 @@ from tools.contract import HOST_SUMMARY_COLUMNS  # noqa: E402
 REPO = Path(__file__).resolve().parents[1]
 RES = REPO / "results"
 FIGS = RES / "figs"
+HOST = RES / "cwru" / "host"
+AN = RES / "cwru" / "analysis"
 F_CPU = 64e6
 P_ACTIVE_W = 3.0 * 52e-6 * 64          # 9.98 mW: nRF52840 PS, 52 uA/MHz CoreMark from flash, DC/DC, 3 V
 P_SLEEP_CHIP_W = 3.0 * 3.16e-6         # System ON, full RAM retention + RTC (nRF52840 product brief)
@@ -59,7 +62,7 @@ PROT_NAME = {"P1": "P1 leaky", "P2": "P2 recording-wise", "P3": "P3 bearing-disj
 # ------------------------------------------------------------------------------------------------------------------
 def load_runs() -> pd.DataFrame:
     rows = []
-    for p in sorted((RES / "host").glob("*.json")):
+    for p in sorted(HOST.glob("*.json")):
         r = json.loads(p.read_text())
         row = {k: r[k] for k in ("model_id", "protocol", "fold", "seed", "f1_macro", "accuracy", "n_test")}
         for n in r["noise"]:
@@ -413,9 +416,9 @@ def main() -> None:
 
     runs = load_runs()
     summary = host_summary(runs)
-    summary.to_csv(RES / "host_summary.csv", index=False)
+    summary.to_csv(AN / "host_summary.csv", index=False)
     costs = cost_table()
-    costs.to_csv(RES / "prehw_costs.csv", index=False)
+    costs.to_csv(AN / "prehw_costs.csv", index=False)
     head: dict = {"n_runs": int(len(runs)), "n_models_with_host": int(runs.model_id.nunique()),
                   "n_models_with_costs": int(len(costs)),
                   "energy_model": {"P_active_mW": P_ACTIVE_W * 1e3, "f_cpu_MHz": F_CPU / 1e6,
@@ -468,7 +471,7 @@ def main() -> None:
             out = d[["model_id", "fam", "precision", "f1", "f1_std", f"E_{energy}_uJ", "ram_peak_B"]].copy()
             out["on_frontier"] = nd.astype(int)
             out["p_frontier"] = prob.round(3)
-            out.sort_values(f"E_{energy}_uJ").to_csv(RES / f"pareto_{p}_{energy}.csv", index=False)
+            out.sort_values(f"E_{energy}_uJ").to_csv(AN / f"pareto_{p}_{energy}.csv", index=False)
             hv_all = hypervolume(F[nd], lo, hi)
             for fam in FAM_ORDER:
                 m = (d.fam == fam).to_numpy()
@@ -482,7 +485,7 @@ def main() -> None:
                 "frontier": out[out.on_frontier == 1].sort_values(f"E_{energy}_uJ").model_id.tolist(),
                 "robust_frontier": out[out.p_frontier >= 0.5].model_id.tolist()}
     hv = pd.DataFrame(hv_rows)
-    hv.to_csv(RES / "hv_table.csv", index=False)
+    hv.to_csv(AN / "hv_table.csv", index=False)
     head["pareto"] = pareto_head
 
     # ---------------- Kendall tau between family rankings across protocols (and inf vs e2e)
@@ -515,7 +518,7 @@ def main() -> None:
             taus.append({"energy": "model_f1", "a": x, "b": y, "tau": round(float(t), 3), "p": round(float(pv), 4),
                          "rank_a": "", "rank_b": ""})
     tau = pd.DataFrame(taus)
-    tau.to_csv(RES / "kendall_tau.csv", index=False)
+    tau.to_csv(AN / "kendall_tau.csv", index=False)
     head["kendall_tau"] = tau.to_dict("records")
 
     # ---------------- cost headline numbers
@@ -563,7 +566,7 @@ def main() -> None:
                                       "life_days": E_BATTERY_J / (f * e + ps) / 86400})
         head["f_star_hz"] = {k: round(v, 5) for k, v in fstar.items()}
     life = pd.DataFrame(life_rows)
-    life.to_csv(RES / "lifetime.csv", index=False)
+    life.to_csv(AN / "lifetime.csv", index=False)
 
     # ---------------- rubric grid (best P3 F1 under RAM x energy budgets)
     grid = []
@@ -581,9 +584,9 @@ def main() -> None:
                     grid.append({"ram_budget_kB": ram, "energy_budget_uJ": eb, "best_f1": round(float(b.f1), 4),
                                  "best_fam": b.fam, "best_model": b.model_id})
     G = pd.DataFrame(grid)
-    G.to_csv(RES / "rubric_grid.csv", index=False)
+    G.to_csv(AN / "rubric_grid.csv", index=False)
 
-    (RES / "headline_numbers.json").write_text(json.dumps(head, indent=2, default=str) + "\n")
+    (AN / "headline_numbers.json").write_text(json.dumps(head, indent=2, default=str) + "\n")
 
     # ---------------- figures
     fig_protocols(summary, plt)

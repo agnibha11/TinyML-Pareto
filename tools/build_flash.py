@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """Compile (and, with a board, upload) the bench firmware for one bundle or all of them (CONTRACT.md 8, from W4).
 
-    python tools/build_flash.py --all --compile-only          # link-check every bundle -> results/fw_build.csv
+    python tools/build_flash.py --all --compile-only          # link-check every bundle -> results/cwru/hardware/fw_build.csv
     python tools/build_flash.py 2 --port /dev/ttyACM0          # compile + upload bundle 2
     python tools/build_flash.py 2 --dataset pu --port ...       # Paderborn: sketch build/pu/sketch/bench (tools/bundle.py
-                                                                # --dataset pu), stamp <hash>-pu, results/pu/fw_build.csv
+                                                                # --dataset pu), stamp <hash>-pu, results/pu/hardware/fw_build.csv
 
 Flags passed to arduino-cli (firmware/VERSIONS.md "Build stamping"): -DBENCH_GIT_HASH, -DBUNDLE_ID, -DARENA_BYTES and
 -DBUNDLE_TFLM for bundles with networks. A bundle is feasible (registry `feasible`, CONTRACT.md 6.1) when it links;
 the static arena is part of .bss, so a link also proves the arena fits in RAM (the board's SEL still has the last
 word, because the TFLM version on the board may allocate slightly differently from the virtual MCU's).
 
-results/fw_build.csv (compile-time facts; fw_metrics.csv with board timings stays Abhinav's):
+results/<dataset>/hardware/fw_build.csv (compile-time facts; fw_metrics.csv with board timings stays Abhinav's):
     bundle, model_id, runtime, links, bundle_flash_B, bundle_ram_static_B, arena_B, flash_model_B_board, git_hash
 """
 from __future__ import annotations
@@ -99,7 +99,7 @@ def main() -> None:
             rows.append({"bundle": b["id"], "model_id": m, "runtime": b["runtime"], "links": res["links"],
                          "bundle_flash_B": res["bundle_flash_B"], "bundle_ram_static_B": res["bundle_ram_static_B"],
                          "arena_B": b["arena_bytes"], "flash_model_B_board": fm, "git_hash": gh})
-    out = REPO / "results" / ("pu" if pu else "") / "fw_build.csv"
+    out = REPO / "results" / ("pu" if pu else "cwru") / "hardware" / "fw_build.csv"
     new = pd.DataFrame(rows)
     if out.exists() and not a.all:
         old = pd.read_csv(out)

@@ -4,7 +4,7 @@
 Host scores (ml/train.py) run the .tflite with TFLite's default optimised kernels; the board runs TFLM, whose
 arithmetic equals TFLite's reference kernels (BUILTIN_REF). For every deployed NN (P2 fold 0, seed 0) this script
 classifies the full P2 fold-0 test set both ways and reports class agreement and the macro-F1 difference.
-Output: results/ref_kernel_check.csv
+Output: results/cwru/analysis/ref_kernel_check.csv
 """
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ def main() -> None:
         print(rows[-1], flush=True)
     df = pd.DataFrame(rows)
     df["f1_diff"] = df.f1_reference - df.f1_default
-    df.to_csv(REPO / "results" / "ref_kernel_check.csv", index=False)
+    df.to_csv(REPO / "results" / "cwru" / "analysis" / "ref_kernel_check.csv", index=False)
     print(df.describe().to_string())
 
 

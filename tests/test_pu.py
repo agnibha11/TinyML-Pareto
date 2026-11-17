@@ -1,15 +1,15 @@
-"""Claims of the Paderborn (second dataset) analysis, checked against results/pu/ (ml/pu_analysis.py)."""
+"""Claims of the Paderborn (second dataset) analysis, checked against results/pu/analysis/ (ml/pu_analysis.py)."""
 import json
 from pathlib import Path
 
 import pytest
 
 RES = Path(__file__).resolve().parents[1] / "results" / "pu"
-pytestmark = pytest.mark.skipif(not (RES / "summary.json").exists(), reason="run ml/pu_analysis.py first")
+pytestmark = pytest.mark.skipif(not (RES / "analysis" / "summary.json").exists(), reason="run ml/pu_analysis.py first")
 
 
 def S():
-    return json.loads((RES / "summary.json").read_text())
+    return json.loads((RES / "analysis" / "summary.json").read_text())
 
 
 def test_every_run_is_present():

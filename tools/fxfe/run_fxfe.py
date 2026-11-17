@@ -9,7 +9,7 @@ flags of tools/vmcu (arm-none-eabi-gcc -Os, Cortex-M4F, softfp):
   fxbench.elf  ten windows (one per class), each front end between the plugin's markers, built for three core
                classes: m4f (Cortex-M4F, the Nano 33 BLE), m4nofp (Cortex-M4 without FPU, standing in for M3/M33-
                class parts: DSP instructions, software float) and m0p (Cortex-M0+: neither). Output:
-               results/fixedpoint/fx_cycles.csv (one row per core, region and window) and fx_cost_summary.csv
+               results/cwru/fixedpoint/fx_cycles.csv (one row per core, region and window) and fx_cost_summary.csv
                The cycle model is the Cortex-M4 one for every build, so m0p counts are exact instructions with
                M4 timing, an approximation (the M0+ has a 2-stage pipeline and 2-cycle loads).
 
@@ -37,7 +37,7 @@ FX = REPO / "tools" / "fxfe"
 FW = REPO / "tools" / "vmcu" / "fw"
 BENCH = REPO / "firmware" / "bench"
 BUILD = REPO / "build" / "fxfe"
-OUT = REPO / "results" / "fixedpoint"
+OUT = REPO / "results" / "cwru" / "fixedpoint"
 PROC = REPO / "data" / "processed"
 LSB_PER_G = 4096.0
 F_CPU = 64e6

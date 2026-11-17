@@ -31,7 +31,8 @@ tools/                 dut.py (board wrapper), measure.py (campaign), bundle.py,
                        dry run)
 logger/                ESP32 INA219 logger firmware
 hardware/energy_rig/   KiCad project, BOM and wiring of the INA219/ESP32 energy rig
-results/               script-written outputs only
+results/               script-written outputs only: cwru/ and pu/ (same layout), vmcu/, vrig/, figs/, demo/;
+                       index in results/README.md
 docs/                  related-work gap table, notes for the paper, midsem/ and sprint2/ status pages, selector/,
                        energy_rig_bringup.md (rig bring-up, calibration, idle-dip finding)
 tests/                 host-side tests (pytest)
@@ -57,7 +58,7 @@ export TF_USE_LEGACY_KERAS=1            # needed for QAT (tf-keras); put it in y
 
 python ml/env_smoke_test.py             # ~1 min: QAT + PTQ int8 export and an emlearn tree; must end "ENV OK"
 python ml/prepare_data.py               # downloads the 40 CWRU files, writes data/processed/*
-python ml/prepare_data.py --check       # re-verifies counts against results/data_counts.csv
+python ml/prepare_data.py --check       # re-verifies counts against results/cwru/data/data_counts.csv
 python -m pytest tests/                 # host tools against the simulated board
 python tools/measure.py --dry-run       # writes a dummy results/dryrun/hw_measurements.csv
 ```
@@ -125,7 +126,7 @@ python -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU')
 
 ```bash
 python tools/pu/run_pu.py --bearings smoke --recordings 2 --seeds 0   # optional 10-minute trial on 6 bearings
-rm -rf results/pu splits/pu data/processed/pu                         # discard the trial before the real run
+rm -rf results/pu/host results/pu/data results/pu/logs splits/pu data/processed/pu   # discard the trial
 
 python tools/pu/run_pu.py                         # download -> prepare -> features -> splits -> train everything
 python tools/pu/run_pu.py --status                # progress from another terminal
@@ -146,8 +147,9 @@ python tools/pu/run_pu.py --status                # progress from another termin
 | `data/raw/pu/*.rar` | the 32 archives (git-ignored) |
 | `data/processed/pu/` | `windows.npy`, `manifest.parquet`, `feat_r1..r4.npy`, `prepare.json` (git-ignored) |
 | `splits/pu/` | P1-P4 split files (ids git-ignored), `protocols.json`, `README.md` with the definitions and sizes |
-| `results/pu/host/*.json` | one file per model, protocol, fold and seed (same format as `results/host/`) |
-| `results/pu/data_counts.csv`, `split_counts.csv`, `run_config.json` | data and split counts, the run's settings |
+| `results/pu/host/*.json` | one file per model, protocol, fold and seed (same format as `results/cwru/host/`) |
+| `results/pu/data/data_counts.csv`, `split_counts.csv` | data and split counts |
+| `results/pu/run_config.json` | the training run's settings |
 | `results/pu/logs/`, `results/pu/progress.json` | worker logs and the live status (git-ignored) |
 
 Protocols: **P1** leaky random split; **P2** leave one operating condition out (4 folds); **P3** bearing-disjoint

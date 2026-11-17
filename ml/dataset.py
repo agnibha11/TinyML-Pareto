@@ -1,7 +1,10 @@
 """Which dataset the host pipeline runs on, chosen with the environment variable TINYML_DATASET.
 
-    TINYML_DATASET=cwru   (default) CWRU, exactly as before: data/processed, splits/, results/host, build/deploy
-    TINYML_DATASET=pu     Paderborn (ml/pu_data.py): data/processed/pu, splits/pu, results/pu/host, build/pu/deploy
+    TINYML_DATASET=cwru   (default) CWRU: data/processed, splits/, results/cwru/, build/deploy
+    TINYML_DATASET=pu     Paderborn (ml/pu_data.py): data/processed/pu, splits/pu, results/pu/, build/pu/deploy
+
+Both datasets share one results layout (results/README.md): data/ (window and split counts), host/ (one JSON per
+training run), analysis/ (summaries, Pareto fronts), cascade/, hardware/ (rig measurements).
 
 features.py, splits.load_split and train.py read their paths, protocols and label columns from here, so the same
 training code runs on both datasets and nothing written for CWRU is ever overwritten by a Paderborn run.
@@ -18,7 +21,7 @@ NAME = os.environ.get("TINYML_DATASET", "cwru").strip().lower()
 if NAME == "cwru":
     PROCESSED = REPO / "data" / "processed"
     SPLITS = REPO / "splits"
-    RESULTS = REPO / "results"
+    RESULTS = REPO / "results" / "cwru"
     BUILD = REPO / "build"
     PROTOCOLS = {"P1": 1, "P2": 4, "P3": 3}
     LABEL = {"P1": "class10", "P2": "class10", "P3": "class4"}
@@ -40,4 +43,10 @@ else:
     raise SystemExit(f"TINYML_DATASET={NAME!r}: expected 'cwru' or 'pu'")
 
 HOST = RESULTS / "host"
+DATA_OUT = RESULTS / "data"
+ANALYSIS = RESULTS / "analysis"
+CASCADE = RESULTS / "cascade"
+HARDWARE = RESULTS / "hardware"
+CWRU_RESULTS = REPO / "results" / "cwru"         # read by the Paderborn analysis for the cross-dataset comparison
+FIGS = REPO / "results" / "figs"                 # figures of both datasets
 DEPLOY = BUILD / "deploy"

@@ -9,11 +9,11 @@ from a script-written file in `results/`; the working paper is `paper/main.pdf` 
 |---|---|---|
 | Splits | `ml/splits.py`, `splits/README.md` | P1/P2/P3 from the manifest, with leakage assertions (file- and bearing-disjoint tests, non-overlapping test windows). 98.1 % of P1 test windows share samples with a training or validation window; 0 % for P2/P3 |
 | Features | `ml/features.py`, `handoff/features_spec.md` v1.1 | Python reference for R0–R3. **R2 is now 24 features** (bands above 5.25 kHz removed; see "Pitfalls") |
-| Training sweep | `ml/models.py`, `ml/train.py`, `results/host/` | 36 architectures → 68 model IDs, all protocols and folds, FP32/PTQ/QAT, noise robustness at 20/10/5/0 dB. Scores come from the exported `.tflite`, never from Keras |
+| Training sweep | `ml/models.py`, `ml/train.py`, `results/cwru/host/` | 36 architectures → 68 model IDs, all protocols and folds, FP32/PTQ/QAT, noise robustness at 20/10/5/0 dB. Scores come from the exported `.tflite`, never from Keras |
 | Export / handoff | `ml/export.py`, `models/`, `configs/`, `handoff/` | `.tflite` + 16-byte-aligned C arrays, emlearn float headers, `meta.json`, `registry.csv`, norm constants (`.npz`/`.h`), the 100 parity test vectors with host outputs, `ops_union.txt` |
-| Statistics | `ml/stats.py`, `ml/check_ref_kernels.py` | Host summary, Pareto fronts (P1–P3 × inference-only/end-to-end), hypervolume per family, Kendall τ, bootstrap membership (accuracy and cost-model uncertainty), battery model, rubric grid, figures, `results/headline_numbers.json` |
+| Statistics | `ml/stats.py`, `ml/check_ref_kernels.py` | Host summary, Pareto fronts (P1–P3 × inference-only/end-to-end), hypervolume per family, Kendall τ, bootstrap membership (accuracy and cost-model uncertainty), battery model, rubric grid, figures, `results/cwru/analysis/headline_numbers.json` |
 | Virtual Cortex-M4 | `tools/vmcu/` | Deployable code compiled for Cortex-M4F (softfp, `-Os`) and run in QEMU with an instruction-counting plugin and a TRM cycle model: per-model cycles, flash, arena, stack; M2 parity and VERIFY replay. See `tools/vmcu/README.md` |
-| Board firmware | `firmware/bench/frontend.*`, `firmware/bench/tflm_glue.*`, `tools/bundle.py`, `tools/build_flash.py` | C front end and TFLM glue shared by the board, the emulator and the PC simulator; bundles for the Nano that **compile and link** with the pinned toolchain (`results/fw_build.csv`) |
+| Board firmware | `firmware/bench/frontend.*`, `firmware/bench/tflm_glue.*`, `tools/bundle.py`, `tools/build_flash.py` | C front end and TFLM glue shared by the board, the emulator and the PC simulator; bundles for the Nano that **compile and link** with the pinned toolchain (`results/cwru/hardware/fw_build.csv`) |
 | Simulated board | `tools/vmcu/host_bundle.py`, `tools/demo_sim.py` | The unmodified `bench_core.cpp`, built for the PC with the real models and driven by `tools/dut.py` over the serial protocol (SEL, VERIFY, RUN) |
 | Logger | `logger/` | ESP32 INA219 window integrator (CONTRACT §7.4) with PC tests that check `measure.py` parses its lines and that energies are exact |
 | R4 front end | `ml/features.py`, `firmware/bench/frontend.c`, `handoff/features_spec.md` v1.2, CONTRACT rc4 | Physics-informed envelope analysis in 41 features (no shaft speed needed). Best bearing-disjoint macro-F1 0.623 → 0.742; C on the virtual Cortex-M4 matches Python to 7e-5; 20 new model IDs (88 in total) |
@@ -30,11 +30,11 @@ from a script-written file in `results/`; the working paper is `paper/main.pdf` 
 2. **Random forest: soft vs hard voting.** scikit-learn averages probabilities and the emlearn C code takes a majority
    vote. Host scores now use the deployed rule (`ml/train.py::rf_hard_predict`).
 3. **Desktop TFLite int8 kernels ≠ TFLM arithmetic.** The VERIFY reference outputs now come from TFLite's
-   reference kernels, which match TFLM bit for bit. `results/ref_kernel_check.csv` bounds the effect on scores.
+   reference kernels, which match TFLM bit for bit. `results/cwru/analysis/ref_kernel_check.csv` bounds the effect on scores.
 
 4. **The window mean is a recording fingerprint.** R1's first feature is the accelerometer's DC offset; on P2 fold 0
    one held-out recording lies 16.6 σ outside the training range, and every R4 MLP that kept it scored ≈ 0.34
-   macro-F1 there (0.90 without). R4 drops it; R1–R3 keep it as frozen (`results/ablation_r4_mean.csv`).
+   macro-F1 there (0.90 without). R4 drops it; R1–R3 keep it as frozen (`results/cwru/analysis/ablation_r4_mean.csv`).
 
 ## For review
 

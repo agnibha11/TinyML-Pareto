@@ -13,7 +13,7 @@ reference on the float windows (what every model so far was trained on).
 4. MLPs: the deployed float and int8 MLPs (P2 fold 0 seed 0, the instance in the firmware), class agreement with
    the reference front end on that fold's test windows.
 
-Outputs: results/fixedpoint/fx_fidelity.csv, fx_accuracy_runs.csv (one row per run), fx_accuracy.csv (per
+Outputs: results/cwru/fixedpoint/fx_fidelity.csv, fx_accuracy_runs.csv (one row per run), fx_accuracy.csv (per
 configuration, protocol and front end), fx_mlp_agreement.csv, fx_summary.json.
 
 Usage: python ml/fixed_point.py [-j 2]
@@ -36,7 +36,7 @@ from splits import LABEL, PROTOCOLS, load_split  # noqa: E402
 from train import manifest, metrics, rf_hard_predict  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
-OUT = REPO / "results" / "fixedpoint"
+OUT = REPO / "results" / "cwru" / "fixedpoint"
 COLS = {"f32_r1": (0, 10), "f32_r2": (10, 34), "f32_r4": (34, 75), "fx_r1": (75, 85), "q15_r2": (85, 109),
         "q31_r2": (109, 133), "q15_r4": (133, 174), "q31_r4": (174, 215), "hyb_r2": (215, 239),
         "hyb_r4": (239, 280)}
@@ -128,7 +128,7 @@ def mlp_agreement(ref: dict, dev: dict) -> pd.DataFrame:
 
 
 def figure() -> None:
-    """Estimated front-end cycles per window on three core classes (results/fixedpoint/fx_cost_summary.csv)."""
+    """Estimated front-end cycles per window on three core classes (results/cwru/fixedpoint/fx_cost_summary.csv)."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt

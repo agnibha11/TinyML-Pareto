@@ -4,17 +4,18 @@
 Inputs:
     results/pu/host/*.json               ml/train.py with TINYML_DATASET=pu (88 model IDs x 10 folds x 5 seeds)
     data/processed/pu/feat_r1.npy, manifest.parquet, splits/pu/   ml/pu_data.py (for the cascade gate)
-    results/host_summary.csv             the CWRU results, for the cross-dataset comparison
-    results/prehw_costs.csv, results/fixedpoint/fx_cost_summary.csv, results/headline_numbers.json
+    results/cwru/analysis/host_summary.csv  the CWRU results, for the cross-dataset comparison
+    results/cwru/analysis/prehw_costs.csv, headline_numbers.json, results/cwru/fixedpoint/fx_cost_summary.csv
                                          virtual Cortex-M4 costs. A model's cost depends on its architecture and input,
                                          not on the dataset; only the last layer shrinks from 10/4 to 3 outputs, which
                                          changes MLP/CNN inference by a few MACs, so the CWRU costs are used unchanged.
 Outputs (results/pu/):
-    host_summary.csv       per model and protocol: macro-F1 mean/std/n, accuracy, F1 at SNR 20/10/5/0 dB
-    kendall_tau.csv        rank agreement between protocols and with CWRU
-    pareto_P3.csv, pareto_P4.csv   accuracy-energy frontier (P3/P4 F1 vs estimated end-to-end energy)
+    analysis/host_summary.csv    per model and protocol: macro-F1 mean/std/n, accuracy, F1 at SNR 20/10/5/0 dB
+    analysis/kendall_tau.csv     rank agreement between protocols and with CWRU
+    analysis/pareto_P3.csv, pareto_P4.csv   accuracy-energy frontier (P3/P4 F1 vs estimated end-to-end energy)
+    analysis/per_bearing_P3.csv, per_bearing_P4.csv   per test bearing
+    analysis/summary.json        every number the paper and slides quote
     cascade/gates.csv, cascade/cascade_models.csv   the detect-then-diagnose gate on Paderborn
-    summary.json           every number the paper and slides quote
     figs: results/figs/fig_pu_protocols, fig_pu_transfer, fig_pu_pareto (png + pdf)
 
 Usage: python ml/pu_analysis.py
@@ -41,7 +42,9 @@ from train import metrics  # noqa: E402
 
 REPO = DS.REPO
 OUT = DS.RESULTS
-FIGS = REPO / "results" / "figs"
+FIGS = DS.FIGS
+AN = DS.ANALYSIS
+CW = DS.CWRU_RESULTS / "analysis"
 PROTS = ("P1", "P2", "P3", "P4")
 FAM = {"dt": "DT", "rf": "RF", "mlp": "MLP", "cnn": "CNN"}
 COLORS = {"DT": "#2a78d6", "RF": "#eb6834", "MLP": "#1baf7a", "CNN": "#4a3aa7"}
@@ -115,7 +118,7 @@ def deep_dive(R: pd.DataFrame, man: pd.DataFrame, summ: dict) -> None:
                    "condition_acc": {c: float(v) for c, v in W.groupby("condition").ok.mean().items()},
                    "confusion": {names[i]: {names[j]: float(v) for j, v in row.items()}
                                  for i, row in pd.crosstab(W.class3, W.pred, normalize="index").iterrows()}}
-        b.to_csv(OUT / f"per_bearing_{tag}.csv", index=False)
+        b.to_csv(AN / f"per_bearing_{tag}.csv", index=False)
     S = R.groupby(["model_id", "protocol", "fold"]).f1.mean().reset_index()
     dd["P2_fold_best"] = {c: float(S[(S.protocol == "P2") & (S.fold == k)].f1.max())
                           for k, c in enumerate(("N15_M07_F10", "N09_M07_F10", "N15_M01_F10", "N15_M07_F04"))}
@@ -141,7 +144,7 @@ def deep_dive(R: pd.DataFrame, man: pd.DataFrame, summ: dict) -> None:
 
     plt = style()
     # per-bearing accuracy of the best P3 model
-    b = pd.read_csv(OUT / "per_bearing_P3.csv")
+    b = pd.read_csv(AN / "per_bearing_P3.csv")
     b["grp"] = b.fault_type.map({"N": 0, "IR": 1, "OR": 2})
     b = b.sort_values(["grp", "origin", "bearing"])
     col = {"healthy": "#8a8984", "artificial": "#eb6834", "real": "#2a78d6"}
@@ -209,7 +212,7 @@ def main() -> None:
     S = (R.groupby(["model_id", "family", "rep", "prec", "arch", "protocol"])
          .agg(f1_mean=("f1", "mean"), f1_std=("f1", "std"), n_runs=("f1", "size"), acc_mean=("acc", "mean"),
               **{f"f1_snr{s}": (f"f1_snr{s}", "mean") for s in SNRS}).reset_index())
-    S.to_csv(OUT / "host_summary.csv", index=False)
+    S.to_csv(AN / "host_summary.csv", index=False)
     W = S.pivot(index="model_id", columns="protocol", values="f1_mean")
     summ: dict = {"n_results": int(len(R)), "n_models": int(W.shape[0]), "chance_f1": 1 / 3,
                   "runs_per_model": {p: int(S[S.protocol == p].n_runs.iloc[0]) for p in PROTS}}
@@ -240,7 +243,7 @@ def main() -> None:
     summ["precision_delta"] = prec
 
     # ---- rank stability between protocols and against CWRU
-    C = pd.read_csv(REPO / "results" / "host_summary.csv", keep_default_na=False)
+    C = pd.read_csv(CW / "host_summary.csv", keep_default_na=False)
     C = C[C.snr_db == ""].pivot(index="model_id", columns="protocol", values="f1_macro_mean")
     J = W.join(C, rsuffix="_cwru")
     tau = []
@@ -250,7 +253,7 @@ def main() -> None:
         tau.append({"a": f"CWRU {p}", "b": f"PU {p}", "tau": kendalltau(J[f"{p}_cwru"], J[p]).statistic})
     tau.append({"a": "CWRU P3", "b": "PU P4", "tau": kendalltau(J["P3_cwru"], J["P4"]).statistic})
     tau = pd.DataFrame(tau)
-    tau.to_csv(OUT / "kendall_tau.csv", index=False)
+    tau.to_csv(AN / "kendall_tau.csv", index=False)
     summ["tau"] = {f"{r.a}|{r.b}": float(r.tau) for r in tau.itertuples()}
     cw_best = J["P3_cwru"].idxmax()
     summ["transfer"] = {"cwru_P3_best": cw_best, "cwru_P3_best_f1_cwru": float(J.loc[cw_best, "P3_cwru"]),
@@ -262,7 +265,7 @@ def main() -> None:
                         "best_rep_pu_P3": max(summ["P3"]["reps"], key=summ["P3"]["reps"].get)}
 
     # ---- accuracy-energy frontier with the virtual Cortex-M4 costs
-    cost = pd.read_csv(REPO / "results" / "prehw_costs.csv").set_index("model_id")
+    cost = pd.read_csv(CW / "prehw_costs.csv").set_index("model_id")
     fr = {}
     for p in ("P3", "P4"):
         t = Sc[Sc.protocol == p].copy()
@@ -270,7 +273,7 @@ def main() -> None:
         t["ram_B"] = t.model_id.map(cost.ram_peak_B) if "ram_peak_B" in cost else np.nan
         t = t.dropna(subset=["E_e2e_uJ"])
         t["frontier"] = nondominated(t.f1_mean.to_numpy(), t.E_e2e_uJ.to_numpy())
-        t.sort_values("E_e2e_uJ").to_csv(OUT / f"pareto_{p}.csv", index=False)
+        t.sort_values("E_e2e_uJ").to_csv(AN / f"pareto_{p}.csv", index=False)
         f = t[t.frontier].sort_values("E_e2e_uJ")
         fr[p] = {"frontier": [{"model": r.model_id, "f1": float(r.f1_mean), "E_uJ": float(r.E_e2e_uJ)}
                               for r in f.itertuples()]}
@@ -296,8 +299,8 @@ def main() -> None:
                               "fpr": float(al[yt == 0].mean()), "n_fault": int((yt == 1).sum()),
                               "n_healthy": int((yt == 0).sum())})
     gates = pd.DataFrame(grows)
-    (OUT / "cascade").mkdir(parents=True, exist_ok=True)
-    gates.to_csv(OUT / "cascade" / "gates.csv", index=False)
+    DS.CASCADE.mkdir(parents=True, exist_ok=True)
+    gates.to_csv(DS.CASCADE / "gates.csv", index=False)
     y3 = man.class3.to_numpy()
     rows = []
     for r in R[R.protocol.isin(["P2", "P3", "P4"])].itertuples():
@@ -321,7 +324,7 @@ def main() -> None:
     for pi in PIS:
         m[f"E_pi{pi:g}_uJ"] = m.E_stage1_uJ + (pi * tp + (1 - pi) * fp) * m.E_esc_uJ
     m["saving_pi0.01"] = m.E_e2e_uJ / m["E_pi0.01_uJ"]
-    m.to_csv(OUT / "cascade" / "cascade_models.csv", index=False)
+    m.to_csv(DS.CASCADE / "cascade_models.csv", index=False)
     cas = {"stage1_uJ": float(s1["either"])}
     for p in ("P2", "P3", "P4"):
         for g in GATES:
@@ -339,7 +342,7 @@ def main() -> None:
                                "best_E_pi0.01": float(best["E_pi0.01_uJ"])}
     summ["cascade"] = cas
     deep_dive(R, man, summ)
-    (OUT / "summary.json").write_text(json.dumps(summ, indent=1))
+    (AN / "summary.json").write_text(json.dumps(summ, indent=1))
 
     # ---- figures
     plt = style()
@@ -388,7 +391,7 @@ def main() -> None:
     # 3: accuracy-energy on Paderborn P3 and P4
     fig, axs = plt.subplots(1, 2, figsize=(7.0, 2.4), sharey=True)
     for ax, p in zip(axs, ("P3", "P4")):
-        t = pd.read_csv(OUT / f"pareto_{p}.csv")
+        t = pd.read_csv(AN / f"pareto_{p}.csv")
         for fam, col in COLORS.items():
             d = t[t.family == fam.lower()]
             ax.scatter(d.E_e2e_uJ, d.f1_mean, s=10, color=col, label=fam, alpha=0.8, lw=0)

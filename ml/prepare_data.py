@@ -5,8 +5,8 @@ Outputs (paths relative to the repo root):
     data/raw/<n>.mat                  CWRU files (downloaded if missing)
     data/processed/windows.npy        (N, 1024) float32, stride-512 windows, 12 kHz
     data/processed/manifest.parquet   one row per window (schema: CONTRACT.md section 3)
-    results/data_counts.csv           per-file sample and window counts (goes in the paper)
-    results/data_files.csv            per-file keys, lengths, RPM, sha256 (provenance)
+    results/cwru/data/data_counts.csv per-file sample and window counts (goes in the paper)
+    results/cwru/data/data_files.csv  per-file keys, lengths, RPM, sha256 (provenance)
     results/figs/class_examples.png   one window + spectrum per class (visual sanity check)
 
 Usage:
@@ -40,6 +40,7 @@ import scipy.io
 import scipy.signal
 
 REPO = Path(__file__).resolve().parents[1]
+FIGS = REPO / "results" / "figs"
 CLASSES_JSON = REPO / "handoff" / "classes.json"
 
 WIN = 1024
@@ -218,13 +219,14 @@ def build(args) -> None:
     assert len(W) == len(M) and (M.window_id.values == np.arange(len(M))).all()
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
-    (args.results_dir / "figs").mkdir(parents=True, exist_ok=True)
+    args.results_dir.mkdir(parents=True, exist_ok=True)
+    FIGS.mkdir(parents=True, exist_ok=True)
     np.save(args.out_dir / "windows.npy", W)
     M.to_parquet(args.out_dir / "manifest.parquet", index=False)
     C.to_csv(args.results_dir / "data_counts.csv", index=False)
     pd.DataFrame(files).to_csv(args.results_dir / "data_files.csv", index=False)
     if not args.no_plot:
-        plot_examples(W, M, args.results_dir / "figs" / "class_examples.png")
+        plot_examples(W, M, FIGS / "class_examples.png")
 
     print(f"\nwindows.npy {W.shape} {W.dtype}  ({W.nbytes / 1e6:.1f} MB)")
     print(f"stride-512 windows: {C.n_windows_stride512.sum()}   non-overlapping: {C.n_windows_nonoverlap.sum()}   "
@@ -286,7 +288,7 @@ def check(args) -> None:
                                    n_no=("start_idx", lambda s: int((s % WIN == 0).sum())))
     exp = C.set_index("file_id")
     if not (got.n == exp.n_windows_stride512).all() or not (got.n_no == exp.n_windows_nonoverlap).all():
-        problems.append("window counts differ from results/data_counts.csv")
+        problems.append("window counts differ from results/cwru/data/data_counts.csv")
     if (M.start_idx % STRIDE != 0).any():
         problems.append("a start_idx is not a multiple of the stride")
     sample = W[:: max(1, len(W) // 500)]
@@ -306,7 +308,7 @@ def main() -> None:
     p.add_argument("--raw-dir", type=Path, default=REPO / "data" / "raw")
     p.add_argument("--npz-dir", type=Path, help="srigas/cwru_bearing_numpy/Data (only with --source npz)")
     p.add_argument("--out-dir", type=Path, default=REPO / "data" / "processed")
-    p.add_argument("--results-dir", type=Path, default=REPO / "results")
+    p.add_argument("--results-dir", type=Path, default=REPO / "results" / "cwru" / "data")
     p.add_argument("--lpf-hz", type=float, default=5000.0,
                    help="common low-pass applied to every recording (0 = off; see module docstring)")
     p.add_argument("--no-plot", action="store_true")

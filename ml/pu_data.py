@@ -11,10 +11,10 @@ Stages (each one resumable; `python ml/pu_data.py all` runs them in order):
     prepare    data/processed/pu/bearings/<code>.npz          per bearing: the chosen recordings, 64 -> 12 kHz,
                                                               the CWRU pipeline's 5 kHz low-pass, 1024-sample
                                                               non-overlapping windows
-               data/processed/pu/windows.npy + manifest.parquet, results/pu/data_counts.csv
+               data/processed/pu/windows.npy + manifest.parquet, results/pu/data/data_counts.csv
     features   data/processed/pu/feat_r{1,2,3,4}.npy         ml/features.py, unchanged
     splits     splits/pu/<P>/<k>/{train,val,test}.npy, splits/pu/protocols.json, splits/pu/README.md,
-               results/pu/split_counts.csv
+               results/pu/data/split_counts.csv
 
 Labels (class3): 0 healthy, 1 inner race (KI), 2 outer race (KA). The three bearings with damage on both rings
 (KB23, KB24, KB27) are prepared and kept in the manifest (class3 = -1) for the detect-then-diagnose gate, but are
@@ -64,7 +64,7 @@ RAW = REPO / "data" / "raw" / "pu"
 PROCESSED = DS.PROCESSED
 BEARING_CACHE = PROCESSED / "bearings"
 SPLITS = DS.SPLITS
-RESULTS = DS.RESULTS
+RESULTS = DS.DATA_OUT
 
 URL = "https://groups.uni-paderborn.de/kat/BearingDataCenter/{code}.rar"
 WIN = 1024

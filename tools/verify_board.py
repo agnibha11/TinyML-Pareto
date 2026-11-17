@@ -8,7 +8,7 @@ board's output vector with <handoff>/test_vectors/outputs/<model_id>.npy:
 One row per model is appended to --out; a failing model is reported, never fatal (the energy campaign goes on).
 
     python tools/verify_board.py --port /dev/ttyACM0 --handoff handoff/pu --registry models/pu/registry.csv \\
-                                 --out results/pu/board_verify.csv
+                                 --out results/pu/hardware/board_verify.csv
 """
 from __future__ import annotations
 

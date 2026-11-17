@@ -8,9 +8,9 @@ and the version number goes up. Nothing in this file changes silently.
 
 | Owner | Workstream | Owns in this repo |
 |---|---|---|
-| Agnibha | ML & data | `ml/`, `data/`, `splits/`, `configs/`, `models/`, `handoff/`, `results/host/`, `results/host_summary.csv`, `results/data_counts.csv`, `results/data_files.csv` |
-| Abhinav | Embedded firmware | `firmware/`, `tools/dut.py`, `tools/bundle.py`, `tools/build_flash.py`, `results/fw_metrics.csv` |
-| Hridayesh | Measurement & paper | `logger/` (ESP32), `tools/measure.py`, `figs/`, `paper/`, `results/hw_measurements.csv`, `results/session_log.csv` |
+| Agnibha | ML & data | `ml/`, `data/`, `splits/`, `configs/`, `models/`, `handoff/`, `results/<dataset>/host/`, `results/<dataset>/analysis/host_summary.csv`, `results/<dataset>/data/` |
+| Abhinav | Embedded firmware | `firmware/`, `tools/dut.py`, `tools/bundle.py`, `tools/build_flash.py`, `results/<dataset>/hardware/fw_metrics.csv` |
+| Hridayesh | Measurement & paper | `logger/` (ESP32), `tools/measure.py`, `figs/`, `paper/`, `results/<dataset>/hardware/hw_measurements.csv`, `results/<dataset>/hardware/session_log.csv` |
 
 ## M0 checklist: where each item is fixed
 
@@ -43,7 +43,7 @@ and the version number goes up. Nothing in this file changes silently.
    `contract`, `repo`. Example: `fw: add LAT command with DWT timing`.
 6. Never commit: raw or processed data (`data/`), build output (`build/`, `*.elf`, `*.bin`, `*.hex`), virtual
    environments, notebooks with outputs, credentials. `.gitignore` enforces most of this.
-7. Results files under `results/` are written only by scripts. Never edit or delete a results row by hand.
+7. Results files under `results/` are written only by scripts (layout: `results/README.md`; `<dataset>` is `cwru` or `pu`). Never edit or delete a results row by hand.
    - A window rejected automatically gets `rejected=1` from `measure.py`.
    - A window you want to discard after review is simply measured again.
    - The analysis uses, for each (model_id, session, input_j, mode), the **last row with `rejected=0`**.
@@ -89,7 +89,7 @@ P1 and P2 use `class10`; P3 uses `class4`.
 - **Common low-pass (adopted in v1.0; signing this contract accepts it):** after decimation, every recording (normal and fault) is filtered with
   the same zero-phase 255-tap FIR low-pass at 5 kHz. Without it, the recorder's anti-alias roll-off above ~5.5 kHz exists
   only in the fault files, and one band feature separates normal from every fault window: a sampling-rate artefact,
-  not physics. `results/data_files.csv` records the cutoff used, and `--lpf-hz 0` exists only for an ablation.
+  not physics. `results/cwru/data/data_files.csv` records the cutoff used, and `--lpf-hz 0` exists only for an ablation.
 - Each file is loaded by its explicit key `X{nnn}_DE_time` (`nnn` = zero-padded file number). 99.mat also contains
   X098 keys (a copy of 98.mat), and these are never loaded.
 - Window = **1024 samples**, float32, in raw accelerometer units (g). Windows are cut at stride 512. A window with
@@ -134,7 +134,7 @@ Family rules (enforced by `tools/contract.py::parse_model_id`):
 - **Deployed and registered instance:** exactly one per ID — the model trained on **P2 fold 0, seed 0, class10 labels**.
   Only that instance gets firmware, energy and memory numbers.
 - **Other instances:** every other protocol, fold and seed (including the 4-class P3 heads) is evaluated on the host
-  only, under the same ID, keyed by `(model_id, protocol, fold, seed)` in `results/host/`.
+  only, under the same ID, keyed by `(model_id, protocol, fold, seed)` in `results/<dataset>/host/`.
 - **Hardware cost:** taken from the deployed instance. The 4-class head differs only in its last layer, a difference
   the paper states.
 
@@ -203,14 +203,14 @@ All CSVs: UTF-8, comma-separated, header row, `.` decimal point, no index column
 
 ### 6.2 Host metrics (Agnibha writes)
 
-- `results/host/<model_id>__<P>__f<fold>__s<seed>.json`: `{model_id, protocol, fold, seed, snr_db, f1_macro, accuracy, confusion, n_test}`
-- `results/host_summary.csv`: `model_id, protocol, snr_db, n_runs, f1_macro_mean, f1_macro_std, accuracy_mean, accuracy_std`
+- `results/<dataset>/host/<model_id>__<P>__f<fold>__s<seed>.json`: `{model_id, protocol, fold, seed, snr_db, f1_macro, accuracy, confusion, n_test}`
+- `results/<dataset>/analysis/host_summary.csv`: `model_id, protocol, snr_db, n_runs, f1_macro_mean, f1_macro_std, accuracy_mean, accuracy_std`
 
-### 6.3 `results/fw_metrics.csv` (Abhinav writes)
+### 6.3 `results/<dataset>/hardware/fw_metrics.csv` (Abhinav writes)
 
 `model_id, runtime, bundle, flash_model_B, arena_used_B, frontend_ram_B, ram_model_peak_B, lat_inf_med_us, lat_inf_min_us, lat_inf_max_us, lat_fe_med_us, git_hash`
 
-### 6.4 `results/hw_measurements.csv` (Hridayesh writes, one row per window)
+### 6.4 `results/<dataset>/hardware/hw_measurements.csv` (Hridayesh writes, one row per window)
 
 `model_id, session, input_j, mode, N, t_window_us_dut, t_window_us_logger, E_window_uJ, P_mean_uW, P_std_uW, V_bus_mV, n_samples, ovf, P_idle_uW, fw_hash, logger_hash, timestamp, rejected`
 
@@ -226,7 +226,7 @@ All CSVs: UTF-8, comma-separated, header row, `.` decimal point, no index column
 - `timestamp` = ISO-8601 with timezone. `rejected` ∈ {0, 1}.
 - Derived quantities (E per inference, ΔE, CV) are computed downstream from these columns. They are never stored here.
 
-### 6.5 `results/session_log.csv` (Hridayesh writes)
+### 6.5 `results/<dataset>/hardware/session_log.csv` (Hridayesh writes)
 
 `session, date, room_temp_C, usb_port, cable, shunt_ohm_measured, logger_hash, fw_hash, notes`
 
@@ -355,7 +355,7 @@ The paper states this table verbatim.
 
 | Area | Command | Must pass |
 |---|---|---|
-| data | `python ml/prepare_data.py --check` | 40 files, window counts match `results/data_counts.csv` |
+| data | `python ml/prepare_data.py --check` | 40 files, window counts match `results/cwru/data/data_counts.csv` |
 | splits (from W2) | `python ml/splits.py --check` | all assertions |
 | firmware | `arduino-cli compile --fqbn arduino:mbed_nano:nano33ble firmware/bench` (from W4: `tools/build_flash.py <bundle> --compile-only`) | builds with pinned versions |
 | host tools | `python -m pytest tests/` (also run by CI as the required `tests` check) | green |
@@ -424,3 +424,9 @@ Version history:
 - v1.0-rc4 addendum (1 Nov 2026), no interface change: `handoff/hann_fx.h` (q15/q31 Hann tables) added to §5 for
   the optional fixed-point front end `firmware/bench/frontend_fx.c`. Same features and units as the float front end,
   so model IDs, VERIFY and the norm constants are unchanged; adopting it on the board is a firmware decision.
+- v1.0-rc4 addendum (17 Nov 2026), file locations only, no schema or interface change: `results/` is split by
+  dataset into `results/cwru/` and `results/pu/` with the same subfolders, `data/` (window and split counts),
+  `host/` (one JSON per run), `analysis/` (host summary, Pareto fronts, headline numbers), `cascade/`, `fixedpoint/`
+  (CWRU) and `hardware/` (rig measurements, session log, build record, board VERIFY). Shared tool outputs stay at
+  `results/vmcu/`, `results/vrig/`, `results/figs/`, `results/demo/`. §1, §6 and §8 paths updated; every column is
+  unchanged. Index of every file and the script that writes it: `results/README.md`. Proposed by Hridayesh.

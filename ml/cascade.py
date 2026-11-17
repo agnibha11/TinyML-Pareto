@@ -15,15 +15,15 @@ gate is tuned on the validation split for recall, never on test data. Three gate
   either2 "either", confirmed: alarm only if the previous window of the same recording also alarmed. Sporadic
           false alarms vanish; a real fault is escalated one window (85 ms) later.
 
-Stage-2 predictions are the stored per-window predictions of all 3,520 host runs (results/host/*.json), so the
+Stage-2 predictions are the stored per-window predictions of all 3,520 host runs (results/cwru/host/*.json), so the
 cascade is scored for every model, fold and seed without retraining. Leakage-free protocols only (P2, P3).
 
 Energy per window at fault prevalence pi (fraction of windows from a faulty machine), from the measured gate rates:
     E(pi) = E_stage1 + [pi * TPR + (1 - pi) * FPR] * E_e2e(model)
-with E_e2e from results/prehw_costs.csv (stage 2 recomputes its whole front end: no reuse of R1 is assumed) and
-E_stage1 from results/fixedpoint/fx_cost_summary.csv. Chip-level energy model of ml/stats.py.
+with E_e2e from results/cwru/analysis/prehw_costs.csv (stage 2 recomputes its whole front end: no reuse of R1 is assumed) and
+E_stage1 from results/cwru/fixedpoint/fx_cost_summary.csv. Chip-level energy model of ml/stats.py.
 
-Outputs (results/cascade/): gates.csv (TPR/FPR per protocol, fold, gate), cascade_runs.csv (per stored run),
+Outputs (results/cwru/cascade/): gates.csv (TPR/FPR per protocol, fold, gate), cascade_runs.csv (per stored run),
 cascade_models.csv (per model and protocol), summary.json; figures fig_cascade_energy and fig_cascade_pareto in
 results/figs/.
 
@@ -43,9 +43,10 @@ from splits import LABEL, PROTOCOLS, load_split  # noqa: E402
 from train import manifest, metrics  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
-RES = REPO / "results"
+RES = REPO / "results" / "cwru"
+AN = RES / "analysis"
 OUT = RES / "cascade"
-FIGS = RES / "figs"
+FIGS = REPO / "results" / "figs"
 FX_R1_COLS = (75, 85)          # integer R1 block of data/processed/feat_fx.npy (tools/fxfe/run_fxfe.py)
 GATES = ("sup", "healthy", "either", "either2")
 PIS = (0.0, 0.01, 0.1, 1.0)
@@ -88,10 +89,10 @@ def load_runs(protocols=("P2", "P3")) -> list[dict]:
 
 
 def costs() -> tuple[pd.DataFrame, dict]:
-    c = pd.read_csv(RES / "prehw_costs.csv").set_index("model_id")
+    c = pd.read_csv(AN / "prehw_costs.csv").set_index("model_id")
     fx = pd.read_csv(RES / "fixedpoint" / "fx_cost_summary.csv")
     fx = fx[fx.core == "m4f"].set_index("region")
-    em = json.loads((RES / "headline_numbers.json").read_text())["energy_model"]
+    em = json.loads((AN / "headline_numbers.json").read_text())["energy_model"]
     uj = lambda cyc: cyc / (em["f_cpu_MHz"] * 1e6) * em["P_active_mW"] * 1e3  # noqa: E731
     tree_inf = float(c.loc["dt-r1-d4-fp32", "inf_cyc_med"])     # a depth-4 tree bounds the depth-2 gate
     s1 = {"sup": uj(fx.loc["FX_R1", "cyc_med"] + tree_inf),

@@ -35,8 +35,9 @@ The live state goes to `results/pu/progress.json` and the worker logs to `result
 
 ## Analysis
 
-After the run, `python ml/pu_analysis.py` writes `results/pu/summary.json`, `host_summary.csv`, `kendall_tau.csv`,
-`per_bearing_P3.csv`, the cascade results and the `fig_pu_*` figures used by the paper (section "Second data set").
+After the run, `python ml/pu_analysis.py` writes `results/pu/analysis/` (`summary.json`, `host_summary.csv`,
+`kendall_tau.csv`, `per_bearing_P3.csv`), the cascade results in `results/pu/cascade/` and the `fig_pu_*` figures
+used by the paper (section "Second data set").
 
 ## Useful options
 

@@ -142,7 +142,7 @@ def test_results_schemas_match_contract():
     assert first_code_list(section("### 6.3")) == C.FW_METRICS_COLUMNS
     assert first_code_list(section("### 6.4")) == C.HW_COLUMNS
     assert first_code_list(section("### 6.5")) == C.SESSION_COLUMNS
-    host = re.search(r"`results/host_summary.csv`: `([^`]+)`", section("### 6.2")).group(1)
+    host = re.search(r"`results/<dataset>/analysis/host_summary.csv`: `([^`]+)`", section("### 6.2")).group(1)
     assert [c.strip() for c in host.split(",")] == C.HOST_SUMMARY_COLUMNS
     modes = re.findall(r"`([A-Z0-9]+)`", re.search(r"`mode` ∈ ([^.]+)\.", section("### 6.4")).group(1))
     assert tuple(modes) == C.HW_MODES

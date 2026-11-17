@@ -11,7 +11,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-RES = Path(__file__).resolve().parents[1] / "results"
+RES = Path(__file__).resolve().parents[1] / "results" / "cwru"
 
 
 def need(p: Path) -> Path:
@@ -23,7 +23,7 @@ def need(p: Path) -> Path:
 def test_fx_bench_matches_pipeline_float_costs():
     """The fixed-point benchmark measures the float front end exactly as the pipeline's virtual-MCU run did."""
     s = pd.read_csv(need(RES / "fixedpoint" / "fx_cost_summary.csv")).set_index(["core", "region"]).cyc_med
-    c = pd.read_csv(need(RES / "prehw_costs.csv")).set_index("model_id").fe_cyc_med
+    c = pd.read_csv(need(RES / "analysis" / "prehw_costs.csv")).set_index("model_id").fe_cyc_med
     for rep, model in (("R1", "dt-r1-d4-fp32"), ("R2", "dt-r2-d4-fp32"), ("R4", "dt-r4-d4-fp32")):
         assert abs(s[("m4f", f"F32_{rep}")] / c[model] - 1) < 0.01
 

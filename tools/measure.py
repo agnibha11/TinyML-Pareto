@@ -414,7 +414,7 @@ def main() -> int:
             p.error("--session and --logger-hash are required for real runs")
         if a.window_s < 10.0:
             p.error("the contract requires windows >= 10 s")
-        out_path = a.out or REPO / "results" / "hw_measurements.csv"
+        out_path = a.out or REPO / "results" / "cwru" / "hardware" / "hw_measurements.csv"
         session = a.session
         log_path = out_path.parent / "session_log.csv"
         if log_path.exists() and any(r["session"] == str(session) for r in csv.DictReader(open(log_path))):
