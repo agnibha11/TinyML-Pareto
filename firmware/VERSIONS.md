@@ -22,7 +22,7 @@ IDE or `arduino-cli` update prompt during the study. Changing any line below mea
 
 | Library | Version | Used for |
 |---|---|---|
-| Chirale_TensorFlowLite | 2.0.0 | TFLM runtime + CMSIS-NN kernels (main build, runtime `tflm-cmsis`) |
+| Chirale_TensorFlowLite | 2.0.0 **+ `firmware/patches/chirale-2.0.0-int8.patch`** | TFLM runtime + CMSIS-NN kernels (main build, runtime `tflm-cmsis`). The patch (17 Nov 2026) makes int8 FULLY_CONNECTED with per-channel weights and int8 MEAN match TensorFlow 2.18 bit for bit; float paths unchanged. Tree hashes in `firmware/patches/chirale.json`; `tools/build_flash.py` refuses an unpatched tree for TFLM bundles and writes `tflm_lib` to `fw_build.csv`. Energy repeats 1-3 used the unpatched library |
 | Arduino_CMSIS-DSP | 5.7.0 | `arm_rfft_fast_f32` etc. for the R2/R3 front end (default branch has only a build script, so pin 5.7.0) |
 | emlearn (C headers) | 0.23.2 | tree/forest inference (runtime `emlearn`); **same version as Python** (`requirements.txt`) |
 | TFLM reference-kernel tree | commit `<fill in by W4 (gate M4)>` of tensorflow/tflite-micro | ablation build, runtime `tflm-ref`, packaged as library `TFLM_REF` |
@@ -33,6 +33,7 @@ IDE or `arduino-cli` update prompt during the study. Changing any line below mea
 arduino-cli core update-index
 arduino-cli core install arduino:mbed_nano@4.6.0
 arduino-cli lib install "Chirale_TensorFlowLite@2.0.0"
+python tools/chirale_lib.py apply           # TinyML-Pareto int8 patch (firmware/patches/); 'status' checks it
 arduino-cli lib install "Arduino_CMSIS-DSP@5.7.0"
 python -m emlearn.arduino.install          # copies emlearn C headers into the Arduino libraries folder (from the venv)
 

@@ -1,0 +1,210 @@
+TinyML-Pareto patch for the Arduino library Chirale_TensorFLowLite 2.0.0 (the board's TFLM runtime, firmware/VERSIONS.md).
+It makes the board's int8 arithmetic match TensorFlow 2.18 (the converter and host reference) bit for bit.
+
+1. FULLY_CONNECTED, int8 with per-channel weights (micro/kernels/cmsis_nn/fully_connected.cpp).
+   TF >= 2.16 quantizes dense weights with one scale per output neuron. Chirale 2.0.0 requantized every neuron with
+   the first neuron's scale. Now the per-neuron multipliers and shifts are computed in Prepare
+   (PopulateConvolutionQuantizationParams, as for CONV_2D) and the layer runs through CMSIS-NN's per-channel
+   1x1-convolution path (arm_convolve_1x1_s8_fast -> arm_nn_mat_mult_nt_t_s8 on Cortex-M4). Per-tensor weights
+   (one scale) keep the original arm_fully_connected_s8 path.
+2. MEAN, int8/int16 (micro/kernels/reduce_common.cpp).
+   Chirale 2.0.0 rounds a float mean, or truncates an integer mean when input and output quantization are equal.
+   TFLite 2.18 uses one integer path (reference_ops::QuantizedMeanOrSum, 1/n folded into the fixed-point
+   multiplier); it is ported here. floor(log2 n) is computed directly because Chirale's CountLeadingZeros is
+   32-bit only.
+
+Float models are not affected (their code paths are unchanged).
+Apply / check / revert: python tools/chirale_lib.py apply | status | revert   (tools/build_flash.py refuses to build
+a TFLM bundle unless the installed library matches the patched tree hash in firmware/patches/chirale.json).
+
+diff -ruN a/src/tensorflow/lite/micro/kernels/cmsis_nn/fully_connected.cpp b/src/tensorflow/lite/micro/kernels/cmsis_nn/fully_connected.cpp
+--- a/src/tensorflow/lite/micro/kernels/cmsis_nn/fully_connected.cpp
++++ b/src/tensorflow/lite/micro/kernels/cmsis_nn/fully_connected.cpp
+@@ -38,6 +38,11 @@
+   int32_t* per_channel_output_multiplier;
+   int32_t* per_channel_output_shift;
+ 
++  // TinyML-Pareto patch (firmware/patches/chirale-2.0.0-int8.patch): the int8 weights have one scale
++  // per output neuron (TF >= 2.16 converts dense layers per channel). Chirale 2.0.0 used the first
++  // neuron's scale for all of them.
++  bool per_channel;
++
+   // Index to buffer for optimizations if applicable.
+   int buffer_idx;
+ 
+@@ -95,6 +100,7 @@
+       &(data->reference_op_data)));
+ 
+   int32_t buf_size = 0;
++  data->per_channel = false;
+ 
+   if (input->type == kTfLiteInt16) {
+     TF_LITE_ENSURE_EQ(context, input->params.zero_point, 0);
+@@ -106,7 +112,15 @@
+     TFLITE_DCHECK_GE(output_dim_count, 2);
+     TFLITE_DCHECK_LE(output_dim_count, 4);
+ 
+-    if (output_dim_count > 2 && data->accum_depth % 4 == 0) {
++    const auto* filter_quant = reinterpret_cast<const TfLiteAffineQuantization*>(
++        filter->quantization.params);
++    data->per_channel = filter->type == kTfLiteInt8 &&
++                        filter->quantization.type == kTfLiteAffineQuantization &&
++                        filter_quant != nullptr && filter_quant->scale != nullptr &&
++                        filter_quant->scale->size > 1;
++
++    if (data->per_channel ||
++        (output_dim_count > 2 && data->accum_depth % 4 == 0)) {
+       data->per_channel_output_multiplier =
+           static_cast<int32_t*>(context->AllocatePersistentBuffer(
+               context, data->output_depth * sizeof(int32_t)));
+@@ -114,6 +128,19 @@
+           static_cast<int32_t*>(context->AllocatePersistentBuffer(
+               context, data->output_depth * sizeof(int32_t)));
+ 
++      if (data->per_channel) {
++        // One multiplier and shift per output neuron, computed exactly as TFLite does for
++        // CONV_2D and per-channel FULLY_CONNECTED.
++        int32_t unused_multiplier;
++        int unused_shift;
++        int32_t unused_min, unused_max;
++        TF_LITE_ENSURE_STATUS(PopulateConvolutionQuantizationParams(
++            context, input, filter, bias, output, params->activation,
++            &unused_multiplier, &unused_shift, &unused_min, &unused_max,
++            data->per_channel_output_multiplier,
++            data->per_channel_output_shift, data->output_depth));
++      }
++
+       cmsis_nn_dims input_dims;
+       input_dims.n = data->batches;
+       input_dims.h = 1;
+@@ -211,7 +238,9 @@
+   const int32_t* bias_data =
+       tflite::micro::GetOptionalTensorData<int32_t>(bias);
+ 
+-  if (output_dim_count > 2 && data.accum_depth % 4 == 0) {
++  // TinyML-Pareto patch: per-channel weights take the per-channel 1x1-convolution path
++  // (arm_nn_mat_mult_nt_t_s8 on Cortex-M4), which requantizes every output neuron with its own scale.
++  if (data.per_channel || (output_dim_count > 2 && data.accum_depth % 4 == 0)) {
+     cmsis_nn_conv_params conv_params;
+     conv_params.dilation.h = 1;
+     conv_params.dilation.w = 1;
+@@ -230,9 +259,11 @@
+     per_channel_quant_params.shift =
+         const_cast<int32_t*>(data.per_channel_output_shift);
+ 
+-    for (int i = 0; i < data.output_depth; i++) {
+-      per_channel_quant_params.multiplier[i] = quant_params.multiplier;
+-      per_channel_quant_params.shift[i] = quant_params.shift;
++    if (!data.per_channel) {
++      for (int i = 0; i < data.output_depth; i++) {
++        per_channel_quant_params.multiplier[i] = quant_params.multiplier;
++        per_channel_quant_params.shift[i] = quant_params.shift;
++      }
+     }
+ 
+     TF_LITE_ENSURE_EQ(
+diff -ruN a/src/tensorflow/lite/micro/kernels/reduce_common.cpp b/src/tensorflow/lite/micro/kernels/reduce_common.cpp
+--- a/src/tensorflow/lite/micro/kernels/reduce_common.cpp
++++ b/src/tensorflow/lite/micro/kernels/reduce_common.cpp
+@@ -180,6 +180,82 @@
+   return kTfLiteOk;
+ }
+ 
++// TinyML-Pareto patch (firmware/patches/chirale-2.0.0-int8.patch): integer-only quantized MEAN, ported
++// from TensorFlow 2.18.1 tensorflow/lite/kernels/internal/reference/reduce.h QuantizedMeanOrSum
++// (compute_sum = false). TFLite uses it for every int8/int16 MEAN. Chirale 2.0.0 instead rounds a float
++// mean (1 step off in a few % of elements) or, when input and output quantization are equal, truncates
++// an integer mean.
++template <typename T>
++TfLiteStatus IntegerMeanTf218(TfLiteContext* context, TfLiteNode* node,
++                              OpDataReduce* op_data, int* temp_index,
++                              int* resolved_axis, int32_t* temp_sum) {
++  const TfLiteEvalTensor* input = tflite::micro::GetEvalInput(context, node, 0);
++  const TfLiteEvalTensor* axis = tflite::micro::GetEvalInput(context, node, 1);
++  TfLiteEvalTensor* output = tflite::micro::GetEvalOutput(context, node, 0);
++  const int* input_dims = input->dims->data;
++  const int input_num_dims = input->dims->size;
++  const int* output_dims = output->dims->data;
++  const int output_num_dims = output->dims->size;
++  const T* input_data = tflite::micro::GetTensorData<T>(input);
++  T* output_data = tflite::micro::GetTensorData<T>(output);
++  const int32_t kMinValue = std::numeric_limits<T>::min();
++  const int32_t kMaxValue = std::numeric_limits<T>::max();
++
++  size_t num_outputs = 1;
++  for (int idx = 0; idx < output_num_dims; ++idx) {
++    num_outputs *= static_cast<size_t>(output_dims[idx]);
++  }
++  for (size_t idx = 0; idx < num_outputs; ++idx) {
++    output_data[idx] = T();
++    temp_sum[idx] = 0;
++  }
++  for (int i = 0; i < input_num_dims; ++i) {
++    if (input_dims[i] == 0) return kTfLiteOk;
++  }
++
++  int num_resolved_axis = 0;
++  TF_LITE_ENSURE(context,
++                 reference_ops::ResolveAxis(
++                     input_num_dims, tflite::micro::GetTensorData<int>(axis),
++                     op_data->num_axis, resolved_axis, &num_resolved_axis));
++  TF_LITE_ENSURE(context,
++                 (reference_ops::ReduceSumImpl<T, int32_t>(
++                     input_data, input_dims, output_dims, input_num_dims,
++                     output_num_dims, resolved_axis, num_resolved_axis,
++                     temp_index, temp_sum)));
++
++  int64_t num_elements_in_axis = 1;
++  for (int idx = 0; idx < num_resolved_axis; ++idx) {
++    num_elements_in_axis *= input_dims[resolved_axis[idx]];
++  }
++  if (num_elements_in_axis == 0) return kTfLiteOk;
++
++  // Fold 1/num_elements_in_axis into the output rescaling, as TFLite does. TFLite writes the shift as
++  // 63 - CountLeadingZeros(uint64_t(n)) = floor(log2(n)); Chirale's CountLeadingZeros is 32-bit only
++  // (__builtin_clz for every type), so compute floor(log2(n)) directly.
++  int shift = 0;
++  for (uint64_t v = static_cast<uint64_t>(num_elements_in_axis); v > 1; v >>= 1) {
++    ++shift;
++  }
++  shift = std::min(shift, 32);
++  shift = std::min(shift, 31 + op_data->shift);
++  const int32_t output_multiplier = static_cast<int32_t>(
++      (static_cast<int64_t>(op_data->multiplier) << shift) /
++      num_elements_in_axis);
++  const int output_shift = op_data->shift - shift;
++
++  for (size_t idx = 0; idx < num_outputs; ++idx) {
++    const int32_t shifted_sum = static_cast<int32_t>(
++        temp_sum[idx] - op_data->input_zp * num_elements_in_axis);
++    int32_t out = MultiplyByQuantizedMultiplier(shifted_sum, output_multiplier,
++                                                output_shift) +
++                  op_data->output_zp;
++    out = std::min(std::max(out, kMinValue), kMaxValue);
++    output_data[idx] = static_cast<T>(out);
++  }
++  return kTfLiteOk;
++}
++
+ template <typename integer_type>
+ TfLiteStatus EvalIntegerMean(TfLiteContext* context, TfLiteNode* node,
+                              int num_axis, OpDataReduce* op_data,
+@@ -187,15 +263,9 @@
+   int32_t* temp_sum = static_cast<int32_t*>(
+       context->GetScratchBuffer(context, op_data->temp_buffer_idx));
+ 
+-  if (op_data->input_zp == op_data->output_zp &&
+-      op_data->input_scale == op_data->output_scale) {
+-    Mean<integer_type, int32_t>(context, node, op_data, temp_index,
+-                                resolved_axis, temp_sum);
+-  } else {
+-    QuantizedMeanOrSum<integer_type>(context, node, temp_index, resolved_axis,
+-                                     temp_sum, op_data, /*compute_sum=*/false);
+-  }
+-  return kTfLiteOk;
++  // TinyML-Pareto patch: one integer path for every quantized MEAN, as in TFLite 2.18.
++  return IntegerMeanTf218<integer_type>(context, node, op_data, temp_index,
++                                        resolved_axis, temp_sum);
+ }
+ 
+ TfLiteStatus EvalMeanHelper(TfLiteContext* context, TfLiteNode* node,

@@ -11,8 +11,14 @@ Flags passed to arduino-cli (firmware/VERSIONS.md "Build stamping"): -DBENCH_GIT
 the static arena is part of .bss, so a link also proves the arena fits in RAM (the board's SEL still has the last
 word, because the TFLM version on the board may allocate slightly differently from the virtual MCU's).
 
+TFLM bundles are built only on the patched board library (firmware/patches/, tools/chirale_lib.py): the build stops
+if the installed Chirale_TensorFLowLite tree is not the patched one. --allow-unpatched-lib builds the old library on
+purpose (e.g. to reproduce the pre-patch int8 rows); its rows then say tflm_lib=chirale-2.0.0.
+
 results/<dataset>/hardware/fw_build.csv (compile-time facts; fw_metrics.csv with board timings stays Abhinav's):
-    bundle, model_id, runtime, links, bundle_flash_B, bundle_ram_static_B, arena_B, flash_model_B_board, git_hash
+    bundle, model_id, runtime, links, bundle_flash_B, bundle_ram_static_B, arena_B, flash_model_B_board, git_hash,
+    tflm_lib (chirale-2.0.0+int8 = patched, chirale-2.0.0 = unpatched, none = no TFLM linked; empty in rows written
+    before the patch, which were all unpatched builds)
 """
 from __future__ import annotations
 
@@ -28,6 +34,7 @@ import pandas as pd
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
+from tools import chirale_lib  # noqa: E402
 from tools.contract import c_name  # noqa: E402
 
 FQBN = "arduino:mbed_nano:nano33ble"
@@ -76,6 +83,8 @@ def main() -> None:
     ap.add_argument("--port")
     ap.add_argument("--arduino-cli", default=shutil.which("arduino-cli") or "arduino-cli")
     ap.add_argument("--dataset", choices=("cwru", "pu"), default="cwru")
+    ap.add_argument("--allow-unpatched-lib", action="store_true",
+                    help="build TFLM bundles even if the board library is not the patched one (firmware/patches/)")
     a = ap.parse_args()
     pu = a.dataset == "pu"
     sketch = REPO / "build" / "pu" / "sketch" / "bench" if pu else SKETCH
@@ -84,6 +93,10 @@ def main() -> None:
     todo = plan if a.all else [b for b in plan if b["id"] == a.bundle]
     if not todo:
         sys.exit("give a bundle id or --all (run tools/bundle.py first)")
+    lib = "none"
+    if any(b["tflm"] for b in todo):
+        lib = chirale_lib.label(*chirale_lib.state()) if a.allow_unpatched_lib else chirale_lib.check()
+        print(f"TFLM library: {lib}")
     gh = git_hash() + ("-pu" if pu else "")   # PING then says bench=<hash>-pu: no mixing up the two datasets
     rows = []
     for b in todo:
@@ -98,7 +111,8 @@ def main() -> None:
                 sum(v for k, v in res["sym"].items() if k.startswith(cn + "_")) or None
             rows.append({"bundle": b["id"], "model_id": m, "runtime": b["runtime"], "links": res["links"],
                          "bundle_flash_B": res["bundle_flash_B"], "bundle_ram_static_B": res["bundle_ram_static_B"],
-                         "arena_B": b["arena_bytes"], "flash_model_B_board": fm, "git_hash": gh})
+                         "arena_B": b["arena_bytes"], "flash_model_B_board": fm, "git_hash": gh,
+                         "tflm_lib": lib if b["tflm"] else "none"})
     out = REPO / "results" / ("pu" if pu else "cwru") / "hardware" / "fw_build.csv"
     new = pd.DataFrame(rows)
     if out.exists() and not a.all:

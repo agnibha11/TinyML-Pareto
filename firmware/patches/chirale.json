@@ -1,0 +1,10 @@
+{
+  "library": "Chirale_TensorFLowLite",
+  "version": "2.0.0",
+  "patch": "chirale-2.0.0-int8.patch",
+  "label": "int8",
+  "tree_sha256": {
+    "unpatched": "7bf4a9d9067bd0b8a5dc144c698972119a613c7e7e08d06fd2cba303c01c0004",
+    "patched": "658f6806f1a9dc6c33eca23e1171c5c824968632e3119fdbf7c5f410fdbb83a2"
+  }
+}
