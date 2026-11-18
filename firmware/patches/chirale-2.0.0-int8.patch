@@ -4,9 +4,12 @@ It makes the board's int8 arithmetic match TensorFlow 2.18 (the converter and ho
 1. FULLY_CONNECTED, int8 with per-channel weights (micro/kernels/cmsis_nn/fully_connected.cpp).
    TF >= 2.16 quantizes dense weights with one scale per output neuron. Chirale 2.0.0 requantized every neuron with
    the first neuron's scale. Now the per-neuron multipliers and shifts are computed in Prepare
-   (PopulateConvolutionQuantizationParams, as for CONV_2D) and the layer runs through CMSIS-NN's per-channel
-   1x1-convolution path (arm_convolve_1x1_s8_fast -> arm_nn_mat_mult_nt_t_s8 on Cortex-M4). Per-tensor weights
-   (one scale) keep the original arm_fully_connected_s8 path.
+   (PopulateConvolutionQuantizationParams, as for CONV_2D) and the layer runs through VecMatMultPerChannelS8, a copy
+   of CMSIS-NN 4.0.2's arm_nn_vec_mat_mult_t_s8 (the kernel behind arm_fully_connected_s8, SMLAD on Cortex-M4) that
+   requantizes each output row with its own multiplier and shift. Per-tensor weights (one scale) keep the original
+   arm_fully_connected_s8 path.
+   (Version int8v2. Version int8 ran per-channel layers through the 1x1-convolution path, arm_convolve_1x1_s8_fast;
+   the outputs are identical, but that path is 1.4-2.5x slower for a single input vector.)
 2. MEAN, int8/int16 (micro/kernels/reduce_common.cpp).
    Chirale 2.0.0 rounds a float mean, or truncates an integer mean when input and output quantization are equal.
    TFLite 2.18 uses one integer path (reference_ops::QuantizedMeanOrSum, 1/n folded into the fixed-point
@@ -18,9 +21,17 @@ Apply / check / revert: python tools/chirale_lib.py apply | status | revert   (t
 a TFLM bundle unless the installed library matches the patched tree hash in firmware/patches/chirale.json).
 
 diff -ruN a/src/tensorflow/lite/micro/kernels/cmsis_nn/fully_connected.cpp b/src/tensorflow/lite/micro/kernels/cmsis_nn/fully_connected.cpp
---- a/src/tensorflow/lite/micro/kernels/cmsis_nn/fully_connected.cpp
-+++ b/src/tensorflow/lite/micro/kernels/cmsis_nn/fully_connected.cpp
-@@ -38,6 +38,11 @@
+--- a/src/tensorflow/lite/micro/kernels/cmsis_nn/fully_connected.cpp	2026-11-10 08:23:57.283553074 +0530
++++ b/src/tensorflow/lite/micro/kernels/cmsis_nn/fully_connected.cpp	2026-11-17 23:43:42.942893092 +0530
+@@ -16,6 +16,7 @@
+ #include "tensorflow/lite/micro/kernels/fully_connected.h"
+ 
+ #include "third_party/cmsis_nn/Include/arm_nnfunctions.h"
++#include "third_party/cmsis_nn/Include/arm_nnsupportfunctions.h"
+ #include "tensorflow/lite/c/builtin_op_data.h"
+ #include "tensorflow/lite/c/common.h"
+ #include "tensorflow/lite/kernels/internal/common.h"
+@@ -38,6 +39,11 @@
    int32_t* per_channel_output_multiplier;
    int32_t* per_channel_output_shift;
  
@@ -32,7 +43,7 @@ diff -ruN a/src/tensorflow/lite/micro/kernels/cmsis_nn/fully_connected.cpp b/src
    // Index to buffer for optimizations if applicable.
    int buffer_idx;
  
-@@ -95,6 +100,7 @@
+@@ -95,6 +101,7 @@
        &(data->reference_op_data)));
  
    int32_t buf_size = 0;
@@ -40,7 +51,7 @@ diff -ruN a/src/tensorflow/lite/micro/kernels/cmsis_nn/fully_connected.cpp b/src
  
    if (input->type == kTfLiteInt16) {
      TF_LITE_ENSURE_EQ(context, input->params.zero_point, 0);
-@@ -106,7 +112,15 @@
+@@ -106,7 +113,15 @@
      TFLITE_DCHECK_GE(output_dim_count, 2);
      TFLITE_DCHECK_LE(output_dim_count, 4);
  
@@ -57,7 +68,7 @@ diff -ruN a/src/tensorflow/lite/micro/kernels/cmsis_nn/fully_connected.cpp b/src
        data->per_channel_output_multiplier =
            static_cast<int32_t*>(context->AllocatePersistentBuffer(
                context, data->output_depth * sizeof(int32_t)));
-@@ -114,6 +128,19 @@
+@@ -114,6 +129,19 @@
            static_cast<int32_t*>(context->AllocatePersistentBuffer(
                context, data->output_depth * sizeof(int32_t)));
  
@@ -77,35 +88,158 @@ diff -ruN a/src/tensorflow/lite/micro/kernels/cmsis_nn/fully_connected.cpp b/src
        cmsis_nn_dims input_dims;
        input_dims.n = data->batches;
        input_dims.h = 1;
-@@ -211,7 +238,9 @@
+@@ -187,6 +215,123 @@
+   }
+ }
+ 
++// TinyML-Pareto patch: arm_nn_vec_mat_mult_t_s8 (CMSIS-NN 4.0.2, DSP and portable branches) with one
++// requantization (multiplier, shift) per output row, for per-channel int8 dense weights. The per-tensor
++// kernel is what Chirale 2.0.0 used before the patch; the 1x1-convolution path the first patch used is
++// 1.4-2.5x slower for a single input vector.
++void VecMatMultPerChannelS8(const int8_t* lhs, const int8_t* rhs,
++                            const int32_t* bias, int8_t* dst,
++                            const int32_t lhs_offset, const int32_t dst_offset,
++                            const int32_t* dst_multiplier,
++                            const int32_t* dst_shift, const int32_t rhs_cols,
++                            const int32_t rhs_rows, const int32_t act_min,
++                            const int32_t act_max) {
++#if defined(ARM_MATH_DSP) && !defined(ARM_MATH_MVEI)
++  const int32_t row_loop_cnt = rhs_rows / 2;
++  const int16_t lhs_offset_s16 = (int16_t)lhs_offset;
++  const uint32_t lhs_offset_s16x2 =
++      __PKHBT(lhs_offset_s16, lhs_offset_s16, 16);
++  const int32_t col_loop_cnt = rhs_cols / 4;
++
++  for (int32_t i = 0; i < row_loop_cnt; i++) {
++    int32_t acc_0 = 0;
++    int32_t acc_1 = 0;
++    if (bias) {
++      acc_0 = *bias++;
++      acc_1 = *bias++;
++    }
++    const int8_t* lhs_vec = lhs;
++    const int8_t* rhs_0 = rhs;
++    const int8_t* rhs_1 = rhs + rhs_cols;
++    rhs += 2 * rhs_cols;
++
++    for (int32_t j = col_loop_cnt; j != 0; j--) {
++      int32_t vec_0 = arm_nn_read_q7x4_ia(&lhs_vec);
++      int32_t vec_1 =
++          __SXTAB16_RORn(lhs_offset_s16x2, (uint32_t)vec_0, 8);
++      vec_0 = __SXTAB16(lhs_offset_s16x2, vec_0);
++
++      int32_t ker_0 = arm_nn_read_q7x4_ia(&rhs_0);
++      int32_t ker_1 = __SXTB16_RORn((uint32_t)ker_0, 8);
++      ker_0 = __SXTB16(ker_0);
++      acc_0 = __SMLAD(ker_1, vec_1, acc_0);
++      acc_0 = __SMLAD(ker_0, vec_0, acc_0);
++
++      ker_0 = arm_nn_read_q7x4_ia(&rhs_1);
++      ker_1 = __SXTB16_RORn((uint32_t)ker_0, 8);
++      ker_0 = __SXTB16(ker_0);
++      acc_1 = __SMLAD(ker_1, vec_1, acc_1);
++      acc_1 = __SMLAD(ker_0, vec_0, acc_1);
++    }
++    for (int32_t k = col_loop_cnt * 4; k < rhs_cols; k++) {
++      const int32_t lhs_temp = (*lhs_vec + lhs_offset);
++      lhs_vec++;
++      acc_0 += lhs_temp * (*rhs_0);
++      rhs_0++;
++      acc_1 += lhs_temp * (*rhs_1);
++      rhs_1++;
++    }
++    acc_0 = arm_nn_requantize(acc_0, dst_multiplier[0], dst_shift[0]);
++    acc_1 = arm_nn_requantize(acc_1, dst_multiplier[1], dst_shift[1]);
++    dst_multiplier += 2;
++    dst_shift += 2;
++    acc_0 += dst_offset;
++    acc_1 += dst_offset;
++    acc_0 = MAX(acc_0, act_min);
++    acc_0 = MIN(acc_0, act_max);
++    acc_1 = MAX(acc_1, act_min);
++    acc_1 = MIN(acc_1, act_max);
++    dst[0] = (int8_t)acc_0;
++    dst[1] = (int8_t)acc_1;
++    dst += 2;
++  }
++
++  if (rhs_rows & 0x1) {
++    int32_t acc_0 = 0;
++    if (bias) {
++      acc_0 = *bias++;
++    }
++    const int8_t* lhs_vec = lhs;
++    const int8_t* rhs_0 = rhs;
++    for (int32_t j = col_loop_cnt; j != 0; j--) {
++      int32_t vec_0 = arm_nn_read_q7x4_ia(&lhs_vec);
++      int32_t vec_1 =
++          __SXTAB16_RORn(lhs_offset_s16x2, (uint32_t)vec_0, 8);
++      vec_0 = __SXTAB16(lhs_offset_s16x2, vec_0);
++      int32_t ker_0 = arm_nn_read_q7x4_ia(&rhs_0);
++      int32_t ker_1 = __SXTB16_RORn((uint32_t)ker_0, 8);
++      ker_0 = __SXTB16(ker_0);
++      acc_0 = __SMLAD(ker_1, vec_1, acc_0);
++      acc_0 = __SMLAD(ker_0, vec_0, acc_0);
++    }
++    for (int32_t k = col_loop_cnt * 4; k < rhs_cols; k++) {
++      const int32_t lhs_temp = (*lhs_vec + lhs_offset);
++      lhs_vec++;
++      acc_0 += lhs_temp * (*rhs_0);
++      rhs_0++;
++    }
++    acc_0 = arm_nn_requantize(acc_0, dst_multiplier[0], dst_shift[0]);
++    acc_0 += dst_offset;
++    acc_0 = MAX(acc_0, act_min);
++    acc_0 = MIN(acc_0, act_max);
++    dst[0] = (int8_t)acc_0;
++  }
++#else
++  for (int32_t r = 0; r < rhs_rows; r++) {
++    int32_t acc = bias ? bias[r] : 0;
++    const int8_t* rhs_r = rhs + r * rhs_cols;
++    for (int32_t k = 0; k < rhs_cols; k++) {
++      acc += (lhs[k] + lhs_offset) * rhs_r[k];
++    }
++    acc = arm_nn_requantize(acc, dst_multiplier[r], dst_shift[r]);
++    acc += dst_offset;
++    acc = MAX(acc, act_min);
++    acc = MIN(acc, act_max);
++    dst[r] = (int8_t)acc;
++  }
++#endif
++}
++
+ TfLiteStatus EvalQuantizedInt8(TfLiteContext* context, TfLiteNode* node,
+                                const OpData& data,
+                                const TfLiteEvalTensor* input,
+@@ -211,7 +356,23 @@
    const int32_t* bias_data =
        tflite::micro::GetOptionalTensorData<int32_t>(bias);
  
 -  if (output_dim_count > 2 && data.accum_depth % 4 == 0) {
-+  // TinyML-Pareto patch: per-channel weights take the per-channel 1x1-convolution path
-+  // (arm_nn_mat_mult_nt_t_s8 on Cortex-M4), which requantizes every output neuron with its own scale.
-+  if (data.per_channel || (output_dim_count > 2 && data.accum_depth % 4 == 0)) {
++  // TinyML-Pareto patch: per-channel weights requantize every output neuron with its own scale.
++  if (data.per_channel) {
++    const int8_t* in = tflite::micro::GetTensorData<int8_t>(input);
++    int8_t* out = tflite::micro::GetTensorData<int8_t>(output);
++    for (int b = 0; b < data.batches; b++) {
++      VecMatMultPerChannelS8(
++          in, tflite::micro::GetTensorData<int8_t>(filter), bias_data, out,
++          -data.reference_op_data.input_zero_point,
++          data.reference_op_data.output_zero_point,
++          data.per_channel_output_multiplier, data.per_channel_output_shift,
++          data.accum_depth, data.output_depth,
++          data.reference_op_data.output_activation_min,
++          data.reference_op_data.output_activation_max);
++      in += data.accum_depth;
++      out += data.output_depth;
++    }
++  } else if (output_dim_count > 2 && data.accum_depth % 4 == 0) {
      cmsis_nn_conv_params conv_params;
      conv_params.dilation.h = 1;
      conv_params.dilation.w = 1;
-@@ -230,9 +259,11 @@
-     per_channel_quant_params.shift =
-         const_cast<int32_t*>(data.per_channel_output_shift);
- 
--    for (int i = 0; i < data.output_depth; i++) {
--      per_channel_quant_params.multiplier[i] = quant_params.multiplier;
--      per_channel_quant_params.shift[i] = quant_params.shift;
-+    if (!data.per_channel) {
-+      for (int i = 0; i < data.output_depth; i++) {
-+        per_channel_quant_params.multiplier[i] = quant_params.multiplier;
-+        per_channel_quant_params.shift[i] = quant_params.shift;
-+      }
-     }
- 
-     TF_LITE_ENSURE_EQ(
 diff -ruN a/src/tensorflow/lite/micro/kernels/reduce_common.cpp b/src/tensorflow/lite/micro/kernels/reduce_common.cpp
---- a/src/tensorflow/lite/micro/kernels/reduce_common.cpp
-+++ b/src/tensorflow/lite/micro/kernels/reduce_common.cpp
+--- a/src/tensorflow/lite/micro/kernels/reduce_common.cpp	2026-11-10 08:23:57.281944815 +0530
++++ b/src/tensorflow/lite/micro/kernels/reduce_common.cpp	2026-11-17 18:26:05.774555204 +0530
 @@ -180,6 +180,82 @@
    return kTfLiteOk;
  }

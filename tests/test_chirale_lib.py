@@ -10,7 +10,9 @@ from tools import chirale_lib as cl
 def test_meta_and_labels():
     assert cl.META["version"] == "2.0.0" and (cl.PATCHES / cl.META["patch"]).is_file()
     assert set(cl.META["tree_sha256"]) == {"unpatched", "patched"}
-    assert cl.label("patched", "") == "chirale-2.0.0+int8"
+    assert cl.label("patched", "") == "chirale-2.0.0+int8v2"
+    old = cl.META["superseded"]["int8"]["tree_sha256"]
+    assert cl.label("superseded", old) == "chirale-2.0.0+int8"   # label of energy repeat 4
     assert cl.label("unpatched", "") == "chirale-2.0.0"
     assert cl.label("unknown", "0123456789abcdef") == "unknown-0123456789ab"
 

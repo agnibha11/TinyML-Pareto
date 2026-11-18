@@ -2,9 +2,16 @@
   "library": "Chirale_TensorFLowLite",
   "version": "2.0.0",
   "patch": "chirale-2.0.0-int8.patch",
-  "label": "int8",
+  "label": "int8v2",
   "tree_sha256": {
     "unpatched": "7bf4a9d9067bd0b8a5dc144c698972119a613c7e7e08d06fd2cba303c01c0004",
-    "patched": "658f6806f1a9dc6c33eca23e1171c5c824968632e3119fdbf7c5f410fdbb83a2"
+    "patched": "e14c8bb5ec218dd086cd3498c56282eb69524ebf48c0a61c84deca22c87e916a"
+  },
+  "superseded": {
+    "int8": {
+      "tree_sha256": "658f6806f1a9dc6c33eca23e1171c5c824968632e3119fdbf7c5f410fdbb83a2",
+      "commit": "c59848e",
+      "note": "same outputs; per-channel FC ran through the slower 1x1-convolution path (energy repeat 4)"
+    }
   }
 }

@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """The board's TFLM runtime (Arduino library Chirale_TensorFLowLite 2.0.0) and the TinyML-Pareto int8 patch.
 
-    python tools/chirale_lib.py status    # installed library: patched / unpatched / unknown, with its tree hash
+    python tools/chirale_lib.py status    # installed library: patched / superseded / unpatched / unknown, tree hash
     python tools/chirale_lib.py apply     # apply firmware/patches/chirale-2.0.0-int8.patch to the unpatched library
     python tools/chirale_lib.py revert    # take the patch out again (back to the unpatched 2.0.0 tree)
 
 The patch makes the board's int8 FULLY_CONNECTED (per-channel weights) and MEAN match TensorFlow 2.18 bit for bit;
 the patch file explains both changes. The library is identified by a hash of its whole file tree (relative path and
-sha256 of every file), and firmware/patches/chirale.json lists the hashes of the unpatched and the patched tree.
+sha256 of every file), and firmware/patches/chirale.json lists the hashes of the unpatched and the patched tree,
+plus the trees of earlier patch versions ("superseded": same outputs, kept so old fw_build.csv labels stay readable).
 tools/build_flash.py refuses to build a TFLM bundle unless the tree is the patched one, and writes the label into
 fw_build.csv (column tflm_lib).
 Library folder: $CHIRALE_LIB if set, else <arduino-cli directories.user>/libraries/Chirale_TensorFLowLite.
@@ -48,7 +49,7 @@ def tree_sha256(root: Path) -> str:
 
 
 def state(root: Path | None = None) -> tuple[str, str]:
-    """('patched' | 'unpatched' | 'unknown' | 'missing', tree hash)."""
+    """('patched' | 'superseded' | 'unpatched' | 'unknown' | 'missing', tree hash)."""
     root = root or lib_dir()
     if not root.is_dir():
         return "missing", ""
@@ -56,12 +57,16 @@ def state(root: Path | None = None) -> tuple[str, str]:
     for k, v in META["tree_sha256"].items():
         if t == v:
             return k, t
+    if any(t == v["tree_sha256"] for v in META.get("superseded", {}).values()):
+        return "superseded", t
     return "unknown", t
 
 
 def label(st: str, t: str) -> str:
-    """fw_build.csv tflm_lib value, e.g. chirale-2.0.0+int8 (patched) or chirale-2.0.0 (unpatched)."""
+    """fw_build.csv tflm_lib value, e.g. chirale-2.0.0+int8v2 (patched) or chirale-2.0.0 (unpatched)."""
     base = f"chirale-{META['version']}"
+    if st == "superseded":
+        return base + "+" + next(k for k, v in META["superseded"].items() if v["tree_sha256"] == t)
     return {"patched": base + "+" + META["label"], "unpatched": base}.get(st, f"unknown-{t[:12]}")
 
 
@@ -77,6 +82,11 @@ def check() -> str:
 def _patch(reverse: bool) -> None:
     root = lib_dir(); st, t = state(root)
     want = "patched" if reverse else "unpatched"
+    if st == "superseded":
+        v = next(v for v in META["superseded"].values() if v["tree_sha256"] == t)
+        sys.exit(f"{root} has the older patch {label(st, t)}: revert it first with\n"
+                 f"  git show {v['commit']}:firmware/patches/{META['patch']} | patch -R -p1 -d '{root}'\n"
+                 f"then run '{'revert' if reverse else 'apply'}' again: nothing changed")
     if st != want:
         sys.exit(f"{root} is {st} (tree {t[:12] or '-'}), expected {want}: nothing changed")
     args = ["patch", "-p1", "--no-backup-if-mismatch", "-d", str(root), "-i", str(PATCHES / META["patch"])]
