@@ -44,6 +44,8 @@ results/
 | `hardware/hw_measurements.csv` | one row per measurement window (CONTRACT §6.4) | `tools/measure.py` |
 | `hardware/session_log.csv` | one row per rig session: date, firmware and logger hash, shunt, notes (CONTRACT §6.5) | `tools/measure.py` |
 | `hardware/fw_build.csv` | per bundle and model: flash, static RAM, arena, git hash of the build | `tools/build_flash.py` |
+| `hardware/board_verify.csv` | on-board VERIFY per model on the unpatched Chirale 2.0.0: class agreement and max error against the host (int8 fails) | `tools/verify_board.py` |
+| `hardware/board_verify_int8v2.csv` | the same VERIFY of every TFLM model on the patched library `chirale-2.0.0+int8v2`: all pass | `tools/verify_board.py` |
 
 ## pu/
 
@@ -57,7 +59,7 @@ results/
 | `analysis/summary.json` | every Paderborn number the paper quotes | `ml/pu_analysis.py` |
 | `cascade/gates.csv`, `cascade_models.csv` | detect-then-diagnose gate on Paderborn | `ml/pu_analysis.py` |
 | `hardware/hw_measurements.csv`, `session_log.csv`, `fw_build.csv` | as for CWRU | `tools/measure.py`, `tools/build_flash.py --dataset pu` |
-| `hardware/board_verify.csv` | on-board VERIFY per model: class agreement and max error against the host | `tools/verify_board.py` |
+| `hardware/board_verify.csv`, `board_verify_int8v2.csv` | as for CWRU | `tools/verify_board.py` |
 | `run_config.json` | seeds, protocols and families of the training run | `tools/pu/run_pu.py` |
 
 `pu/logs/` and `pu/progress.json` (worker logs and the live status of a training run) are git-ignored.
@@ -75,3 +77,7 @@ results/
 
 Session = 10 × repeat + bundle; a stopped session continued later gets +100 (for example 131 continues 31). Repeats
 1-3 are complete for both data sets: 80 models each, at least 20 accepted windows per model and repeat.
+Repeats 1-3 ran on the unpatched library, whose int8 outputs are wrong. Repeats 4 and 5 re-measure only the TFLM int8
+models plus fp32 anchors: repeat 4 (CWRU 42-44, Paderborn 44-46) on patch v1 `chirale-2.0.0+int8`, with sessions
+CWRU 42 and Paderborn 45 stopped early; repeat 5 (CWRU 52-54, Paderborn 54-56) on `chirale-2.0.0+int8v2`, complete.
+`session_log.csv` notes name the library of each session; `fw_build.csv` holds the latest (int8v2) builds.
