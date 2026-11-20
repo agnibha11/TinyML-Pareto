@@ -19,6 +19,10 @@ Command line (manual bring-up):
 Parsing is strict. Any ERR reply, a timeout, a malformed line, an unexpected extra line, or an echoed k/j/n that
 differs from what was sent raises DUTError; nothing is guessed. After a timeout the link is resynchronised
 (CONTRACT.md 7.1) before the error is raised, so the next command never receives a stale reply.
+A reply that arrives damaged (an unexpected or empty line, a malformed or missing field) raises DUTReplyError, a
+DUTError subclass, also after a resync: the board did the work but the host lost part of the line. On 18 Nov 2026
+four sessions stopped this way with no USB drop (the start of a reply line was missing). measure.py repeats the
+command (a damaged window is written rejected=1 and measured again); the damaged values are never used.
 """
 from __future__ import annotations
 
@@ -52,6 +56,11 @@ class DUTError(RuntimeError):
     """The board replied ERR, sent something malformed, or did not answer in time."""
 
 
+class DUTReplyError(DUTError):
+    """A reply line arrived damaged (unexpected, empty, or with malformed/missing fields). The link has been
+    resynchronised; repeating the command is safe."""
+
+
 @dataclass(frozen=True)
 class ModelEntry:
     k: int
@@ -63,7 +72,7 @@ def _parse_kv(tokens: list[str], line: str) -> dict[str, str]:
     out = {}
     for t in tokens:
         if not _KV.match(t):
-            raise DUTError(f"malformed key=value token {t!r} in {line!r}")
+            raise DUTReplyError(f"malformed key=value token {t!r} in {line!r}")
         k, v = t.split("=", 1)
         out[k] = v
     return out
@@ -73,7 +82,7 @@ def _ints(d: dict[str, str], *keys: str, line: str) -> dict[str, int]:
     try:
         return {k: int(d[k]) for k in keys}
     except (KeyError, ValueError) as e:
-        raise DUTError(f"missing or non-integer field {e} in {line!r}") from None
+        raise DUTReplyError(f"missing or non-integer field {e} in {line!r}") from None
 
 
 class DUT:
@@ -165,7 +174,12 @@ class DUT:
             if line == "OK" or line.startswith("OK "):
                 return _parse_kv(line.split()[1:], line), extra
             if not allow_extra:
-                raise DUTError(f"{cmd!r}: unexpected line {line!r} before the final OK/ERR")
+                msg = f"{cmd!r}: unexpected line {line!r} before the final OK/ERR"
+                try:
+                    self.resync(max_wait_s=max(5.0, deadline - time.monotonic()))
+                except DUTError:
+                    raise DUTError(f"{msg}; resync also failed - power-cycle the board") from None
+                raise DUTReplyError(f"{msg} (link resynchronised)")
             extra.append(line)
 
     # -- commands (CONTRACT.md 7.2) -------------------------------------------------------------------------------

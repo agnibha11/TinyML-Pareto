@@ -223,6 +223,8 @@ All CSVs: UTF-8, comma-separated, header row, `.` decimal point, no index column
   rejected twice.
 - **Logger fields:** when no valid `W` line arrived (§7.4), `t_window_us_logger` through `ovf` are empty and
   `rejected = 1`.
+- **Board field:** when the board's reply arrived damaged (§7.4), `t_window_us_dut` is empty and `rejected = 1`; the
+  logger fields hold that window's `W` line if one arrived.
 - `timestamp` = ISO-8601 with timezone. `rejected` ∈ {0, 1}.
 - Derived quantities (E per inference, ΔE, CV) are computed downstream from these columns. They are never stored here.
 
@@ -338,6 +340,12 @@ Rules for the line:
 
 A rejected window is retried once. After a second rejection the campaign continues, and that window is re-measured
 before M6 (see §1, rule 7).
+
+A **damaged board reply** (an empty or unexpected line, or a malformed or missing field; seen four times on 18 Nov 2026
+with no USB drop, the start of the line missing) is never parsed for values. `dut.py` resynchronises the link (§7.1)
+and raises `DUTReplyError`. For a windowed command, `measure.py` still reads that window's `W` line, so it cannot pair
+with the next window, writes the attempt as rejected, and measures the window again. Setup commands (`SEL`, `INPUT`,
+`LAT`, the `E2E 1` probe) are repeated, at most twice.
 
 ### 7.5 What counts as each phase
 

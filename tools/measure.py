@@ -34,7 +34,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 from tools.contract import HW_COLUMNS, MAX_DURATION_MISMATCH, SESSION_COLUMNS, parse_model_id  # noqa: E402
-from tools.dut import DUT, DUTError, ModelEntry  # noqa: E402
+from tools.dut import DUT, DUTError, DUTReplyError, ModelEntry  # noqa: E402
 
 N_INPUTS = 5
 # CONTRACT.md 7.4: exact keys in exact order; integers for rise_us, fall_us, n, ovf
@@ -45,7 +45,8 @@ W_DEADLINE_S = 3.0   # logger must print the W line within this time after the b
 # LAT's per-call timing (FRONT -0.3 %, E2E -1.4 % on the rig, 14 Nov 2026), and sizing from the median left 21 of
 # 62 windows under 10 s (forests: input-dependent latency, 29.5-69.8 us for one model).
 WINDOW_MARGIN = 1.05
-MAX_ATTEMPTS = 3     # per window: logger rejections, duration mismatches and too-short windows all count
+MAX_ATTEMPTS = 3     # per window: logger rejections, duration mismatches, too-short windows and damaged replies all count
+REPLY_RETRIES = 2    # setup commands (SEL, INPUT, LAT, the E2E 1 probe): repeats after a damaged reply (dut.DUTReplyError)
 LOGGER_RECONNECT_S = 180.0   # after the ESP32 drops off USB, wait this long for it to come back before aborting
 # LAT repetitions per stored window: clamp(ceil(60 s / t), 11, 101) with t = front end + inference from an E2E 1
 # probe (CONTRACT.md 7.2). Fast models keep 101; cnn-r0-w200d4-fp32 (20.9 s per call) gets 11 instead of 101,
@@ -297,10 +298,26 @@ def measure_window(dut, logger, out: CsvAppender, base: dict, mode: str, n: int,
     MAX_DURATION_MISMATCH or ovf > 0, or when the window is shorter than min_us (energy windows must last >= 10 s,
     CONTRACT.md 7.3): then N is scaled up for the next attempt. Still rejected after the last attempt: the window
     is left for re-measurement and the campaign continues.
+    A damaged board reply (DUTReplyError) is also a rejected attempt: the window ran, so the logger's W line for it
+    is read and written into the rejected row (empty t_window_us_dut); otherwise it could pair with the next window.
     """
     for attempt in range(1, MAX_ATTEMPTS + 1):
         logger.arm()
-        reply = call(n)
+        try:
+            reply = call(n)
+        except DUTReplyError as e:
+            row = {**base, "mode": mode, "N": n, "t_window_us_dut": "",
+                   "P_idle_uW": "" if p_idle_uw is None else f"{p_idle_uw:.3f}", "timestamp": now_iso(), "rejected": 1}
+            try:
+                w = logger.next_window()
+                row.update({"t_window_us_logger": w.duration_us, "E_window_uJ": f"{w.E_uJ:.3f}",
+                            "P_mean_uW": f"{w.Pmean_uW:.3f}", "P_std_uW": f"{w.Pstd_uW:.3f}",
+                            "V_bus_mV": f"{w.Vbus_mV:.1f}", "n_samples": w.n, "ovf": w.ovf})
+            except (TimeoutError, ValueError, LoggerDropped):
+                pass
+            out.write(row)
+            print(f"    {mode} rejected (damaged board reply: {e}), attempt {attempt}/{MAX_ATTEMPTS}", flush=True)
+            continue
         t_dut = reply["us"]
         row = {**base, "mode": mode, "N": n, "t_window_us_dut": t_dut,
                "P_idle_uW": "" if p_idle_uw is None else f"{p_idle_uw:.3f}", "timestamp": now_iso()}
@@ -329,6 +346,17 @@ def measure_window(dut, logger, out: CsvAppender, base: dict, mode: str, n: int,
     return None
 
 
+def retry_reply(fn, *args):
+    """Call a setup command; repeat it (up to REPLY_RETRIES times) if its reply arrived damaged."""
+    for attempt in range(REPLY_RETRIES + 1):
+        try:
+            return fn(*args)
+        except DUTReplyError as e:
+            if attempt == REPLY_RETRIES:
+                raise
+            print(f"    damaged board reply ({e}); repeating ({attempt + 1}/{REPLY_RETRIES})", flush=True)
+
+
 def run_session(dut, logger, out: CsvAppender, session: int, window_s: float, models: list[int] | None,
                 sleep_ms: int, allow_nonconforming_ids: bool = False) -> None:
     fw = dut.ping()["bench"]
@@ -342,14 +370,14 @@ def run_session(dut, logger, out: CsvAppender, session: int, window_s: float, mo
 
     for e in todo:
         t0 = time.monotonic()
-        dut.sel(e.k)
+        retry_reply(dut.sel, e.k)
         # probe: one front end + inference (E2E 1) to size LAT; its D2 window is dropped by the next logger.arm()
-        t_call = dut.e2e(1)["us"]
+        t_call = retry_reply(dut.e2e, 1)["us"]
         if t_call > LAT_MAX_CALL_S * 1e6:
             print(f"  [{e.k}] {e.model_id}: SKIPPED, one call takes {t_call / 1e6:.1f} s > {LAT_MAX_CALL_S:.0f} s "
                   "(the DWT cycle counter would wrap during LAT)")
             continue
-        lat = dut.lat(lat_reps(t_call), t_call)
+        lat = retry_reply(dut.lat, lat_reps(t_call), t_call)
         # size from the fastest stored input (LAT's min over the 5 per-input medians) so every input's window is
         # >= window_s; slower inputs just get longer windows
         inf_us = lat.get("inf_min_us", lat["inf_med_us"])
@@ -363,7 +391,7 @@ def run_session(dut, logger, out: CsvAppender, session: int, window_s: float, mo
               f" (LAT reps {lat.get('reps', 101)})")
         min_us = window_s * 1e6
         for j in range(N_INPUTS):
-            dut.input(j)
+            retry_reply(dut.input, j)
             base = {"model_id": e.model_id, "session": session, "input_j": j, "fw_hash": fw,
                     "logger_hash": logger.hash}
             w_idle = measure_window(dut, logger, out, {**base, "input_j": ""}, "IDLE", 0,

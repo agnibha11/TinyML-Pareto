@@ -335,3 +335,80 @@ def test_file_table_matches_classes_json():
     assert (ft[ft.fault_type == "N"].fs_original == 48_000).all()
     assert set(ft.class4) == {0, 1, 2, 3}
     assert ft.groupby("class10").load_hp.apply(list).map(lambda x: x == [0, 1, 2, 3]).all()
+
+
+def test_damaged_reply_resyncs_and_is_typed(board):
+    """18 Nov 2026: the start of a reply line was lost (no USB drop). The host raises DUTReplyError after a resync,
+    so the next command gets its own reply; nothing from the damaged line is used."""
+    from tools.dut import DUTReplyError
+    dut, _ = board
+    real = dut._readline
+    for damage in (lambda s: s[5:], lambda s: ""):      # tail of the line only; empty line
+        calls = {"n": 0}
+
+        def flaky(deadline, damage=damage, calls=calls):
+            calls["n"] += 1
+            line = real(deadline)
+            return damage(line) if calls["n"] == 1 else line
+        dut._readline = flaky
+        with pytest.raises(DUTReplyError, match="unexpected line .*resynchronised"):
+            dut.sel(0)
+        dut._readline = real
+        assert dut.sel(0) == {"k": 0, "arena_used": 0}
+        assert dut.ping()["bench"] == "sim"
+
+
+def test_measure_window_damaged_reply_is_a_rejected_attempt():
+    """A damaged reply to a windowed command: one rejected row that carries the logger's W line of that window
+    (so it can never pair with the next window), then a normal retry."""
+    from tools.dut import DUTReplyError
+    from tools.measure import Window, measure_window
+
+    class Board:
+        calls = 0
+
+        def run(self, n):
+            Board.calls += 1
+            if Board.calls == 1:
+                raise DUTReplyError("'RUN 201': unexpected line '' before the final OK/ERR (link resynchronised)")
+            return {"n": n, "us": 10_000_000}
+
+    class Log:
+        windows = 0
+
+        def arm(self):
+            pass
+
+        def next_window(self, timeout_s=3.0):
+            Log.windows += 1
+            return Window(0, 10_000_000, 10_000, 240_000.0, 24_000.0, 100.0, 5000.0, 0)
+
+    class Rows:
+        def __init__(self):
+            self.rows = []
+
+        def write(self, row):
+            self.rows.append(row)
+
+    out = Rows()
+    w = measure_window(Board(), Log(), out, {"model_id": "m", "session": 1, "input_j": 0}, "RUN", 1000, Board().run,
+                       20_000.0, min_us=10_000_000)
+    assert w is not None and Log.windows == 2
+    assert [r["rejected"] for r in out.rows] == [1, 0]
+    assert out.rows[0]["t_window_us_dut"] == "" and out.rows[0]["t_window_us_logger"] == 10_000_000
+
+
+def test_setup_commands_repeat_after_a_damaged_reply():
+    from tools.dut import DUTReplyError
+    from tools.measure import REPLY_RETRIES, retry_reply
+    state = {"n": 0}
+
+    def flaky(k, fail):
+        state["n"] += 1
+        if state["n"] <= fail:
+            raise DUTReplyError("damaged")
+        return {"k": k}
+    assert retry_reply(flaky, 3, REPLY_RETRIES) == {"k": 3} and state["n"] == REPLY_RETRIES + 1
+    state["n"] = 0
+    with pytest.raises(DUTReplyError):
+        retry_reply(flaky, 3, REPLY_RETRIES + 1)
