@@ -79,5 +79,8 @@ Session = 10 × repeat + bundle; a stopped session continued later gets +100 (fo
 1-3 are complete for both data sets: 80 models each, at least 20 accepted windows per model and repeat.
 Repeats 1-3 ran on the unpatched library, whose int8 outputs are wrong. Repeats 4 and 5 re-measure only the TFLM int8
 models plus fp32 anchors: repeat 4 (CWRU 42-44, Paderborn 44-46) on patch v1 `chirale-2.0.0+int8`, with sessions
-CWRU 42 and Paderborn 45 stopped early; repeat 5 (CWRU 52-54, Paderborn 54-56) on `chirale-2.0.0+int8v2`, complete.
+CWRU 42 and Paderborn 45 stopped early; repeats 5-7 (CWRU 52-54, 62-64, 72-74; Paderborn 54-56, 64-66, 74-76) on
+`chirale-2.0.0+int8v2`, complete: 29 int8 models + 6 fp32 anchors per data set, 3 repeats each. Four repeat-6/7
+sessions (CWRU 63, 74; Paderborn 74, 76) stopped on a damaged serial reply; their remaining models are in the
+continuations CWRU 163, 174 and Paderborn 174, 176 (partial rows of the two models cut mid-way were removed).
 `session_log.csv` notes name the library of each session; `fw_build.csv` holds the latest (int8v2) builds.
