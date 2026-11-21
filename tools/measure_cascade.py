@@ -38,8 +38,8 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 from tools.contract import CASCADE_COLUMNS, SESSION_COLUMNS  # noqa: E402
 from tools.dut import DUT, DUTError  # noqa: E402
-from tools.measure import (WINDOW_MARGIN, CsvAppender, Logger, Window, measure_window, now_iso,  # noqa: E402
-                           retry_reply)
+from tools.measure import (W_DEADLINE_S, WINDOW_MARGIN, CsvAppender, Logger, LoggerDropped,  # noqa: E402
+                           Window, measure_window, now_iso, retry_reply)
 
 N_INPUTS = 5
 STREAM_MODEL = {"cwru": "rf-r2-t25d10-fp32", "pu": "mlp-r4-h32-fp32"}   # most accurate on the deployed protocol (§4.6)
@@ -51,6 +51,8 @@ G6_CALIB = 128          # Paderborn gate 6 (pre-registration Deviation 4)
 GATES = {"cwru": (1, 2, 3, 4, 5), "pu": (1, 2, 3, 4, 5, 6)}
 DEFAULT_GATE = {"cwru": {"cascade": 3, "duty": 5}, "pu": {"cascade": 6, "duty": 6}}   # Deviation 4: S-2 uses G6
 ANCHOR = {"mode": "GATE", "gate": 1, "input_j": 0}
+LOGGER_MIN_WINDOW_US = 100_000   # logger/logger.ino MIN_WINDOW_US: shorter D2 windows get no W line
+PROBE2_US = 500_000              # fast calls: a second probe of ~0.5 s sizes N (pilot 80: 1-call probes gave 9.5-9.9 s)
 
 
 class SimLogger:
@@ -108,6 +110,19 @@ class Session:
         self.p_idle = None
 
     # -- board state, outside any window --------------------------------------------------------------------------
+    def unmeasured(self, fn, *args):
+        """A timed command that is not a measurement (probe, setup CALIB). Its D2 window still makes the logger print a
+        W line if it lasts >= 100 ms, a moment after the board's reply; read and drop that line here, or it pairs with
+        the next measured window (pilot 80: 22 rejected first attempts)."""
+        self.logger.arm()
+        r = retry_reply(fn, *args)
+        if r.get("us", 0) >= 0.9 * LOGGER_MIN_WINDOW_US:
+            try:
+                self.logger.next_window(W_DEADLINE_S)
+            except (TimeoutError, ValueError, LoggerDropped):
+                pass
+        return r
+
     def setup(self, c: dict) -> None:
         d = self.dut
         if c.get("model_id") and self.state["sel"] != c["model_id"]:
@@ -124,7 +139,7 @@ class Session:
         # condition that uses a self-calibrating gate, unless it is already in the session's state
         want = {5: G5_CALIB, 6: G6_CALIB}.get(g) if c["mode"] != "CALIB" else None
         if want and self.state[f"cal{g}"] != want:
-            retry_reply(d.calib, want, 1)           # its D2 window is dropped by the next logger.arm()
+            self.unmeasured(d.calib, want, 1)
             self.state[f"cal{g}"] = want
         if c["mode"] == "CALIB":
             self.state[f"cal{g}"] = c["arg"]
@@ -176,8 +191,11 @@ class Session:
         call = self.call(c)
         if m == "FRONT":
             self.dut.fe_us = None
-        t1 = retry_reply(call, 1)["us"]               # probe: one call (its window is dropped by the next arm())
+        t1 = self.unmeasured(call, 1)["us"]          # probe: one call
         self.per = max(float(t1), 1.0)
+        if self.per < PROBE2_US / 10:                  # fast calls: one call overstates the per-call time
+            n2 = math.ceil(PROBE2_US / self.per)
+            self.per = max(self.unmeasured(call, n2)["us"] / n2, 1.0)
         if m == "FRONT":
             self.dut.fe_us = self.per
         n = max(1, math.ceil(self.window_s * WINDOW_MARGIN * 1e6 / self.per))
@@ -263,6 +281,7 @@ def main() -> int:
     s = Session(dut, logger, out, session, window_s, models)
     print(f"cascade session {session} ({a.dataset}): firmware {s.fw}, blocks {todo}, seed {seed}")
     try:
+        s.measure({"mode": "IDLE"})    # so the start anchor has an idle reference (session 81's had none)
         s.measure(ANCHOR)
         for i, b in enumerate(todo):
             s.block(b, blocks[b])
