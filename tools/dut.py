@@ -49,6 +49,8 @@ WINDOW_MARGIN_S = 5.0        # windowed commands: 1.5 x expected length + 5 s
 MAX_WINDOW_S = 600.0         # longest window the firmware accepts; used when latency is not known yet
 RESYNC_SILENCE_S = 0.2
 VERIFY_BYTES = 1024 * 4
+GVERIFY_BYTES = 1024 * 2     # CONTRACT.md 7.6: one int16 window
+CASCADE_GATES = {1: "sup", 2: "healthy", 3: "either", 4: "either2", 5: "selfcal", 6: "selfcal_r2"}
 _KV = re.compile(r"^[a-z_]+=[^\s=]+$")
 
 
@@ -279,6 +281,87 @@ class DUT:
             raise DUTError(f"malformed VERIFY reply {kv}: {e}") from None
         return cls, out
 
+    # -- cascade commands (CONTRACT.md 7.6, cascade bundles only) -----------------------------------------------------
+    def temp(self) -> float:
+        """Die temperature in degrees C (nRF52840 TEMP, 0.25 C steps)."""
+        kv, _ = self.command("TEMP")
+        return _ints(kv, "temp_centi_c", line="TEMP")["temp_centi_c"] / 100.0
+
+    def gsel(self, g: int) -> str:
+        kv, _ = self.command(f"GSEL {int(g)}")
+        out = _ints(kv, "g", line="GSEL")
+        if out["g"] != g or kv.get("name") != CASCADE_GATES.get(g):
+            raise DUTError(f"GSEL {g} answered {kv}")
+        return kv["name"]
+
+    def gverify(self, window_int16: np.ndarray) -> dict:
+        """fx_r1 and every base gate on one int16 window. Floats come back as exact float32 values."""
+        w = np.ascontiguousarray(window_int16, dtype="<i2").ravel()
+        if w.size != 1024:
+            raise ValueError(f"window must have 1024 samples, got {w.size}")
+        kv, _ = self.command("GVERIFY", timeout_s=VERIFY_TIMEOUT_S, payload=w.tobytes())
+        try:
+            out = _ints(kv, "sup", "leaf", "healthy", "sc", line="GVERIFY")
+            out["d"], out["dsc"] = f32_from_hex(kv["d"]), f32_from_hex(kv["dsc"])
+            out["fx"] = np.array([f32_from_hex(h) for h in kv["fx"].split(",")], dtype=np.float32)
+        except (KeyError, ValueError) as e:
+            raise DUTReplyError(f"malformed GVERIFY reply {kv}: {e}") from None
+        if out["fx"].size != 10:
+            raise DUTReplyError(f"GVERIFY returned {out['fx'].size} fx values")
+        if "sr" in kv:   # Paderborn bundle: gate 6
+            try:
+                out["sr"], out["dsr"] = int(kv["sr"]), f32_from_hex(kv["dsr"])
+                out["hb"] = np.array([f32_from_hex(h) for h in kv["hb"].split(",")], dtype=np.float32)
+            except (KeyError, ValueError) as e:
+                raise DUTReplyError(f"malformed GVERIFY gate-6 fields {kv}: {e}") from None
+        return out
+
+    def _cascade_cmd(self, cmd: str, n: int, timeout_s: float, keys: tuple[str, ...]) -> tuple[dict, dict]:
+        kv, _ = self.command(cmd, timeout_s=timeout_s)
+        out = _ints(kv, *keys, line=cmd)
+        if out["n"] != n:
+            raise DUTError(f"{cmd} answered with n={out['n']}")
+        return out, kv
+
+    def _t(self, calls: float, per_call_us: float | None) -> float:
+        """1.5 x expected + 5 s (one warm-up call included); MAX_WINDOW_S + 5 s while the duration is unknown."""
+        return MAX_WINDOW_S + WINDOW_MARGIN_S if per_call_us is None else \
+            (calls + 1) * per_call_us / 1e6 * 1.5 + WINDOW_MARGIN_S
+
+    def gate(self, n: int, per_call_us: float | None = None) -> dict:
+        return self._cascade_cmd(f"GATE {int(n)}", n, self._t(n, per_call_us), ("n", "us", "alarm"))[0]
+
+    def cascade(self, n: int, m: int, per_call_us: float | None = None) -> dict:
+        return self._cascade_cmd(f"CASCADE {int(n)} {int(m)}", n, self._t(n, per_call_us),
+                                 ("n", "us", "alarms", "esc", "cls"))[0]
+
+    def stream(self, n: int, s: int, per_pass_us: float | None = None) -> dict:
+        out, kv = self._cascade_cmd(f"STREAM {int(n)} {int(s)}", n, self._t(n, per_pass_us),
+                                    ("n", "us", "windows", "alarms", "esc"))
+        try:
+            out["seq"] = int(kv["seq"], 16)
+        except (KeyError, ValueError):
+            raise DUTReplyError(f"STREAM reply without a valid seq: {kv}") from None
+        return out
+
+    def calib(self, n: int, r: int, per_call_us: float | None = None) -> dict:
+        out, kv = self._cascade_cmd(f"CALIB {int(n)} {int(r)}", n, self._t(r, per_call_us), ("n", "r", "us"))
+        if out["r"] != r:
+            raise DUTError(f"CALIB {n} {r} answered with r={out['r']}")
+        try:
+            out["thr"] = f32_from_hex(kv["thr"])
+        except (KeyError, ValueError):
+            raise DUTReplyError(f"CALIB reply without a valid thr: {kv}") from None
+        return out
+
+    def duty(self, t_ms: int, n: int) -> dict:
+        timeout = 1.5 * t_ms * n / 1000 + WINDOW_MARGIN_S + 30.0   # + one stage-2 warm-up
+        return self._cascade_cmd(f"DUTY {int(t_ms)} {int(n)}", n, timeout,
+                                 ("n", "us", "alarms", "esc", "overrun"))[0]
+
+    def fxfe(self, n: int, p: int, per_call_us: float | None = None) -> dict:
+        return self._cascade_cmd(f"FXFE {int(n)} {int(p)}", n, self._t(n, per_call_us), ("n", "us"))[0]
+
     # -- helpers --------------------------------------------------------------------------------------------------
     @staticmethod
     def n_for(window_s: float, per_call_us: float) -> int:
@@ -286,6 +369,21 @@ class DUT:
         if per_call_us <= 0:
             raise ValueError("latency must be positive")
         return max(1, math.ceil(window_s * 1e6 / per_call_us))
+
+
+def f32_from_hex(h: str) -> float:
+    """CONTRACT.md 7.6 <hex>: the 8-digit IEEE-754 bit pattern of a float32."""
+    if len(h) != 8:
+        raise ValueError(f"not an 8-digit float32 bit pattern: {h!r}")
+    return float(np.array([int(h, 16)], dtype=np.uint32).view(np.float32)[0])
+
+
+def fnv1a(bits) -> int:
+    """32-bit FNV-1a over one byte per window (the STREAM seq field)."""
+    h = 2166136261
+    for b in bits:
+        h = ((h ^ (int(b) & 0xFF)) * 16777619) & 0xFFFFFFFF
+    return h
 
 
 def _cli(argv: list[str]) -> int:

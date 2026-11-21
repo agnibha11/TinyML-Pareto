@@ -43,4 +43,20 @@ const bench_model_t g_models[] = {
 };
 const int g_n_models = (int)(sizeof g_models / sizeof g_models[0]);
 
+#ifdef BENCH_CASCADE
+// CASCADE m = 2 on the simulator: the stub's front end is a copy, so "reuse" copies too and overwrites the first 10
+// features with the gate's fx_r1 output.
+static void stub_reuse(const float *x, const float *r1, float *feat) {
+  for (int i = 0; i < BENCH_WIN; ++i) feat[i] = x[i];
+  for (int i = 0; i < 10; ++i) feat[i] = r1[i];
+}
+const bench_reuse_fe_t g_model_reuse[] = {stub_reuse};
+#ifdef CASC_HAS_G6_STUB   // Paderborn cascade simulator: gate 6 hands its R2 features over
+static void stub_reuse_r2(const float *h, float *feat) {
+  for (int i = 0; i < 24; ++i) feat[i] = h[i];
+}
+const bench_reuse_r2_t g_model_reuse_r2[] = {stub_reuse_r2};
+#endif
+#endif
+
 #endif  // BUNDLE_ID

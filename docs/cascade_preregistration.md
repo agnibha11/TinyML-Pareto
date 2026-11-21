@@ -83,7 +83,7 @@ so. Paderborn keeps P4 out of the selection and uses it as the held-out check (�
 | G3 `either` | fx_r1 | G1 OR G2 | 1-of-1 | both |
 | G4 `either2` | fx_r1 | G1 OR G2 | 2-of-2 | both |
 | G5 `selfcal` | fx_r1 | G2 with the threshold rescaled from N on-device healthy windows (§4.4) | 1-of-1 | both |
-| G6 `pu_best` | chosen by the rule below | | | Paderborn |
+| G6 `selfcal_r2` | fx_r2_hyb (R1 + 14 log bands) | G5 on 23 features, N = 128 (chosen after the study: Deviations, 4) | 1-of-1 | Paderborn |
 
 G1–G4 are the paper's current gates, so the host and board numbers can be compared one to one. G1 is
 `ml/cascade.py`'s `sup`: a tree on all 10 fx_r1 features. On CWRU P2 fold 0 it splits on the window mean.
@@ -169,8 +169,21 @@ Together these span three decades of E₂.
 - **Flash.** The eight models take ~434 KB, the TFLM base ~320 KB, and the window pool (§4.6) 190 KB, against a
   983 KB limit. If the cascade bundle does not link, `cnn-r0-w200d4-fp32` (332 KB) is replaced by the most accurate
   P3 CNN that fits, before any data is taken.
-- **Paderborn.** The same rule (best of each family on P3 and P4) picks Paderborn's stage-2 set, after the
-  Paderborn design study.
+- **Paderborn.** The same rule (best of each family on P3 and P4) picks Paderborn's stage-2 set. Result of the
+  Paderborn design study (21 Nov), measured board E2E:
+
+  | Protocol | Family | Model | E2E (µJ) |
+  |---|---|---|---|
+  | P3 | DT | dt-r2-d6-fp32 | 57 |
+  | P3 | CNN | cnn-r0-w025d4-fp32 | 2 160 |
+  | P3 | RF | rf-r2-t25d6-fp32 | 58 |
+  | P3 | MLP | mlp-r4-h32-fp32 | 93 |
+  | P4 | RF | rf-r4-t25d6-fp32 | 87 |
+  | P4 | CNN | cnn-r0-w025d2-fp32 | 1 140 |
+  | P4 | DT | dt-r1-d4-fp32 | 14 |
+  | P4 | MLP | mlp-r3-h128-fp32 | 304 |
+
+  Paderborn's stream model is `mlp-r4-h32-fp32`, the most accurate on P3.
 
 ### 4.6 Streams
 
@@ -268,4 +281,46 @@ CNNs therefore carry a ±2 % systematic, which the RQ3 and RQ4 tolerances must b
 
 ## Deviations
 
-None yet.
+Deviations 1–3 were recorded on 21 Nov 2026, before the Paderborn design study ran. Deviation 4 was recorded after
+it ran. All four come before any cascade energy window.
+
+1. **§4.2 rule step 3, "Paderborn headline stage-2 model".** This was not defined. It is now the paper's Paderborn
+   P3 best model, `mlp-r4-h32-fp32` (`results/pu/analysis/summary.json`, P3 `best_model`), i.e. the most accurate
+   model on the protocol the board runs.
+2. **Paderborn recordings in the design study.** The Paderborn manifest has no `file_id`.
+   - **Confirmation:** k-of-n runs over consecutive test windows of one recording (bearing, condition, recording).
+   - **Self-calibration:** it calibrates on the first N windows, in time order, of one healthy bearing at one
+     operating condition (its five recordings in a row). It is evaluated on that bearing and condition's test
+     windows after the calibration span, plus every fault test window. One Paderborn recording has only about 46
+     windows, too few for N = 32 with anything left to evaluate.
+3. **Firmware (CONTRACT v1.1).**
+   - `FXFE` offers fx_r1 and the two hybrid front ends only. The q15/q31 paths do not link with the board's
+     CMSIS-DSP 5.7.0, and S-6 needs only fx_r1 and the hybrids.
+   - `CASCADE` runs stage 2 on the float stored input that `E2E` measures, so RQ3's Δ contains only the cascade's
+     own overhead. `STREAM` and `DUTY` convert the int16 window to float first, as a deployment would.
+4. **G6 (21 Nov 2026, after the Paderborn design study; a post-hoc choice).**
+   - **What the rule gave.** Applied as written, the §4.2 rule picks `fxr1 tree1 1of1`. On Paderborn P3, every gate
+     that reaches mean TPR ≥ 0.98 has FPR 1.0 (8 of 45). So the chosen gate escalates every window, and the cascade
+     would cost more than the headline model alone: 102 µJ against 93 µJ per window at π = 1 %. The rule searched
+     front ends, detectors and confirmations, but not the design study's fourth axis, self-calibration (§4.1).
+   - **What replaces it.** G6 is the self-calibrating Mahalanobis gate on `hyb_r2`:
+     - features: the 9 fx_r1 gate features plus the 14 log band powers (23 features, `fx_r2_hyb` on the board);
+     - calibrated on N = 128 healthy windows.
+   - **How N was chosen.** The rule's own cost criterion, the lowest E(π = 1 %), among the N that fit the
+     Paderborn bundle's flash:
+
+     | N | P3 TPR | P3 FPR | E(π = 1 %) | P4 TPR | P4 FPR |
+     |---|---|---|---|---|---|
+     | 64 | 0.994 | 0.032 | ≈ 61 µJ | 1.0 | 0.051 |
+     | 128 | 0.989 | 0.012 | ≈ 59 µJ | 1.0 | 0.016 |
+
+     The P4 columns are held out.
+   - **In the paper,** G6 is reported as chosen after the study. `fxr1 tree1` is reported as the rule's result, with
+     its E(π = 1 %).
+   - **On the board.**
+     - The Paderborn pool holds the first 128 windows, in time order, of the first healthy (bearing, condition)
+       of the P3 fold-0 test split.
+     - `CALIB` with gate 6 selected calibrates G6. The factory part of G6 is only its ρ, from the training split's
+       `hyb_r2` Mahalanobis.
+     - Paderborn S-2 uses G6, so `CASCADE` m = 2 reuses the whole R2 front end for the R2 models (RQ6).
+

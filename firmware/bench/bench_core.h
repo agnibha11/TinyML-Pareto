@@ -26,5 +26,14 @@ typedef struct {
 extern const bench_model_t g_models[];
 extern const int g_n_models;
 
+// Cascade bundles only (CONTRACT.md 7.6, CASCADE m = 2): the model's front end with its R1 part taken from the gate's
+// fx_r1 features instead of being computed again. One entry per g_models entry, 0 for a model without an R1 part.
+typedef void (*bench_reuse_fe_t)(const float *window, const float *fx_r1, float *features);
+extern const bench_reuse_fe_t g_model_reuse[];
+// Paderborn cascade bundle (gate 6 computes the whole R2 front end, fx_r2_hyb): an R2 model's features from those 24
+// values (z-score only). 0 for every other model.
+typedef void (*bench_reuse_r2_t)(const float *r2_24, float *features);
+extern const bench_reuse_r2_t g_model_reuse_r2[];
+
 void bench_setup(void);  // call once from setup()
 void bench_poll(void);   // call repeatedly from loop(); handles at most one complete command per call

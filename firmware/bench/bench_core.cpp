@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "bench_internal.h"
 #include "hal.h"
 #include "stored_inputs.h"
 
@@ -38,14 +39,25 @@ static uint32_t s_reps[BENCH_LAT_REPS];
 // ---------------------------------------------------------------------------------------------------------------
 // Output helpers
 // ---------------------------------------------------------------------------------------------------------------
-static void reply(const char *fmt, ...) {
+static void vreply(const char *fmt, va_list ap) {
   char buf[256];
-  va_list ap;
-  va_start(ap, fmt);
   vsnprintf(buf, sizeof buf, fmt, ap);
-  va_end(ap);
   bhal_write(buf);
   bhal_write("\r\n");
+}
+
+static void reply(const char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  vreply(fmt, ap);
+  va_end(ap);
+}
+
+void bench_reply(const char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  vreply(fmt, ap);
+  va_end(ap);
 }
 
 // Float formatting without printf("%f") (newlib-nano may be built without float printf).
@@ -106,6 +118,12 @@ static const bench_model_t *selected(void) {
   if (s_sel < 0) { reply("ERR NOSEL select a model with SEL <k>"); return 0; }
   return &g_models[s_sel];
 }
+
+// For bench_cascade.cpp (bench_internal.h).
+const bench_model_t *bench_selected(void) { return selected(); }
+int bench_selected_index(void) { return s_sel; }
+int bench_input_index(void) { return s_input; }
+void bench_drain_input(void) { drain_input(); }
 
 // ---------------------------------------------------------------------------------------------------------------
 // Commands
@@ -249,24 +267,35 @@ static void cmd_verify(void) {
 // Dispatcher
 // ---------------------------------------------------------------------------------------------------------------
 static void dispatch(char *line) {
-  char *argv[2] = {0, 0};
+  char *argv[3] = {0, 0, 0};
   int argc = 0;
   int too_many = 0;
   for (char *tok = strtok(line, " "); tok; tok = strtok(0, " ")) {
-    if (argc == 2) { too_many = 1; break; }
+    if (argc == 3) { too_many = 1; break; }
     argv[argc++] = tok;
   }
   if (argc == 0) { reply("ERR UNKNOWN empty line"); return; }
   const char *cmd = argv[0];
   static const char *const known[] = {"PING", "LIST", "SEL", "INPUT", "IDLE", "SLEEP",
                                       "RUN", "FRONT", "E2E", "LAT", "VERIFY"};
-  int is_known = 0;
+  // CONTRACT.md 7.6: implemented by cascade bundles only (bench_cascade.cpp); any other build replies ERR NOTIMPL.
+  static const char *const cascade[] = {"TEMP", "GSEL", "GVERIFY", "GATE", "CASCADE", "STREAM", "CALIB", "DUTY",
+                                        "FXFE"};
+  int is_known = 0, is_cascade = 0;
   for (unsigned i = 0; i < sizeof known / sizeof known[0]; ++i) is_known |= !strcmp(cmd, known[i]);
-  if (!is_known) { reply("ERR UNKNOWN %s", cmd); return; }  // unknown wins over argument errors
-  uint32_t a = 0;
+  for (unsigned i = 0; i < sizeof cascade / sizeof cascade[0]; ++i) is_cascade |= !strcmp(cmd, cascade[i]);
+  if (!is_known && !is_cascade) { reply("ERR UNKNOWN %s", cmd); return; }  // unknown wins over argument errors
+  if (too_many || (!is_cascade && argc == 3)) { reply("ERR ARG too many arguments"); return; }
+  uint32_t args[2] = {0, 0};
+  for (int i = 1; i < argc; ++i) {
+    if (!parse_u32(argv[i], &args[i - 1])) { reply("ERR ARG not an unsigned integer: %s", argv[i]); return; }
+  }
+  if (is_cascade) {
+    bench_cascade_command(cmd, argc - 1, args);
+    return;
+  }
+  const uint32_t a = args[0];
   const int has_arg = argc >= 2;
-  if (too_many) { reply("ERR ARG too many arguments"); return; }
-  if (has_arg && !parse_u32(argv[1], &a)) { reply("ERR ARG not an unsigned integer: %s", argv[1]); return; }
 
   // LAT takes an optional repetition count (default BENCH_LAT_REPS).
   if (!strcmp(cmd, "LAT")) {
@@ -306,6 +335,7 @@ void bench_setup(void) {
   s_overflow = 0;
   s_sel = -1;
   s_input = 0;
+  bench_cascade_setup();
 }
 
 void bench_poll(void) {

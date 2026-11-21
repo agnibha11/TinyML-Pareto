@@ -65,3 +65,5 @@ void bhal_write(const char *s) {
     len -= (size_t)w;
   }
 }
+
+int32_t bhal_temp_cC(void) { return 2500; }  // a fixed 25.00 C

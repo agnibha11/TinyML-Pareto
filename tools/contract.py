@@ -14,7 +14,7 @@ import re
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-CONTRACT_VERSION = "1.0-rc4"
+CONTRACT_VERSION = "1.1"
 
 # §2
 CLASSES_JSON = REPO / "handoff" / "classes.json"
@@ -50,7 +50,14 @@ SESSION_COLUMNS = ["session", "date", "room_temp_C", "usb_port", "cable", "shunt
 
 # §7
 SERIAL_COMMANDS = ("PING", "LIST", "SEL", "INPUT", "IDLE", "SLEEP", "RUN", "FRONT", "E2E", "LAT", "VERIFY")
-ERR_CODES = ("UNKNOWN", "ARG", "NOSEL", "RANGE", "ALLOC", "INVOKE", "IO", "NOTIMPL")
+ERR_CODES = ("UNKNOWN", "ARG", "NOSEL", "RANGE", "ALLOC", "INVOKE", "IO", "NOTIMPL", "NOCAL")
+# §7.6 (cascade bundles only)
+CASCADE_COMMANDS = ("TEMP", "GSEL", "GVERIFY", "GATE", "CASCADE", "STREAM", "CALIB", "DUTY", "FXFE")
+CASCADE_MODES = ("IDLE", "SLEEP", "GATE", "CASCADE", "STREAM", "CALIB", "DUTY", "FXFE")
+CASCADE_COLUMNS = ["session", "mode", "gate", "model_id", "input_j", "stream", "arg", "N", "t_window_us_dut",
+                   "t_window_us_logger", "E_window_uJ", "P_mean_uW", "P_std_uW", "V_bus_mV", "n_samples", "ovf",
+                   "P_idle_uW", "alarms", "escalations", "seq", "die_temp_C", "fw_hash", "logger_hash", "timestamp",
+                   "rejected"]
 SYNC_PIN = "D2"
 LOGGER_SYNC_GPIO = 4
 MIN_WINDOW_S = 10.0
