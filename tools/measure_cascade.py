@@ -52,6 +52,7 @@ GATES = {"cwru": (1, 2, 3, 4, 5), "pu": (1, 2, 3, 4, 5, 6)}
 DEFAULT_GATE = {"cwru": {"cascade": 3, "duty": 5}, "pu": {"cascade": 6, "duty": 6}}   # Deviation 4: S-2 uses G6
 ANCHOR = {"mode": "GATE", "gate": 1, "input_j": 0}
 LOGGER_MIN_WINDOW_US = 100_000   # logger/logger.ino MIN_WINDOW_US: shorter D2 windows get no W line
+LOGGER_BOOT_S = 2.0              # wait after opening the logger port before the first window
 PROBE2_US = 500_000              # fast calls: a second probe of ~0.5 s sizes N (pilot 80: 1-call probes gave 9.5-9.9 s)
 
 
@@ -249,6 +250,8 @@ def main() -> int:
         if log_path.exists() and any(r["session"] == str(a.session) for r in csv.DictReader(open(log_path))):
             p.error(f"session {a.session} already exists in {log_path}")
         dut, logger = DUT(a.port), Logger(a.logger, a.logger_hash)
+        time.sleep(LOGGER_BOOT_S)   # opening the CP2102 port reboots the ESP32 (session 81: first IDLE missed)
+        logger.arm()
         session, window_s = a.session, a.window_s
     seed = a.seed if a.seed is not None else session
     a.cascade_gate = a.cascade_gate or DEFAULT_GATE[a.dataset]["cascade"]
