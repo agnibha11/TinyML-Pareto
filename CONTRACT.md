@@ -172,6 +172,13 @@ handoff/
     r4.npy r4_norm.npy         (100, 41)
     outputs/<model_id>.npy     host outputs for the same windows, in exactly the form VERIFY returns (§7.2)
     stored_inputs.npy / .json  the 5 windows behind INPUT 0–4 + provenance (P2 fold-0 test set)
+  cascade/<ds>/                cascade bundle data (§7.6), written by ml/cascade_export.py
+    gate_params.h / .json      gate parameters (tree, Mahalanobis, selfcal rho), fitted on the deployed split
+    pool_int16.npy, pool.csv   (P, 1024) int16 window pool (healthy first) + provenance
+    streams.csv                stream, position, pool index, fault flag, expected alarm of every gate
+    gverify_int16.npy          (V, 1024) int16 GVERIFY vectors
+    gverify.csv                expected fx_r1 features, scores, alarms and threshold margins per vector
+    summary.json               host gate rates on the deployed test split, stream alarm counts, pool size
 models/
   registry.csv                 one row per deployable model (§6.1)
   <model_id>/
@@ -359,6 +366,60 @@ with the next window, writes the attempt as rejected, and measures the window ag
 
 The paper states this table verbatim.
 
+### 7.6 Cascade commands (v1.1 draft, 21 Nov 2026; not yet in the firmware)
+
+Only the **cascade bundle** of each dataset implements these (`tools/bundle.py --cascade`, data from
+`handoff/cascade/<ds>/`, `ml/cascade_export.py`). Every other bundle answers them with `ERR NOTIMPL`. All §7.1 and
+§7.3 rules apply.
+- Setup always happens outside the window: gate selection, the int16 copy of the stored input, model setup, the
+  warm-up call.
+- Every timed command does one warm-up of its body, then D2 HIGH, the loop, D2 LOW.
+- Every timed reply carries `us=<window_us>` as defined in §7.2.
+- Gate math: `firmware/bench/cascade.c`. Study design: `docs/cascade_preregistration.md`.
+
+**Data on the board.**
+- The gate parameters (`gate_params.h`).
+- A pool of `P` int16 windows: the first `H` are healthy, in time order.
+- 5 streams of 100 pool indices: S0, S2, S10, S100, ST, numbered 0..4.
+- The 5 stored inputs, as int16 copies made with `fx_from_float` at `INPUT` time.
+
+**Gates.** 1 `sup`, 2 `healthy`, 3 `either`, 4 `either2`, 5 `selfcal`; 6 is reserved for the Paderborn gate.
+- **Decisions** are float32 on the board.
+- **Gate 4** keeps the decision of gate 3 on the previous window. That state is reset at the start of every
+  `GATE`, `CASCADE` and `DUTY` window and every `STREAM` pass.
+- **Gate 5** needs a successful `CALIB`. Until then, any command that uses it replies `ERR NOCAL`.
+
+| Command | Timed? | Board action | Final line |
+|---|---|---|---|
+| `TEMP` | no | nRF52840 die temperature (TEMP peripheral, 0.25 °C steps) | `OK temp_cC=<centi-°C>` |
+| `GSEL <g>` | no | select gate g ∈ 1..5 | `OK g=<g> name=<name>` |
+| `GVERIFY` | no | `RDY 2048`, then 1024 × int16 LE (the same handshake, timeout and drain as `VERIFY`); fx_r1 and every base gate on that window | `OK sup=<0\|1> leaf=<node> healthy=<0\|1> d=<hex> sc=<-1\|0\|1> dsc=<hex> fx=<hex>,…` (10 values) |
+| `GATE <N>` | yes | N × (fx_r1 + the selected gate) on the stored input | `OK n=<N> us=<> alarm=<0\|1>` |
+| `CASCADE <N> <m>` | yes | N × gate + stage 2 of the selected model (`SEL`) on the stored input. m = 0: stage 2 only on an alarm; 1: stage 2 always; 2: stage 2 always, reusing the gate's fx_r1 features (`ERR NOTIMPL` for a model without an R1 part) | `OK n=<N> us=<> alarms=<> esc=<> cls=<last>` |
+| `STREAM <N> <s>` | yes | N passes over stream s. Each window: gate; on an alarm, `fx_to_float` + the model's front end + inference | `OK n=<N> us=<> windows=<100 N> alarms=<> esc=<> seq=<hex>` |
+| `CALIB <n> <R>` | yes | R × `casc_calibrate` on the first n healthy pool windows (n = 2..min(64, H)); the last result becomes gate 5's state | `OK n=<n> r=<R> us=<> thr=<hex>` |
+| `DUTY <T> <N>` | yes | N periods of T ms (T = 10..60000). Each period runs one stream-0 window (cycling) through the gate and, on an alarm, stage 2, then thread sleep (as `SLEEP`) to the end of the period | `OK n=<N> us=<> alarms=<> esc=<> overrun=<periods whose work exceeded T>` |
+| `FXFE <N> <p>` | yes | N × fixed-point front end p on the stored input: 0 fx_r1, 1 fx_r2_hyb, 2 fx_r4_hyb, 3 fx_r2_q15, 4 fx_r4_q15 | `OK n=<N> us=<>` |
+
+- **`<hex>`** is the IEEE-754 bit pattern of a float32: 8 lowercase hex digits. The host compares exact values, not
+  rounded decimals.
+- **`seq`** is the 32-bit FNV-1a hash of the alarm bits of the first pass, one byte per window. The host compares it
+  with the hash of the expected sequence in `streams.csv`.
+- **`esc`** counts stage-2 runs. `alarms` and `esc` are totals over the whole window, and the host checks them
+  against N × the expected counts.
+- **N sizing.** As in §7.3, from a 1-call probe: `GATE 1`, `CASCADE 1 m`, `STREAM 1 s`, `CALIB n 1`. `DUTY` lasts
+  N × T.
+- **Timeouts.** 1.5 × the expected time + 5 s. Before a probe, 605 s.
+- **New error code** `NOCAL`: gate 5 used before a successful `CALIB`. A non-positive-definite calibration
+  covariance also replies `ERR NOCAL`.
+- **Rows** go to `results/<ds>/cascade_hw/cascade_measurements.csv`, one row per window:
+
+  `session, mode, gate, model_id, input_j, stream, arg, N, t_window_us_dut, t_window_us_logger, E_window_uJ, P_mean_uW, P_std_uW, V_bus_mV, n_samples, ovf, P_idle_uW, alarms, escalations, seq, die_temp_C, fw_hash, logger_hash, timestamp, rejected`
+
+  - `mode` ∈ `IDLE`, `SLEEP`, `GATE`, `CASCADE`, `STREAM`, `CALIB`, `DUTY`, `FXFE`.
+  - `arg` holds the command's second argument (m, s, R, T or p).
+  - The rejection and pairing rules are those of §7.4.
+
 ## 8. Checks the reviewer runs before approving a merge
 
 | Area | Command | Must pass |
@@ -438,3 +499,12 @@ Version history:
   (CWRU) and `hardware/` (rig measurements, session log, build record, board VERIFY). Shared tool outputs stay at
   `results/vmcu/`, `results/vrig/`, `results/figs/`, `results/demo/`. §1, §6 and §8 paths updated; every column is
   unchanged. Index of every file and the script that writes it: `results/README.md`. Proposed by Hridayesh.
+- v1.1 draft (21 Nov 2026), proposed by Hridayesh (sole owner of every workstream since 20 Nov), not yet binding:
+  - §7.6 cascade commands `TEMP`, `GSEL`, `GVERIFY`, `GATE`, `CASCADE`, `STREAM`, `CALIB`, `DUTY`, `FXFE` for a
+    separate cascade bundle per dataset;
+  - error code `NOCAL`;
+  - the `cascade_hw/cascade_measurements.csv` row format.
+
+  Existing commands, bundles and files are unchanged. It becomes binding, and `CONTRACT_VERSION` becomes 1.1, when
+  the firmware implements it and the tests cover it. That happens before cascade pilot session 80
+  (`docs/cascade_preregistration.md`).

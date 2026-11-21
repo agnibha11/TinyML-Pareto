@@ -1,0 +1,106 @@
+{
+ "dataset": "cwru",
+ "deployed_split": [
+  "P2",
+  0
+ ],
+ "test_windows": 1126,
+ "host_rates_test_split": {
+  "sup": {
+   "tpr": 1.0,
+   "fpr": 0.423728813559322
+  },
+  "healthy": {
+   "tpr": 1.0,
+   "fpr": 1.0
+  },
+  "either": {
+   "tpr": 1.0,
+   "fpr": 1.0
+  },
+  "either2": {
+   "tpr": 0.9915651358950328,
+   "fpr": 0.9830508474576272
+  },
+  "selfcal16": {
+   "tpr": 0.9990627928772259,
+   "fpr": 0.023255813953488372,
+   "n_eval_healthy": 43,
+   "fpr_factory_same_windows": 1.0
+  },
+  "selfcal32": {
+   "tpr": 0.9990627928772259,
+   "fpr": 0.037037037037037035,
+   "n_eval_healthy": 27,
+   "fpr_factory_same_windows": 1.0
+  }
+ },
+ "pool": {
+  "healthy": 59,
+  "fault_runs": 9,
+  "fault_windows": 36,
+  "flash_B": 194560
+ },
+ "streams": {
+  "S0": {
+   "len": 100,
+   "faults": 0,
+   "sup": 39,
+   "healthy": 100,
+   "either": 100,
+   "either2": 99,
+   "selfcal16": 2,
+   "selfcal32": 2
+  },
+  "S2": {
+   "len": 100,
+   "faults": 2,
+   "sup": 39,
+   "healthy": 100,
+   "either": 100,
+   "either2": 99,
+   "selfcal16": 4,
+   "selfcal32": 4
+  },
+  "S10": {
+   "len": 100,
+   "faults": 10,
+   "sup": 47,
+   "healthy": 100,
+   "either": 100,
+   "either2": 99,
+   "selfcal16": 11,
+   "selfcal32": 11
+  },
+  "S100": {
+   "len": 100,
+   "faults": 100,
+   "sup": 100,
+   "healthy": 100,
+   "either": 100,
+   "either2": 99,
+   "selfcal16": 97,
+   "selfcal32": 97
+  },
+  "ST": {
+   "len": 100,
+   "faults": 50,
+   "sup": 71,
+   "healthy": 100,
+   "either": 100,
+   "either2": 99,
+   "selfcal16": 50,
+   "selfcal32": 50
+  }
+ },
+ "gverify": {
+  "vectors": 185,
+  "within_1e-5_of_threshold": {
+   "sup": 0,
+   "healthy": 0,
+   "selfcal16": 0,
+   "selfcal32": 0
+  },
+  "mahal_float32_flips": 0
+ }
+}
