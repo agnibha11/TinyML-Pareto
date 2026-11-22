@@ -317,6 +317,39 @@ retraining. With gate rates TPR and FPR, the energy per window at fault prevalen
 $E(\pi) = E_1 + [\pi\,\mathrm{TPR} + (1-\pi)\,\mathrm{FPR}]\,E_2$, where $E_1$ is the first stage on the virtual
 M4F and $E_2$ the model's end-to-end cost.
 
+\subsection{Measured cascade}
+\label{sec:cashwm}
+Every term of $E(\pi)$ above is an estimate. To measure them, the cascade runs on the Arduino Nano~33~BLE in a
+pre-registered campaign: the research questions, acceptance rules, gates, streams and analysis were committed to the
+repository before the first energy window (\texttt{docs/cascade\_preregistration.md}), and every later change is
+listed there as a dated deviation. The board is powered from USB through an INA219 on the 5\,V line, and an ESP32
+logger integrates its power over windows that the board brackets with a GPIO line. The energy of one call is
+$(\bar P - \bar P_\text{idle})\,T/N$, where $T$ is the length of a window of $N$ calls (at least 10\,s) and
+$\bar P_\text{idle}$ comes from the IDLE window recorded just before the block. All energies in this campaign are
+therefore board-level increments over idle, measured at the USB input.
+
+The board runs one split per data set, the split of the deployed model instances: CWRU P2 fold~0 (models trained on
+loads 1--3, monitoring at load 0, an operating point they never saw) and Paderborn P3 fold~0. Gates G1--G3 are the
+supervised, healthy-only and either gates above, G4 is G3 with 2-of-2 confirmation over consecutive windows, and two
+gates calibrate themselves on the device. G5 keeps from the factory only the ratio $\rho$ of the healthy-only
+threshold to the median validation distance; after installation, the command \texttt{CALIB} $n$ estimates the mean
+and covariance of the first $n$ healthy windows (16 or 32, i.e.\ 1.4 or 2.7\,s of signal) and sets the threshold to
+$\rho$ times their median distance, without fault or validation data. On Paderborn every R1 gate that keeps
+TPR $\geq 0.98$ alarms on every window, so G6, chosen after the host design study and reported as such, applies the
+same procedure to the R1 features plus 14 log band powers (the hybrid R2 front end of Section~\ref{sec:fxm}), with
+$n = 128$. All gates read the int16 window. Stage~2 is the most accurate model of each family on two protocols per
+data set (CWRU P2 and P3, Paderborn P3 and P4), eight per data set, whose end-to-end energies span
+\NumChPuDtROneE{}\,$\mu$J to \NumChETwoMax{}\,mJ.
+
+Firmware commands measure each term: \texttt{GATE} (stage~1 alone, $E_1$), \texttt{CASCADE} (stage~1, then stage~2
+on an alarm or on every call, optionally reusing the R1 features), \texttt{STREAM}, \texttt{CALIB} and \texttt{DUTY}. A stream is a
+fixed sequence of 100 int16 windows of the deployed split's test recordings, read from a pool in flash
+(\NumChCwPool{} windows for CWRU, \NumChPuPool{} for Paderborn): all healthy (S0), 2 or 10 faulty windows in runs of
+two (S2, S10), all faulty (S100), and 50 healthy followed by 50 faulty (ST). \texttt{DUTY} processes one window per
+period $T$ = 0.1, 1 or 10\,s and sleeps in between. Three repeats were taken per data set, each in its own session on
+the same firmware build, and every value is the mean over repeats with a 95\,\% $t$-interval ($n = 3$). The analysis
+script is \texttt{ml/cascade.py --hw}.
+
 \input{results_section}
 
 \bibliographystyle{IEEEtran}
