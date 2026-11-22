@@ -1,0 +1,63 @@
+% Fig. 1 -- study overview (TikZ). Included from main.tex.
+\begin{tikzpicture}[
+  font=\scriptsize,
+  >={Stealth[length=4pt]},
+  blk/.style={draw=#1!70!black, fill=#1!9, rounded corners=2pt, line width=0.5pt, align=left,
+              inner sep=3pt, text width=3.0cm, minimum height=2.32cm, anchor=north west},
+  hd/.style={font=\scriptsize\bfseries, anchor=south west, inner sep=1pt},
+  arr/.style={->, line width=0.6pt, draw=black!65},
+  win/.style={minimum width=2.1mm, minimum height=2.1mm, inner sep=0pt, draw=white, line width=0.3pt},
+]
+\definecolor{cA}{HTML}{2A78D6}\definecolor{cB}{HTML}{EB6834}\definecolor{cC}{HTML}{1BAF7A}
+\definecolor{cD}{HTML}{EDA100}\definecolor{cG}{HTML}{6B6B66}
+\colorlet{tr}{cA!75}\colorlet{te}{cB!85}
+% ---------------- top row: pipeline
+\node[blk=cG] (d) at (0,0) {\textbf{\ding{172} Data}\\[1pt]
+  CWRU: 10 classes, 4 loads,\\ \quad machined faults\\[1pt] Paderborn KAt: 3 classes,\\ \quad real + artificial damage\\[1pt]
+  1024-sample windows, 12\,kHz};
+\node[blk=cB] (p) at (3.56,0) {\textbf{\ding{173} Evaluation ladder}\\[1pt]
+  P1 window-random (leaky)\\ P2 recording-disjoint\\ P3 bearing-disjoint\\ P4 artificial $\rightarrow$ real (PU)\\[1pt]
+  folds $\times$ seeds each};
+\node[blk=cC] (m) at (7.12,0) {\textbf{\ding{174} Design space}\\[1pt]
+  R0 raw $\rightarrow$ 1-D CNN\\ R1--R4 features $\rightarrow$\\ \quad DT, RF, MLP\\[1pt]
+  fp32, int8 PTQ, int8 QAT\\ emlearn; TFLM+CMSIS-NN\\ 80 fit the board};
+\node[blk=cA] (b) at (10.68,0) {\textbf{\ding{175} Verified deployment}\\[1pt]
+  Nano 33 BLE (M4F)\\ VERIFY: board = host\\ \quad bit for bit, then\\ board energy: FRONT,\\ \quad RUN, E2E (INA219)\\ \NumTotWindows{} windows};
+\node[blk=cD] (o) at (14.24,0) {\textbf{\ding{176} Monitor design}\\[1pt]
+  measured fronts that\\ \quad survive the ladder\\[1pt] front-end-first tuning\\[1pt]
+  self-calibrating\\ \quad detect-then-diagnose};
+\foreach \a/\b in {d/p,p/m,m/b,b/o} \draw[arr] (\a.east) -- (\b.west);
+% ---------------- bottom row: what the protocols hold out (schematic)
+\begin{scope}[yshift=-3.05cm]
+  \node[anchor=west, font=\scriptsize\bfseries, inner sep=0pt] at (0,0.33) {What each protocol holds out};
+  \node[anchor=north west, font=\scriptsize, text width=3.2cm, align=left, inner sep=0pt] at (0,0.12) {one square = one window,\\ one column = one recording};
+  % legend
+  \node[win, fill=tr] at (0.12,-0.52) {}; \node[anchor=west, font=\scriptsize] at (0.22,-0.52) {train};
+  \node[win, fill=te] at (0.95,-0.52) {}; \node[anchor=west, font=\scriptsize] at (1.05,-0.52) {test};
+  \node[anchor=west, font=\scriptsize, text=black!60] at (0,-0.82) {windows overlap by 50\,\%};
+  % three protocol panels
+  \foreach \px/\name/\mode in {3.56/P1: random windows/0, 8.3/P2: whole recordings/1, 13.04/P3: whole bearings/2}{
+    \node[anchor=west, font=\scriptsize\bfseries] at (\px,0.33) {\name};
+    \foreach \r in {0,...,5}{          % recordings (columns): bearings = pairs of recordings
+      \foreach \w in {0,...,3}{        % windows in a recording
+        \pgfmathtruncatemacro{\h}{mod(\r*7+\w*3,4)}
+        \ifcase\mode
+          \ifnum\h=0 \def\c{te}\else\def\c{tr}\fi
+        \or
+          \ifnum\r=2 \def\c{te}\else\def\c{tr}\fi
+        \or
+          \ifnum\r>3 \def\c{te}\else\def\c{tr}\fi
+        \fi
+        \node[win, fill=\c] at (\px+0.12+\r*0.55, 0.0-\w*0.235) {};
+      }
+    }
+    % bearing brackets
+    \foreach \bb in {0,1,2}{
+      \draw[black!45, line width=0.4pt] (\px+0.02+\bb*1.1, -0.86) -- ++(0,-0.06) -- ++(0.75,0) -- ++(0,0.06);
+      \node[font=\tiny, text=black!55] at (\px+0.4+\bb*1.1,-1.02) {bearing \bb};
+    }
+  }
+  \node[anchor=west, font=\scriptsize, text=cB!80!black] at (3.5,-1.3)
+       {\NumHostPOneLeakPct{} of CWRU P1 test windows overlap a training window};
+\end{scope}
+\end{tikzpicture}

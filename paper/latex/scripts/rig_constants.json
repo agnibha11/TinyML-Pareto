@@ -1,0 +1,17 @@
+{
+ "_source": "Measured rig and toolchain constants recorded in the repository: docs/energy_rig_bringup.md and results/rig session notes (shunt calibration, HFXO clock check), Claude outputs/measurement_report.html section 13 (limitations), PLAN_int8_and_cascade.md A2 (MEAN mismatch), docs/cascade_preregistration.md Deviation 5.4 (image systematic), the 22 Nov log10f micro-benchmark (cycles, error). Transcribed; make_numbers.py turns them into macros.",
+ "ShuntOhm": "0.1139",
+ "ShuntUnc": "1.2",
+ "RcClockErr": "0.77",
+ "MeanLsbLo": "3",
+ "MeanLsbHi": "6",
+ "ImageSysCascade": "8",
+ "LogfCycles": "1{,}343",
+ "FloatLogCycles": "100",
+ "FloatLogErr": "5\\times10^{-7}",
+ "IdleWindowS": "10",
+ "MinWindowS": "10",
+ "DurTolPct": "0.1",
+ "LoggerHz": "1",
+ "LpfKHz": "5"
+}

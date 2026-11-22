@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Cascade gate design space (Part B3 host pre-study): which stage-1 gates and stage-2 models go on the board.
 
-Extends ml/cascade.py (four R1 gates, estimated energies) along four axes, CWRU first (Paderborn once its data is here):
+Extends ml/cascade.py (four R1 gates, estimated energies) along four axes, on CWRU (P2, P3) or, with
+TINYML_DATASET=pu, Paderborn (P3, which chooses gate G6, and P4, the held-out check; docs/cascade_preregistration.md
+§4.2):
 
   front end  fxr1      the integer R1 front end (fx_r1, 10 features; 9 used, the window mean is a recording fingerprint)
              hyb_r2    fx_r1 + the 14 log band powers of R2 (what fx_r2_hyb computes: integer R1, float FFT)
@@ -28,27 +30,41 @@ Stage 2: measured board E2E energy per model (repeats 1-3; int8 TFLM models: rep
 Break-even prevalence of a gate g for a stage-2 model m: the fault prevalence pi below which the cascade costs less
 than running m on every window, E1 + [pi TPR + (1 - pi) FPR] E2 = E2  ->  pi* = (1 - E1/E2 - FPR) / (TPR - FPR).
 
-Outputs (local until chosen for the paper): results/rig/cascade_design/{gates,calib,costs,breakeven}.csv, summary.txt
+Paderborn has no file_id. A recording is (bearing, condition, recording) for the confirmation and latency; the
+self-calibration uses one healthy bearing at one condition (its recordings in a row), because a single Paderborn
+recording has only ~46 windows (pre-registration, Deviations 2). The stage-1 cycle counts and board ratios are CWRU's
+(the front ends do not depend on the data); stage-2 energies are the dataset's own board measurements.
+
+Outputs (local until chosen for the paper): results/rig/cascade_design[/pu]/{gates,calib,costs,breakeven}.csv,
+summary.txt; Paderborn also g6.json (the pre-registered G6 choice).
 
     python ml/cascade_design.py
+    TINYML_DATASET=pu python ml/cascade_design.py
 """
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
+import json
+
 import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import dataset as DS  # noqa: E402
 from cascade import FX_R1_COLS, gate_features  # noqa: E402
 from features import cached  # noqa: E402
 from splits import PROTOCOLS, load_split  # noqa: E402
 from train import manifest  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
-RES = REPO / "results" / "cwru"
-OUT = REPO / "results" / "rig" / "cascade_design"
+RES = DS.RESULTS                          # stage-2 energies and host F1 of this dataset
+COST = REPO / "results" / "cwru"          # stage-1 cycles (virtual MCU) and board front-end ratios
+OUT = REPO / "results" / "rig" / "cascade_design" / ("" if DS.NAME == "cwru" else DS.NAME)
+STUDY = ("P2", "P3") if DS.NAME == "cwru" else ("P3", "P4")
+# G6 rule (pre-registration §4.2): chosen on P3, P4 held out; stage 2 = the Paderborn headline model (Deviations 1)
+G6_PROTOCOL, G6_HEADLINE, G6_PI, G6_TPR = "P3", "mlp-r4-h32-fp32", 0.01, 0.98
 WIN_MS = 1024 / 12.0
 F_CPU, P_ACT_MW = 64e6, 9.984            # chip-level energy model (ml/stats.py, headline_numbers.json)
 TREE_CYC = 281                           # dt-r1-d4 inference (prehw_costs.csv): bounds a depth <= 3 gate tree
@@ -58,18 +74,29 @@ CALIB_N = (16, 32, 64, 128)
 
 # ---------------------------------------------------------------------------------------------------------------- data
 def front_ends() -> dict[str, np.ndarray]:
-    fx = np.load(REPO / "data" / "processed" / "feat_fx.npy", mmap_mode="r")[:, slice(*FX_R1_COLS)].astype(np.float64)
+    fx = np.load(DS.PROCESSED / "feat_fx.npy", mmap_mode="r")[:, slice(*FX_R1_COLS)].astype(np.float64)
+    assert np.isfinite(fx).all(), "feat_fx.npy: fx_r1 block incomplete"
     g1 = gate_features(fx)                                         # 9: log rms/std/peak/p2p, crest, kurt, skew, ...
     r2 = np.asarray(cached("r2"), np.float64)[:, 10:]              # 14 log10 band powers
     r4 = np.asarray(cached("r4"), np.float64)[:, 9:]               # 32 log envelope bins
     return {"fxr1": g1, "hyb_r2": np.column_stack([g1, r2]), "hyb_r4": np.column_stack([g1, r4])}
 
 
-def time_order(man: pd.DataFrame, idx: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def recordings(man: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """(recording id, calibration group id, time key) per window. CWRU: file_id for both, start_idx.
+    Paderborn: (bearing, condition, recording); (bearing, condition); recording-major time."""
+    if "file_id" in man:
+        f = man.file_id.to_numpy()
+        return f, f, man.start_idx.to_numpy().astype(np.int64)
+    rec = pd.factorize(man.bearing.astype(str) + "|" + man.condition.astype(str) + "|" + man.recording.astype(str))[0]
+    grp = pd.factorize(man.bearing.astype(str) + "|" + man.condition.astype(str))[0]
+    return rec, grp, man.recording.to_numpy().astype(np.int64) * 10**8 + man.start_idx.to_numpy()
+
+
+def time_order(rec: np.ndarray, t: np.ndarray, idx: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Positions of idx in time order per recording, and the recording of each (in that order)."""
-    m = man.iloc[idx][["file_id", "start_idx"]].reset_index(drop=True)
-    o = m.sort_values(["file_id", "start_idx"]).index.to_numpy()
-    return o, m.file_id.to_numpy()[o]
+    o = np.lexsort((t[idx], rec[idx]))
+    return o, rec[idx][o]
 
 
 def confirm(al: np.ndarray, order: np.ndarray, fid: np.ndarray, k: int, n: int) -> np.ndarray:
@@ -140,6 +167,10 @@ def fit_detectors(G: np.ndarray, yb: np.ndarray, sp: dict) -> dict[str, tuple[np
 def hw_energy() -> pd.DataFrame:
     """Measured board energy per model and mode (mean over repeats; int8 TFLM: repeats 5-7 only)."""
     d = pd.read_csv(RES / "hardware" / "hw_measurements.csv", low_memory=False)
+    return _hw(d)
+
+
+def _hw(d: pd.DataFrame) -> pd.DataFrame:
     d = d[(d.rejected == 0) & d["mode"].isin(["RUN", "FRONT", "E2E"])].copy()
     d["rep"] = (d.session % 100) // 10
     int8 = d.model_id.str.contains("int8")
@@ -149,7 +180,8 @@ def hw_energy() -> pd.DataFrame:
 
 
 def stage1_costs(hw: pd.DataFrame) -> pd.DataFrame:
-    fx = pd.read_csv(RES / "fixedpoint" / "fx_cost_summary.csv")
+    """hw: CWRU board energies (the board ratios of the float front ends)."""
+    fx = pd.read_csv(COST / "fixedpoint" / "fx_cost_summary.csv")
     fx = fx[fx.core == "m4f"].set_index("region").cyc_med
     uj = lambda c: c / F_CPU * P_ACT_MW * 1e3  # noqa: E731
     ratio = {fe: hw.loc[f"dt-{r}-d4-fp32", "FRONT"] / uj(fx[f"F32_{r.upper()}"])
@@ -171,15 +203,16 @@ def stage1_costs(hw: pd.DataFrame) -> pd.DataFrame:
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     man = manifest()
-    yb = (man.class10.to_numpy() != 0).astype(int)
+    rec, grp, tkey = recordings(man)
     FE = front_ends()
     grows, crows = [], []
-    for p in ("P2", "P3"):
+    for p in STUDY:
+        yb = (man[DS.LABEL[p]].to_numpy() != 0).astype(int)    # 0 = healthy in every label set
         for k in range(PROTOCOLS[p]):
             sp = load_split(p, k)
             te = sp["test"]
             yt = yb[te]
-            order, fid = time_order(man, te)
+            order, fid = time_order(rec, tkey, te)
             for fe, G in FE.items():
                 dets = fit_detectors(G, yb, sp)
                 mahal_model, factory_ratio = dets.pop("_mahal_model")
@@ -191,27 +224,29 @@ def main() -> None:
                                       "tpr": a[yt == 1].mean(), "fpr": a[yt == 0].mean(),
                                       "auc": auc(score, yt) if cn == "1of1" and not np.isnan(score).all() else np.nan,
                                       "lat_med_win": lm, "lat_max_win": lx, "rec_missed": miss})
-                # self-calibration: healthy recording of the deployment condition (test split's normal windows)
-                hfiles = np.unique(man.file_id.to_numpy()[te][yt == 0])
+                # self-calibration: healthy recording (CWRU) / bearing at one condition (Paderborn) of the test split
+                hfiles = np.unique(grp[te][yt == 0])
                 for f in hfiles:
-                    allw = man[(man.file_id == f)].sort_values("start_idx")
+                    allw = np.flatnonzero(grp == f)
+                    allw = allw[np.argsort(tkey[allw], kind="stable")]
                     for N in CALIB_N:
-                        cal = allw.index.to_numpy()[:N]
-                        end = int(allw.start_idx.iloc[N - 1]) + 1024 if N <= len(allw) else None
-                        if end is None:
+                        if N > len(allw):
                             continue
+                        cal = allw[:N]
+                        end = tkey[cal[-1]] + 1024       # healthy windows from here on were not seen in calibration
                         m = Mahal(G[cal])
                         dc = m(G[cal])
                         th_dep = np.median(dc) * factory_ratio
                         # evaluate on test windows after the calibration span (healthy) + every fault test window
-                        st = man.start_idx.to_numpy()[te]
-                        keep = (yt == 1) | ((man.file_id.to_numpy()[te] == f) & (st >= end))
+                        keep = (yt == 1) | ((grp[te] == f) & (tkey[te] >= end))
+                        if not (keep & (yt == 0)).any():
+                            continue
                         s = m(G[te[keep]])
                         a = s > th_dep
                         yk = yt[keep]
                         # same evaluation set for the factory-calibrated gate, for a paired comparison
                         a0 = mahal_model(G[te[keep]]) > np.percentile(mahal_model(G[sp["val"]][yb[sp["val"]] == 0]), 99)
-                        crows.append({"protocol": p, "fold": k, "front_end": fe, "N": N, "healthy_file": int(f),
+                        crows.append({"protocol": p, "fold": k, "front_end": fe, "N": N, "healthy_group": int(f),
                                       "n_eval_healthy": int((yk == 0).sum()), "tpr": a[yk == 1].mean(),
                                       "fpr": a[yk == 0].mean(), "tpr_factory": a0[yk == 1].mean(),
                                       "fpr_factory": a0[yk == 0].mean(), "auc": auc(s, yk)})
@@ -222,7 +257,8 @@ def main() -> None:
     calib.to_csv(OUT / "calib.csv", index=False)
 
     hw = hw_energy()
-    costs = stage1_costs(hw)
+    hw_cwru = hw if DS.NAME == "cwru" else _hw(pd.read_csv(COST / "hardware" / "hw_measurements.csv", low_memory=False))
+    costs = stage1_costs(hw_cwru)
     costs.to_csv(OUT / "costs.csv", index=False)
     g = gates.groupby(["protocol", "front_end", "detector", "confirm"])[["tpr", "fpr", "auc", "lat_med_win",
                                                                         "lat_max_win", "rec_missed"]].mean()
@@ -242,7 +278,7 @@ def main() -> None:
     lines = []
     with pd.option_context("display.width", 220, "display.float_format", lambda v: f"{v:.3g}",
                            "display.max_rows", 400):
-        for p in ("P2", "P3"):
+        for p in STUDY:
             s = g[g.protocol == p].sort_values(["fpr", "E1_hwcal_uJ"])
             s = s[s.tpr >= 0.98]
             lines += [f"=== {p}: gates with mean TPR >= 0.98, by FPR then cost ({len(s)} of {(g.protocol == p).sum()})",
@@ -253,9 +289,35 @@ def main() -> None:
         lines += ["=== stage-2 candidates (best host F1 per family) with measured board E2E",
                   cand.to_string(index=False), ""]
         lines += ["=== stage-1 cost (front end + detector)", costs.to_string(index=False)]
+    if DS.NAME == "pu":
+        lines += ["", *g6_choice(g, hw)]
     txt = "\n".join(lines)
     (OUT / "summary.txt").write_text(txt)
     print(txt)
+
+
+def g6_choice(g: pd.DataFrame, hw: pd.DataFrame) -> list[str]:
+    """Pre-registered G6 rule (§4.2): mean TPR >= 0.98 over the P3 folds, then the lowest predicted E(pi = 1 %) for
+    the headline model with hardware-calibrated E1, ties by the lower E1; else the highest TPR - FPR (weak gate).
+    P4 is reported for the chosen gate only."""
+    e2 = float(hw.loc[G6_HEADLINE, "E2E"])
+    s = g[g.protocol == G6_PROTOCOL].copy()
+    s["E_pi"] = s.E1_hwcal_uJ + (G6_PI * s.tpr + (1 - G6_PI) * s.fpr) * e2
+    key = ["front_end", "detector", "confirm"]
+    ok = s[s.tpr >= G6_TPR]
+    weak = ok.empty
+    best = (s.assign(j=s.tpr - s.fpr).sort_values(["j", "E1_hwcal_uJ"], ascending=[False, True]) if weak
+            else ok.sort_values(["E_pi", "E1_hwcal_uJ"])).iloc[0]
+    p4 = g[(g.protocol == "P4") & (g[key] == best[key]).all(axis=1)].iloc[0]
+    out = {"rule": "pre-registration 4.2", "protocol": G6_PROTOCOL, "headline_model": G6_HEADLINE, "E2_uJ": e2,
+           "pi": G6_PI, "tpr_min": G6_TPR, "weak_gate": bool(weak), "n_passing": int(len(ok)),
+           **{k: best[k] for k in key}, "P3": {c: float(best[c]) for c in ("tpr", "fpr", "E1_hwcal_uJ", "E_pi")},
+           "P4_heldout": {"tpr": float(p4.tpr), "fpr": float(p4.fpr)}}
+    (OUT / "g6.json").write_text(json.dumps(out, indent=1, default=str))
+    top = (ok if not weak else s).sort_values(["E_pi", "E1_hwcal_uJ"])[key + ["tpr", "fpr", "E1_hwcal_uJ", "E_pi"]]
+    return [f"=== G6 (rule §4.2): {len(ok)} gates pass TPR >= {G6_TPR} on {G6_PROTOCOL}; E(pi=1%) with "
+            f"{G6_HEADLINE} (E2 = {e2:.1f} uJ)", top.head(15).to_string(index=False), "",
+            f"chosen: {dict((k, best[k]) for k in key)}  weak={weak}", f"P4 held-out: TPR {p4.tpr:.3f} FPR {p4.fpr:.3f}"]
 
 
 if __name__ == "__main__":

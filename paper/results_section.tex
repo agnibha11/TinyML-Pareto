@@ -354,6 +354,99 @@ envelope front end is the best input for unseen bearings, the front end sets the
 nothing. Two do not: the best model and the cascade's benefit are specific to the test rig, and models trained on
 artificial damage do not recognise real damage.
 
+\subsection{The cascade on the board}
+\label{sec:cashw}
+The campaign of Section~\ref{sec:cashwm} accepted \NumChWindows{} energy windows over three repeats per data set. The
+idle power stayed within \NumChIdle{}\,mW and the die temperature within \NumChTemp{}\,$^\circ$C, and the median
+repeat-to-repeat CV over conditions is \NumChCwCvMed{} (CWRU) and \NumChPuCvMed{} (Paderborn). A drift anchor
+(G1 on one stored input) measured at the start, middle and end of each session moved by at most \NumChCwAnchorDrift{}
+and \NumChPuAnchorDrift{}.
+
+\textbf{The board's gates decide as the host does.} All \NumChCwChecks{} (CWRU) and \NumChPuChecks{} (Paderborn)
+decision checks agree with the host, including G5 and G6 after on-device calibration and the alarm sequence of
+every stream; the integer features differ from the host by at most \NumChCwFxErr{} relative.
+
+\textbf{Integer gates cost less than any stage-2 model.} G1 costs
+\NumChCwEOneSup{}\,$\mu$J on CWRU and \NumChPuEOneSup{}\,$\mu$J on Paderborn; the Mahalanobis gates G2--G5 cost
+\NumChCwEOneMah{} and \NumChPuEOneMah{}\,$\mu$J; G6, with its hybrid R2 features, costs \NumChPuEOneSix{}\,$\mu$J.
+Over the five stored inputs, healthy and faulty, $E_1$ varies by at most \NumChInputSpread{}. The measured energies
+are \NumChRatioEst{} times the chip-level estimates of Section~\ref{sec:casm} (G1: \NumChCwEOneSupEst{}\,$\mu$J).
+Scaled by the measured-over-estimated ratio of the board's float front end with the same features, the estimates come
+within a factor of \NumChRatioCal{} of the measurement. The integer R1 front end measures \NumChCwFxROne{}\,$\mu$J against
+\NumChCwFloatROne{}\,$\mu$J for the float one on the same windows, \NumChCwFxROneSave{} less, more than the
+\NumFxMfROneSave{} cycle saving that the virtual MCU predicted for this comparison (Section~\ref{sec:fx}).
+
+\textbf{The cascade is additive, if $E_2$ is measured in the same firmware image.} The pre-registered test takes
+$\Delta = E(\texttt{CASCADE}) - E_1 - E_2$ with stage~2 forced on every call, where $E_2$ is the model's end-to-end energy from
+the main energy campaign, and allows $|\Delta| \leq 2\,\%$ of $E_2$.
+It fails for \NumChCwRqThreeFail{} CWRU models (worst \NumChCwRqThreeWorst{}) and \NumChPuRqThreeFail{} Paderborn
+models (worst \NumChPuRqThreeWorst{}), and the stream test (3\,\%) fails for \NumChCwRqFourFail{} CWRU streams and
+\NumChPuRqFourFail{} Paderborn streams. The cause is not the cascade: the same float front end costs \NumChImage{}
+less in the cascade firmware than in the energy-campaign bundles, with both the
+time per call and the active power changing, most likely through code layout. With $E_2$ taken from the cascade
+image itself (its measured front end plus the model's inference), $\Delta$ is \NumChRqThreeInb{} for all
+\NumChRqThreeInbN{} models where this is possible (\NumChRqThreeInbUj{}\,$\mu$J), and the CWRU streams match
+their predictions within \NumChCwRqFourInb{} (Fig.~\ref{fig:cashw}a). On every one of the \NumChStreams{} streams the board
+escalated exactly the windows the host predicted. The Paderborn streams stay above their
+predictions even in-bundle (\NumChPuRqFourInb{}): on the all-healthy stream G6 escalates nothing, yet costs \NumChPuSZeroMeas{}\,$\mu$J per
+window, \NumChPuSZeroOver{}\,$\mu$J more than \texttt{GATE}; the CWRU gate's excess on the same stream is
+\NumChCwSZeroOver{}\,$\mu$J. The
+stream path reads its windows from flash, whereas \texttt{GATE} reads a stored input from RAM; whether this explains
+the difference needs a firmware change and is left open. For energy models of TinyML pipelines the lesson is that a
+per-stage cost carries over between firmware images only to within several percent, as much as the difference
+between many of the models compared here.
+
+\textbf{The gate must know the machine it monitors.} At CWRU's unseen load the factory healthy-only gate alarms on
+every healthy window, and so does G3 (FPR \NumChCwFprEither{}); G1 alarms on \NumChCwFprSup{} of them. After
+calibrating on 32 healthy windows, G5 has FPR \NumChCwFprFive{} at TPR \NumChCwTprFive{} (host rates on the
+board's split, which the board reproduces; the FPR rests on the \NumChCwDeployHealthyN{} healthy test windows after
+the calibration span), so at 1\,\% prevalence the cascade with
+the stream model costs \NumChCwEPiFive{}\,$\mu$J per window, against \NumChCwEPiSup{} with G1,
+\NumChCwEPiEither{} with G3 and \NumChCwETwoStream{}\,$\mu$J for the model alone. On Paderborn no R1 gate works:
+G1 and G3 alarm on every window, and G5 misses a quarter of the faults (TPR \NumChPuTprFive{}). G6 reaches TPR
+\NumChPuTprSix{} without a false alarm (on only \NumChPuDeployHealthyN{} healthy windows, a coarse estimate) for
+\NumChPuEPiSix{}\,$\mu$J at 1\,\% prevalence, against \NumChPuEPiSup{} with G1 and \NumChPuETwoStream{}\,$\mu$J for
+the model alone. The pre-registered hypothesis that the cheapest CWRU gate is not on Paderborn's (E$_1$, FPR) front
+fails as stated, because G1 is formally on it as the cheapest gate despite its FPR of \NumChPuFprSup{}; by the energy at 1\,\%
+prevalence it holds. The one-off calibration costs \NumChCwCalibSixteen{} and \NumChCwCalibThirtyTwo{}\,$\mu$J for
+G5 and \NumChPuCalibOneTwentyEight{}\,$\mu$J for G6, the energy of about \NumChPuCalibWindows{} monitored windows.
+
+\textbf{A gate pays only when it costs much less than stage 2} (Fig.~\ref{fig:cashw}b). With G5, the measured
+cascade at 1\,\% prevalence costs \NumChCwBeMin{} (\NumChCwBeMinModel{}) to \NumChCwBeMax{} (\NumChCwBeMaxModel{})
+of each CWRU model alone. G6 costs as much as Paderborn's R2 models, so with them the cascade saves almost nothing
+(\NumChPuBeRTwo{} of the model alone, \NumChPuBeRTwoReuse{} with reuse), and in front of \NumChPuBeMaxModel{}
+(\NumChPuDtROneE{}\,$\mu$J) it costs \NumChPuBeMax{} times as much. The saving grows with the model's cost:
+\NumChPuBeRFour{} for the R4 models and down to \NumChPuBeMin{} for \NumChPuBeMinModel{}. Reusing the gate's R1 features saves \NumChCwReuseROne{}\,$\mu$J (CWRU) and
+\NumChPuReuseROne{}\,$\mu$J (Paderborn), \NumChReuseOverExp{} of the float R1 front end it replaces and
+\NumChCwReuseROnePct{} of the CWRU models' energy; G6 lets the R2 models skip their whole front end, saving
+\NumChPuReuseRTwo{}\,$\mu$J.
+
+\textbf{On this board, USB dominates a duty-cycled deployment.} Sleeping between windows, the Nano~33~BLE draws
+\NumChCwSleep{}\,mW, so the board uses about \NumChCwBoardHour{}\,J per hour at every monitoring interval and would
+drain a CR2032 (\NumChBattery{}\,kJ) in about \NumChBoardLifeH{} hours. Fitting $P = P_0 + E_\text{period}/T$ over
+the three intervals gives \NumChCwPeriod{}\,$\mu$J [\NumChCwPeriodLo{}, \NumChCwPeriodHi{}] per period on CWRU (G5
+with \texttt{rf-r2-t25d10-fp32}) and \NumChPuPeriod{}\,$\mu$J [\NumChPuPeriodLo{}, \NumChPuPeriodHi{}] on Paderborn
+(G6 with \texttt{mlp-r4-h32-fp32}), against \NumChCwPeriodModel{} and \NumChPuPeriodModel{}\,$\mu$J from $E_1$ and
+the escalations; the difference, about \NumChWake{}\,$\mu$J, is the cost of waking and returning to sleep. At one
+window per second the monitoring itself adds \NumChCwIncHourOne{} and \NumChPuIncHourOne{}\,J per hour,
+\NumChCwIncShare{} and \NumChPuIncShare{} of the board's draw. Counted alone, these increments would take
+\NumChCwLifeIncOne{} and \NumChPuLifeIncOne{} years to drain a CR2032; on a board without USB, its sleep floor
+decides how much of that remains.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.78\textwidth]{fig_cascade_hw_streams}\\[2pt]
+\small (a)\\[2pt]
+\includegraphics[width=0.78\textwidth]{fig_cascade_hw_breakeven}\\[2pt]
+\small (b)
+\caption{The cascade measured on the Nano~33~BLE (means over three repeats). (a) Energy per window on the 100-window
+streams against the board's escalation rate (dots), with the prediction $E_1 + \text{rate}\cdot E_2$ using $E_2$
+measured in the cascade firmware (solid) or in the energy campaign (dashed). (b) Cascade energy relative to the model
+alone against fault prevalence, for every stage-2 model with the deployable gate (measured $E_1$ and $E_2$, host
+gate rates on the board's split).}
+\label{fig:cashw}
+\end{figure*}
+
 \subsection{Kernels, precision and memory}
 Table~\ref{tab:costs} lists the cost and accuracy of the best bearing-disjoint configuration of every
 family/input/precision group.
@@ -454,7 +547,9 @@ allows. The front end, not the classifier, is what the energy budget decides.
 
 % =====================================================================================================================
 \section{Limitations and Next Steps}
-This version has no board measurements. Cycles come from an instruction-exact emulator with a static Cortex-M4
+Apart from the measured cascade (Section~\ref{sec:cashw}), this version has no board measurements, and the
+rig's INA219 gain is so far calibrated against a 1\,\% resistor rather than a calibrated multimeter, which sets
+the absolute scale of the measured energies but not their ratios. Cycles come from an instruction-exact emulator with a static Cortex-M4
 timing model. Energies are proportional to cycles, so they cannot show power differences between, for example, FPU-
 and integer-heavy code. The board's DWT counts (\texttt{LAT}) will calibrate the model, and
 \texttt{tools/vmcu/calibrate.py} is in place for that. The INA219 rig will then replace every energy number, including

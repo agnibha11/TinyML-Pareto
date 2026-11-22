@@ -83,7 +83,7 @@ so. Paderborn keeps P4 out of the selection and uses it as the held-out check (�
 | G3 `either` | fx_r1 | G1 OR G2 | 1-of-1 | both |
 | G4 `either2` | fx_r1 | G1 OR G2 | 2-of-2 | both |
 | G5 `selfcal` | fx_r1 | G2 with the threshold rescaled from N on-device healthy windows (§4.4) | 1-of-1 | both |
-| G6 `pu_best` | chosen by the rule below | | | Paderborn |
+| G6 `selfcal_r2` | fx_r2_hyb (R1 + 14 log bands) | G5 on 23 features, N = 128 (chosen after the study: Deviations, 4) | 1-of-1 | Paderborn |
 
 G1–G4 are the paper's current gates, so the host and board numbers can be compared one to one. G1 is
 `ml/cascade.py`'s `sup`: a tree on all 10 fx_r1 features. On CWRU P2 fold 0 it splits on the window mean.
@@ -169,8 +169,21 @@ Together these span three decades of E₂.
 - **Flash.** The eight models take ~434 KB, the TFLM base ~320 KB, and the window pool (§4.6) 190 KB, against a
   983 KB limit. If the cascade bundle does not link, `cnn-r0-w200d4-fp32` (332 KB) is replaced by the most accurate
   P3 CNN that fits, before any data is taken.
-- **Paderborn.** The same rule (best of each family on P3 and P4) picks Paderborn's stage-2 set, after the
-  Paderborn design study.
+- **Paderborn.** The same rule (best of each family on P3 and P4) picks Paderborn's stage-2 set. Result of the
+  Paderborn design study (21 Nov), measured board E2E:
+
+  | Protocol | Family | Model | E2E (µJ) |
+  |---|---|---|---|
+  | P3 | DT | dt-r2-d6-fp32 | 57 |
+  | P3 | CNN | cnn-r0-w025d4-fp32 | 2 160 |
+  | P3 | RF | rf-r2-t25d6-fp32 | 58 |
+  | P3 | MLP | mlp-r4-h32-fp32 | 93 |
+  | P4 | RF | rf-r4-t25d6-fp32 | 87 |
+  | P4 | CNN | cnn-r0-w025d2-fp32 | 1 140 |
+  | P4 | DT | dt-r1-d4-fp32 | 14 |
+  | P4 | MLP | mlp-r3-h128-fp32 | 304 |
+
+  Paderborn's stream model is `mlp-r4-h32-fp32`, the most accurate on P3.
 
 ### 4.6 Streams
 
@@ -268,4 +281,118 @@ CNNs therefore carry a ±2 % systematic, which the RQ3 and RQ4 tolerances must b
 
 ## Deviations
 
-None yet.
+Deviations 1–3 were recorded on 21 Nov 2026, before the Paderborn design study ran. Deviation 4 was recorded after
+it ran. All four come before any cascade energy window. Deviation 5 was recorded on 22 Nov 2026, after repeats 1–3
+and a first run of the analysis (`ml/cascade.py --hw`, commit `cb75d70`). It is post hoc, except item 5.1, which
+writes down choices that were fixed in code before session 80.
+
+1. **§4.2 rule step 3, "Paderborn headline stage-2 model".** This was not defined. It is now the paper's Paderborn
+   P3 best model, `mlp-r4-h32-fp32` (`results/pu/analysis/summary.json`, P3 `best_model`), i.e. the most accurate
+   model on the protocol the board runs.
+2. **Paderborn recordings in the design study.** The Paderborn manifest has no `file_id`.
+   - **Confirmation:** k-of-n runs over consecutive test windows of one recording (bearing, condition, recording).
+   - **Self-calibration:** it calibrates on the first N windows, in time order, of one healthy bearing at one
+     operating condition (its five recordings in a row). It is evaluated on that bearing and condition's test
+     windows after the calibration span, plus every fault test window. One Paderborn recording has only about 46
+     windows, too few for N = 32 with anything left to evaluate.
+3. **Firmware (CONTRACT v1.1).**
+   - `FXFE` offers fx_r1 and the two hybrid front ends only. The q15/q31 paths do not link with the board's
+     CMSIS-DSP 5.7.0, and S-6 needs only fx_r1 and the hybrids.
+   - `CASCADE` runs stage 2 on the float stored input that `E2E` measures, so RQ3's Δ contains only the cascade's
+     own overhead. `STREAM` and `DUTY` convert the int16 window to float first, as a deployment would.
+4. **G6 (21 Nov 2026, after the Paderborn design study; a post-hoc choice).**
+   - **What the rule gave.** Applied as written, the §4.2 rule picks `fxr1 tree1 1of1`. On Paderborn P3, every gate
+     that reaches mean TPR ≥ 0.98 has FPR 1.0 (8 of 45). So the chosen gate escalates every window, and the cascade
+     would cost more than the headline model alone: 102 µJ against 93 µJ per window at π = 1 %. The rule searched
+     front ends, detectors and confirmations, but not the design study's fourth axis, self-calibration (§4.1).
+   - **What replaces it.** G6 is the self-calibrating Mahalanobis gate on `hyb_r2`:
+     - features: the 9 fx_r1 gate features plus the 14 log band powers (23 features, `fx_r2_hyb` on the board);
+     - calibrated on N = 128 healthy windows.
+   - **How N was chosen.** The rule's own cost criterion, the lowest E(π = 1 %), among the N that fit the
+     Paderborn bundle's flash:
+
+     | N | P3 TPR | P3 FPR | E(π = 1 %) | P4 TPR | P4 FPR |
+     |---|---|---|---|---|---|
+     | 64 | 0.994 | 0.032 | ≈ 61 µJ | 1.0 | 0.051 |
+     | 128 | 0.989 | 0.012 | ≈ 59 µJ | 1.0 | 0.016 |
+
+     The P4 columns are held out.
+   - **In the paper,** G6 is reported as chosen after the study. `fxr1 tree1` is reported as the rule's result, with
+     its E(π = 1 %).
+   - **On the board.**
+     - The Paderborn pool holds the first 128 windows, in time order, of the first healthy (bearing, condition)
+       of the P3 fold-0 test split.
+     - `CALIB` with gate 6 selected calibrates G6. The factory part of G6 is only its ρ, from the training split's
+       `hyb_r2` Mahalanobis.
+     - Paderborn S-2 uses G6, so `CASCADE` m = 2 reuses the whole R2 front end for the R2 models (RQ6).
+5. **Analysis after repeats 1–3 (22 Nov 2026; post hoc except 5.1).** The pre-registered tests stay primary and
+   are reported with their verdicts. Every variant below is labelled secondary in the paper.
+   - **5.1 Gate choices missing from §5.2.** They were fixed in `tools/measure_cascade.py` (commit `97e20b4`,
+     21 Nov 16:37) before pilot session 80, but never written into this document.
+     - S-2 `CASCADE`: CWRU uses G3 `either`, the headline gate of `ml/cascade.py`; Paderborn uses G6 (Deviation 4).
+       G3 alarms on all five CWRU stored inputs, so on CWRU m = 0 escalates every call and equals m = 1.
+     - S-5 `DUTY`: CWRU uses G5 after `CALIB 32`, the only CWRU gate with a low FPR at the unseen load; Paderborn
+       uses G6.
+   - **5.2 Idle baseline.** §6 does not say which idle window is subtracted.
+     - Primary: `P_idle_uW` as recorded, the accepted IDLE window just before the block (CONTRACT §7, the energy
+       campaign's rule).
+     - Sensitivity: the mean of the session's seven IDLE windows. A single 10 s IDLE window can fall in one of the
+       board's USB idle dips. Session 81's CWRU S-2 idle read 18.52 mW, against 18.79 mW in session 82.
+     - Effect of the session mean:
+       - the across-repeat CV (median over conditions) falls from 0.44 to 0.20 % (CWRU) and from 0.38 to 0.28 %
+         (Paderborn);
+       - per-condition energies move by a median of +0.05 % (CWRU) and +0.19 % (Paderborn);
+       - no RQ verdict changes.
+     - The energy campaign's E2E values are recomputed with the same rule in both variants.
+   - **5.3 Exclusion rule.** The rule "fewer than 3 accepted windows in a repeat is missing" applies to the
+     conditions over the 5 stored inputs (S-1, S-2, S-6). `STREAM`, `CALIB`, `SLEEP` and `DUTY` have one window per
+     condition and repeat by design (§5.2), so for them the rule cannot apply. No window was missing in 81–83.
+   - **5.4 Firmware-image systematic, and an in-bundle stage-2 reference (RQ3, RQ4).**
+     - **Finding.** The same float front end costs less on the cascade image (bundle 90) than on the
+       energy-campaign bundles:
+       - CWRU: R4 by 8 % (both the time per call, −3.4 %, and the active power, about −1 mW, change) and R2 by 5 %;
+       - Paderborn: R2 and R4 by about 3 %.
+       - Idle power is the same in both campaigns (18.7–18.8 mW).
+       This is §7's code-layout effect, but up to 8 % instead of ±2 %.
+     - **Pre-registered result.** RQ3 and RQ4 use the energy campaign's E2E, so this systematic enters both.
+       - RQ3 fails the 2 % rule for 6 of 8 CWRU models (Δ down to −8.0 %) and 5 of 8 Paderborn models (down to
+         −11.7 %).
+       - RQ4 fails the 3 % rule for 4 of 15 CWRU streams (G4 on S0, S2, S10 and ST, −3.3 to −3.9 %) and all 15 Paderborn streams.
+     - **Secondary reference.** E₂,in-bundle = the model's `FRONT` measured on the cascade image (S-6) + its `RUN`
+       from the energy campaign. `RUN` is inference only, at most 1 µJ for these models. This is available for the
+       R2/R4 models only.
+       - With it, RQ3's Δ is +0.3 to +0.7 % for all 9 such models.
+       - CWRU's streams fall within +0.6 to +2.6 %.
+     - The paper reports both, and the systematic as a finding: front-end energy depends on the firmware image by
+       up to 8 %.
+   - **5.5 Paderborn stream overhead (RQ4).** Paderborn's streams exceed the prediction by 5–7 %, even in-bundle.
+     - G6 on S0 escalates no window, yet costs 3.4 µJ per window more than `GATE` G6 (56.7 against 53.3 µJ).
+     - Two parts of the stream path are not in the formula's terms:
+       - `STREAM` reads its windows from the flash pool, while `GATE` reads the stored input from RAM;
+       - an escalation converts int16 to float.
+     - The flash-versus-RAM explanation is a hypothesis. Testing it needs a firmware change, and by §5.3 a firmware
+       change restarts the repeats. It is therefore reported as measured, with the 3.4 µJ, and not modelled away.
+     - For the integer R1 gates on CWRU, the same overhead is about 0.3 µJ.
+   - **5.6 RQ5 wording.**
+     - On Paderborn, G1 `sup` is formally on the (E₁, FPR at TPR ≥ 0.98) front, because it is the cheapest gate.
+       But its FPR is 1.0, so it escalates every window. The literal hypothesis therefore fails.
+     - The paper reports this, and next to it E(π = 1 %) with the dataset's stream model. That is the cost
+       criterion of Deviation 4.
+     - On that criterion G6 (54.2 µJ) beats G1 (100.5 µJ) on Paderborn, while G5 (12.3 µJ) and G1 (31.3 µJ) lead
+       on CWRU.
+   - **5.7 RQ6 expectation.** The R1-part saving was expected to be "small, ≤ 10 % of E2E". It is measured at
+       11.9–12.1 µJ, which is 13–21 % of E2E on CWRU. On Paderborn it is 11.7–11.8 µJ, 12–14 % of E2E for the R4
+       models. That is reported as a missed expectation. The whole-R2 saving with G6 on Paderborn is 54.7 µJ, 97 % of
+       the model's front end.
+   - **5.8 RQ8 estimator.**
+     - The increment of `DUTY` power over the single `SLEEP` window is not usable at T ≥ 1 s. The increment there
+       is a few µW to tens of µW out of 17.7 mW, smaller than the offset between two separate 10–20 s windows.
+     - Instead, the per-period energy comes from P = P_base + E_period / T, fitted per repeat over T = 0.1, 1 and
+       10 s. It needs no `SLEEP` window.
+       - CWRU (G5 + rf-r2): 18.3 µJ [10.1, 26.4] per period, against 10.8 µJ from E₁ + escalations.
+       - Paderborn (G6 + mlp-r4-h32): 67.7 µJ [56.6, 78.7], against 53.3 µJ.
+       - The difference is the wake and sleep overhead per period.
+     - Energy per hour is reported both ways:
+       - incremental: E_period · 3600 / T;
+       - board level: P_board · 3600 s, about 64 J/h, mostly USB.
+

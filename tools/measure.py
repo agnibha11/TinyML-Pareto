@@ -290,7 +290,7 @@ def resize_n(n: int, t_us: int, min_us: float) -> int:
 
 
 def measure_window(dut, logger, out: CsvAppender, base: dict, mode: str, n: int, call, p_idle_uw,
-                   min_us: float | None = None):
+                   min_us: float | None = None, reply_fields=None):
     """Run one windowed command call(n), pair it with the logger, write the row (CONTRACT.md 7.4).
 
     Up to MAX_ATTEMPTS attempts; every attempt writes one row (rows are never edited). An attempt is rejected when
@@ -300,6 +300,7 @@ def measure_window(dut, logger, out: CsvAppender, base: dict, mode: str, n: int,
     is left for re-measurement and the campaign continues.
     A damaged board reply (DUTReplyError) is also a rejected attempt: the window ran, so the logger's W line for it
     is read and written into the rejected row (empty t_window_us_dut); otherwise it could pair with the next window.
+    reply_fields(reply) -> dict adds columns taken from the board's reply (tools/measure_cascade.py: alarms, seq).
     """
     for attempt in range(1, MAX_ATTEMPTS + 1):
         logger.arm()
@@ -319,6 +320,8 @@ def measure_window(dut, logger, out: CsvAppender, base: dict, mode: str, n: int,
             print(f"    {mode} rejected (damaged board reply: {e}), attempt {attempt}/{MAX_ATTEMPTS}", flush=True)
             continue
         t_dut = reply["us"]
+        if reply_fields is not None:
+            base = {**base, **reply_fields(reply)}
         row = {**base, "mode": mode, "N": n, "t_window_us_dut": t_dut,
                "P_idle_uW": "" if p_idle_uw is None else f"{p_idle_uw:.3f}", "timestamp": now_iso()}
         try:

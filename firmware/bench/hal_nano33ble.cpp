@@ -71,4 +71,16 @@ size_t bhal_read_bytes(uint8_t *buf, size_t n, uint32_t timeout_ms) {
 
 void bhal_write(const char *s) { Serial.write(reinterpret_cast<const uint8_t *>(s), strlen(s)); }
 
+// nRF52840 TEMP peripheral: one conversion (~36 us), result in 0.25 C steps. Never called inside a window.
+int32_t bhal_temp_cC(void) {
+  NRF_TEMP->EVENTS_DATARDY = 0;
+  NRF_TEMP->TASKS_START = 1;
+  while (NRF_TEMP->EVENTS_DATARDY == 0) {
+  }
+  NRF_TEMP->EVENTS_DATARDY = 0;
+  const int32_t t = (int32_t)NRF_TEMP->TEMP;
+  NRF_TEMP->TASKS_STOP = 1;
+  return t * 25;
+}
+
 #endif  // ARDUINO

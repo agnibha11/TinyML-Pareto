@@ -1,6 +1,6 @@
 # CONTRACT.md — M0 interface contract
 
-Status: **v1.0-rc4, ready for sign-off.** It becomes binding when all three sign §9 (gate M0, due Sun 11 Oct 2026).
+Status: **v1.1** (21 Nov 2026): v1.0-rc4 plus the §7.6 cascade commands.
 
 This file fixes every interface between the three workstreams, so the three codebases fit together without anyone
 reading anyone else's code. If you need to change something here, open a PR that edits this file. All three approve it,
@@ -250,7 +250,7 @@ All CSVs: UTF-8, comma-separated, header row, `.` decimal point, no index column
   `OK` or `ERR`.** A final `OK` line may carry `key=value` pairs separated by single spaces.
 - `ERR <CODE> <free text>` codes: `UNKNOWN` (unknown command), `ARG` (bad or missing argument), `NOSEL` (no model selected),
   `RANGE` (index out of range), `ALLOC` (AllocateTensors failed), `INVOKE` (inference failed), `IO` (short binary read),
-  `NOTIMPL` (command not implemented in this firmware build).
+  `NOTIMPL` (command not implemented in this firmware build), `NOCAL` (§7.6: gate 5 used before a successful `CALIB`).
 - If several errors apply, `UNKNOWN` wins: an unknown keyword is reported before any argument error.
 - The board never prints anything unless it is answering a command. It sends no banner at boot. Only `LIST` sends
   lines before its final line, and `VERIFY` sends its `RDY` handshake. Any other line is a protocol violation, and
@@ -366,10 +366,11 @@ with the next window, writes the attempt as rejected, and measures the window ag
 
 The paper states this table verbatim.
 
-### 7.6 Cascade commands (v1.1 draft, 21 Nov 2026; not yet in the firmware)
+### 7.6 Cascade commands (v1.1, 21 Nov 2026)
 
-Only the **cascade bundle** of each dataset implements these (`tools/bundle.py --cascade`, data from
-`handoff/cascade/<ds>/`, `ml/cascade_export.py`). Every other bundle answers them with `ERR NOTIMPL`. All §7.1 and
+Only the **cascade bundle** of each dataset implements these (`tools/bundle.py --cascade`, bundle 90, built with
+`-DBENCH_CASCADE=1`; data from `handoff/cascade/<ds>/`, `ml/cascade_export.py`; code in
+`firmware/bench/bench_cascade.cpp`). Every other bundle answers them with `ERR NOTIMPL`. All §7.1 and
 §7.3 rules apply.
 - Setup always happens outside the window: gate selection, the int16 copy of the stored input, model setup, the
   warm-up call.
@@ -381,25 +382,28 @@ Only the **cascade bundle** of each dataset implements these (`tools/bundle.py -
 - The gate parameters (`gate_params.h`).
 - A pool of `P` int16 windows: the first `H` are healthy, in time order.
 - 5 streams of 100 pool indices: S0, S2, S10, S100, ST, numbered 0..4.
-- The 5 stored inputs, as int16 copies made with `fx_from_float` at `INPUT` time.
+- The 5 stored inputs, as int16 copies made with `fx_from_float` in each command's setup, outside the window.
 
-**Gates.** 1 `sup`, 2 `healthy`, 3 `either`, 4 `either2`, 5 `selfcal`; 6 is reserved for the Paderborn gate.
+**Gates.** 1 `sup`, 2 `healthy`, 3 `either`, 4 `either2`, 5 `selfcal`. The Paderborn bundle also has 6 `selfcal_r2`
+(pre-registration, Deviation 4): gate 5 on 23 features, the 9 gate features plus the 14 log band powers of
+`fx_r2_hyb`, built with `-DCASC_NG_MAX=23 -DCASC_CAL_MAX=128`.
 - **Decisions** are float32 on the board.
 - **Gate 4** keeps the decision of gate 3 on the previous window. That state is reset at the start of every
   `GATE`, `CASCADE` and `DUTY` window and every `STREAM` pass.
-- **Gate 5** needs a successful `CALIB`. Until then, any command that uses it replies `ERR NOCAL`.
+- **Gate 5** needs a successful `CALIB`, and gate 6 a successful `CALIB` with gate 6 selected. Until then, any
+  command that uses it replies `ERR NOCAL`.
 
 | Command | Timed? | Board action | Final line |
 |---|---|---|---|
-| `TEMP` | no | nRF52840 die temperature (TEMP peripheral, 0.25 °C steps) | `OK temp_cC=<centi-°C>` |
-| `GSEL <g>` | no | select gate g ∈ 1..5 | `OK g=<g> name=<name>` |
-| `GVERIFY` | no | `RDY 2048`, then 1024 × int16 LE (the same handshake, timeout and drain as `VERIFY`); fx_r1 and every base gate on that window | `OK sup=<0\|1> leaf=<node> healthy=<0\|1> d=<hex> sc=<-1\|0\|1> dsc=<hex> fx=<hex>,…` (10 values) |
+| `TEMP` | no | nRF52840 die temperature (TEMP peripheral, 0.25 °C steps) | `OK temp_centi_c=<centi-°C>` |
+| `GSEL <g>` | no | select gate g ∈ 1..5, Paderborn 1..6 (`ERR RANGE` otherwise); `GATE`, `CASCADE`, `STREAM`, `DUTY` reply `ERR NOSEL` until a gate is selected | `OK g=<g> name=<name>` |
+| `GVERIFY` | no | `RDY 2048`, then 1024 × int16 LE (the same handshake, timeout and drain as `VERIFY`); fx_r1 and every base gate on that window | `OK sup=<0\|1> leaf=<node> healthy=<0\|1> d=<hex> sc=<-1\|0\|1> dsc=<hex> fx=<hex>,…` (10 values); Paderborn appends ` sr=<-1\|0\|1> dsr=<hex> hb=<hex>,…` (gate 6 alarm and distance, the 14 bands of `fx_r2_hyb`). The line can exceed 256 characters |
 | `GATE <N>` | yes | N × (fx_r1 + the selected gate) on the stored input | `OK n=<N> us=<> alarm=<0\|1>` |
-| `CASCADE <N> <m>` | yes | N × gate + stage 2 of the selected model (`SEL`) on the stored input. m = 0: stage 2 only on an alarm; 1: stage 2 always; 2: stage 2 always, reusing the gate's fx_r1 features (`ERR NOTIMPL` for a model without an R1 part) | `OK n=<N> us=<> alarms=<> esc=<> cls=<last>` |
+| `CASCADE <N> <m>` | yes | N × gate on the int16 copy + stage 2 of the selected model (`SEL`) on the float stored input itself, the window `E2E` measures. m = 0: stage 2 only on an alarm; 1: stage 2 always; 2: stage 2 always, with the model's R1 part taken from the gate's fx_r1 output (R1: z-score only; R2: `fe_r2_tail`; R4: `fe_r4_tail`, `frontend.h`). With gate 6, an R2 model takes the gate's whole `fx_r2_hyb` output (z-score only). `ERR NOTIMPL` for an R0 or R3 model | `OK n=<N> us=<> alarms=<> esc=<> cls=<last>` |
 | `STREAM <N> <s>` | yes | N passes over stream s. Each window: gate; on an alarm, `fx_to_float` + the model's front end + inference | `OK n=<N> us=<> windows=<100 N> alarms=<> esc=<> seq=<hex>` |
-| `CALIB <n> <R>` | yes | R × `casc_calibrate` on the first n healthy pool windows (n = 2..min(64, H)); the last result becomes gate 5's state | `OK n=<n> r=<R> us=<> thr=<hex>` |
-| `DUTY <T> <N>` | yes | N periods of T ms (T = 10..60000). Each period runs one stream-0 window (cycling) through the gate and, on an alarm, stage 2, then thread sleep (as `SLEEP`) to the end of the period | `OK n=<N> us=<> alarms=<> esc=<> overrun=<periods whose work exceeded T>` |
-| `FXFE <N> <p>` | yes | N × fixed-point front end p on the stored input: 0 fx_r1, 1 fx_r2_hyb, 2 fx_r4_hyb, 3 fx_r2_q15, 4 fx_r4_q15 | `OK n=<N> us=<>` |
+| `CALIB <n> <R>` | yes | R × the calibration on the first n healthy pool windows (n = 2..min(64, H); Paderborn 2..min(128, H)). It calibrates gate 6 when gate 6 is selected, gate 5 otherwise; the last result becomes that gate's state | `OK n=<n> r=<R> us=<> thr=<hex>` |
+| `DUTY <T> <N>` | yes | N periods of T ms (T = 10..60000, T × N ≤ 600 000 ms) on a fixed schedule. Each period runs one stream-0 window (cycling) through the gate and, on an alarm, stage 2 (as in `STREAM`), then thread sleep (as `SLEEP`) and `WFI` to the end of the period | `OK n=<N> us=<> alarms=<> esc=<> overrun=<periods whose work exceeded T>` |
+| `FXFE <N> <p>` | yes | N × fixed-point front end p on the int16 stored input: 0 fx_r1, 1 fx_r2_hyb, 2 fx_r4_hyb. The q15/q31 paths are not offered: the board's Arduino_CMSIS-DSP 5.7.0 lacks `arm_absmax_q15/q31` | `OK n=<N> us=<>` |
 
 - **`<hex>`** is the IEEE-754 bit pattern of a float32: 8 lowercase hex digits. The host compares exact values, not
   rounded decimals.
@@ -499,12 +503,16 @@ Version history:
   (CWRU) and `hardware/` (rig measurements, session log, build record, board VERIFY). Shared tool outputs stay at
   `results/vmcu/`, `results/vrig/`, `results/figs/`, `results/demo/`. §1, §6 and §8 paths updated; every column is
   unchanged. Index of every file and the script that writes it: `results/README.md`. Proposed by Hridayesh.
-- v1.1 draft (21 Nov 2026), proposed by Hridayesh (sole owner of every workstream since 20 Nov), not yet binding:
+- v1.1 (21 Nov 2026), Hridayesh (sole owner of every workstream since 20 Nov):
   - §7.6 cascade commands `TEMP`, `GSEL`, `GVERIFY`, `GATE`, `CASCADE`, `STREAM`, `CALIB`, `DUTY`, `FXFE` for a
     separate cascade bundle per dataset;
   - error code `NOCAL`;
   - the `cascade_hw/cascade_measurements.csv` row format.
 
-  Existing commands, bundles and files are unchanged. It becomes binding, and `CONTRACT_VERSION` becomes 1.1, when
-  the firmware implements it and the tests cover it. That happens before cascade pilot session 80
-  (`docs/cascade_preregistration.md`).
+  Existing commands and their replies are unchanged; the dispatcher now accepts two arguments, and non-cascade
+  builds answer the §7.6 keywords with `ERR NOTIMPL` instead of `ERR UNKNOWN`. Implemented in
+  `firmware/bench/bench_cascade.cpp` and covered by `tests/test_cascade.py` on the PC simulator (`make
+  bench_sim_cascade`). Changes from the draft: `TEMP` replies `temp_centi_c` (§7.1 keys are lowercase); `FXFE` offers
+  fx_r1 and the two hybrids only; `CASCADE` runs stage 2 on the float stored input; Paderborn gate 6 (`selfcal_r2`,
+  pre-registration Deviation 4) with its `CALIB` and `GVERIFY` fields. Board verification (S-V) comes
+  with cascade pilot session 80 (`docs/cascade_preregistration.md`).

@@ -14,3 +14,4 @@ void     bhal_sleep_ms(uint32_t ms);      // RTOS thread sleep (lets Mbed enter 
 int      bhal_read_byte(void);            // next received byte, or -1 if none
 size_t   bhal_read_bytes(uint8_t *buf, size_t n, uint32_t timeout_ms);  // blocking with timeout
 void     bhal_write(const char *s);       // raw write, no newline added
+int32_t  bhal_temp_cC(void);             // die temperature in centi-degrees C (nRF52840 TEMP, 0.25 C steps)

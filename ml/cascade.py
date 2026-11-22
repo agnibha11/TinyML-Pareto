@@ -28,6 +28,7 @@ cascade_models.csv (per model and protocol), summary.json; figures fig_cascade_e
 results/figs/.
 
 Usage: python ml/cascade.py
+       python ml/cascade.py --hw [--dataset cwru|pu|both] [--idle window|session|both]   (board campaign, ml/cascade_hw.py)
 """
 from __future__ import annotations
 
@@ -238,4 +239,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    if "--hw" in sys.argv[1:]:          # measured cascade campaign (docs/cascade_preregistration.md §6)
+        from cascade_hw import main as hw_main
+        hw_main(sys.argv[1:])
+    else:
+        main()

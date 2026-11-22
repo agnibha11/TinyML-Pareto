@@ -2,6 +2,9 @@
 // one-off calibration. Host reference: ml/cascade_export.py.
 #include "cascade.h"
 
+// Like frontend_fx.c: on the board only in bundle builds (the stub sketch has no generated headers).
+#if !defined(ARDUINO) || defined(BUNDLE_ID)
+
 #include <math.h>
 
 #include "frontend_fx.h"
@@ -18,16 +21,18 @@ int casc_tree(const casc_params_t *p, const float *fx10, int *leaf) {
   return p->alarm[n] ? 1 : 0;
 }
 
-float casc_mahal(const float *g9, const float *mu, const float *ci) {
-  float d[CASC_NG], s = 0.0f;
-  for (int i = 0; i < CASC_NG; ++i) d[i] = g9[i] - mu[i];
-  for (int i = 0; i < CASC_NG; ++i) {
+float casc_mahal_n(const float *g, const float *mu, const float *ci, int nd) {
+  float d[CASC_NG_MAX > CASC_NG ? CASC_NG_MAX : CASC_NG], s = 0.0f;
+  for (int i = 0; i < nd; ++i) d[i] = g[i] - mu[i];
+  for (int i = 0; i < nd; ++i) {
     float r = 0.0f;
-    for (int j = 0; j < CASC_NG; ++j) r += ci[i * CASC_NG + j] * d[j];
+    for (int j = 0; j < nd; ++j) r += ci[i * nd + j] * d[j];
     s += d[i] * r;
   }
   return s;
 }
+
+float casc_mahal(const float *g9, const float *mu, const float *ci) { return casc_mahal_n(g9, mu, ci, CASC_NG); }
 
 void casc_eval(const casc_params_t *p, const casc_cal_t *cal, const int16_t *w, casc_eval_t *e) {
   fx_r1(w, e->fx);
@@ -36,7 +41,7 @@ void casc_eval(const casc_params_t *p, const casc_cal_t *cal, const int16_t *w, 
   e->d = casc_mahal(e->g, p->mu, p->ci);
   e->healthy = e->d > p->thr;
   if (cal && cal->valid) {
-    e->dsc = casc_mahal(e->g, cal->mu, cal->ci);
+    e->dsc = casc_mahal_n(e->g, cal->mu, cal->ci, cal->d);
     e->sc = e->dsc > cal->thr;
   } else {
     e->dsc = 0.0f;
@@ -44,14 +49,13 @@ void casc_eval(const casc_params_t *p, const casc_cal_t *cal, const int16_t *w, 
   }
 }
 
-int casc_decide(const casc_params_t *p, const casc_cal_t *cal, int g, const int16_t *w, casc_state_t *st) {
-  float fx[CASC_NFX], gf[CASC_NG];
-  fx_r1(w, fx);
+int casc_decide_fx(const casc_params_t *p, const casc_cal_t *cal, int g, const float *fx, casc_state_t *st) {
+  float gf[CASC_NG];
   if (g == CASC_SUP) return casc_tree(p, fx, 0);
   casc_gate_features(fx, gf);
   if (g == CASC_SELFCAL) {
     if (!cal || !cal->valid) return -1;
-    return casc_mahal(gf, cal->mu, cal->ci) > cal->thr;
+    return casc_mahal_n(gf, cal->mu, cal->ci, cal->d) > cal->thr;
   }
   const int h = casc_mahal(gf, p->mu, p->ci) > p->thr;
   if (g == CASC_HEALTHY) return h;
@@ -60,6 +64,12 @@ int casc_decide(const casc_params_t *p, const casc_cal_t *cal, int g, const int1
   const int out = either & st->prev_either;  // CASC_EITHER2
   st->prev_either = either;
   return out;
+}
+
+int casc_decide(const casc_params_t *p, const casc_cal_t *cal, int g, const int16_t *w, casc_state_t *st) {
+  float fx[CASC_NFX];
+  fx_r1(w, fx);
+  return casc_decide_fx(p, cal, g, fx, st);
 }
 
 static void sort_f(float *a, int n) {  // insertion sort, n <= CASC_CAL_MAX
@@ -71,27 +81,33 @@ static void sort_f(float *a, int n) {  // insertion sort, n <= CASC_CAL_MAX
   }
 }
 
-int casc_calibrate(const casc_params_t *p, const int16_t (*w)[1024], int n, casc_cal_t *cal) {
-  static float G[CASC_CAL_MAX][CASC_NG];
-  double mean[CASC_NG] = {0}, m2[CASC_NG][CASC_NG] = {{0}}, L[CASC_NG][CASC_NG] = {{0}}, inv[CASC_NG][CASC_NG];
-  float fx[CASC_NFX], dist[CASC_CAL_MAX];
+static float s_G[CASC_CAL_MAX * CASC_NG_MAX];   // calibration features, row-major n x d
+
+int casc_calibrate_feats(const float *G, int n, int d, float ridge, float rho, casc_cal_t *cal) {
+  // static: 3 x 23 x 23 doubles do not belong on an Mbed thread stack
+  static double mean[CASC_NG_MAX], m2[CASC_NG_MAX][CASC_NG_MAX], L[CASC_NG_MAX][CASC_NG_MAX],
+      inv[CASC_NG_MAX][CASC_NG_MAX];
+  static float dist[CASC_CAL_MAX];
   cal->valid = 0;
-  if (n < 2 || n > CASC_CAL_MAX) return -1;
+  if (n < 2 || n > CASC_CAL_MAX || d < 1 || d > CASC_NG_MAX) return -1;
+  for (int i = 0; i < d; ++i) {
+    mean[i] = 0.0;
+    for (int j = 0; j < d; ++j) m2[i][j] = L[i][j] = 0.0;
+  }
   for (int k = 0; k < n; ++k) {  // Welford
-    fx_r1(w[k], fx);
-    casc_gate_features(fx, G[k]);
-    double delta[CASC_NG];
-    for (int i = 0; i < CASC_NG; ++i) {
-      delta[i] = (double)G[k][i] - mean[i];
+    const float *g = &G[k * d];
+    double delta[CASC_NG_MAX];
+    for (int i = 0; i < d; ++i) {
+      delta[i] = (double)g[i] - mean[i];
       mean[i] += delta[i] / (double)(k + 1);
     }
-    for (int i = 0; i < CASC_NG; ++i)
-      for (int j = 0; j <= i; ++j) m2[i][j] += delta[i] * ((double)G[k][j] - mean[j]);
+    for (int i = 0; i < d; ++i)
+      for (int j = 0; j <= i; ++j) m2[i][j] += delta[i] * ((double)g[j] - mean[j]);
   }
   // Cholesky of cov + ridge I = L L^T (lower triangle of m2 holds the sums)
-  for (int i = 0; i < CASC_NG; ++i) {
+  for (int i = 0; i < d; ++i) {
     for (int j = 0; j <= i; ++j) {
-      double s = m2[i][j] / (double)(n - 1) + (i == j ? (double)p->ridge : 0.0);
+      double s = m2[i][j] / (double)(n - 1) + (i == j ? (double)ridge : 0.0);
       for (int k = 0; k < j; ++k) s -= L[i][k] * L[j][k];
       if (i == j) {
         if (s <= 0.0) return -2;
@@ -102,29 +118,64 @@ int casc_calibrate(const casc_params_t *p, const int16_t (*w)[1024], int n, casc
     }
   }
   // inverse = L^-T L^-1, column by column: solve L y = e_c, then L^T x = y
-  for (int c = 0; c < CASC_NG; ++c) {
-    double y[CASC_NG], x[CASC_NG];
-    for (int i = 0; i < CASC_NG; ++i) {
+  for (int c = 0; c < d; ++c) {
+    double y[CASC_NG_MAX], x[CASC_NG_MAX];
+    for (int i = 0; i < d; ++i) {
       double s = (i == c) ? 1.0 : 0.0;
       for (int k = 0; k < i; ++k) s -= L[i][k] * y[k];
       y[i] = s / L[i][i];
     }
-    for (int i = CASC_NG - 1; i >= 0; --i) {
+    for (int i = d - 1; i >= 0; --i) {
       double s = y[i];
-      for (int k = i + 1; k < CASC_NG; ++k) s -= L[k][i] * x[k];
+      for (int k = i + 1; k < d; ++k) s -= L[k][i] * x[k];
       x[i] = s / L[i][i];
     }
-    for (int i = 0; i < CASC_NG; ++i) inv[i][c] = x[i];
+    for (int i = 0; i < d; ++i) inv[i][c] = x[i];
   }
-  for (int i = 0; i < CASC_NG; ++i) {
+  for (int i = 0; i < d; ++i) {
     cal->mu[i] = (float)mean[i];
-    for (int j = 0; j < CASC_NG; ++j) cal->ci[i * CASC_NG + j] = (float)(0.5 * (inv[i][j] + inv[j][i]));
+    for (int j = 0; j < d; ++j) cal->ci[i * d + j] = (float)(0.5 * (inv[i][j] + inv[j][i]));
   }
-  for (int k = 0; k < n; ++k) dist[k] = casc_mahal(G[k], cal->mu, cal->ci);
+  for (int k = 0; k < n; ++k) dist[k] = casc_mahal_n(&G[k * d], cal->mu, cal->ci, d);
   sort_f(dist, n);
   const float med = (n & 1) ? dist[n / 2] : 0.5f * (dist[n / 2 - 1] + dist[n / 2]);
-  cal->thr = p->rho * med;
+  cal->thr = rho * med;
   cal->n = n;
+  cal->d = d;
   cal->valid = 1;
   return 0;
 }
+
+int casc_calibrate(const casc_params_t *p, const int16_t (*w)[1024], int n, casc_cal_t *cal) {
+  float fx[CASC_NFX];
+  cal->valid = 0;
+  if (n < 2 || n > CASC_CAL_MAX) return -1;
+  for (int k = 0; k < n; ++k) {
+    fx_r1(w[k], fx);
+    casc_gate_features(fx, &s_G[k * CASC_NG]);
+  }
+  return casc_calibrate_feats(s_G, n, CASC_NG, p->ridge, p->rho, cal);
+}
+
+#if CASC_G6_ENABLED
+void casc_g6_features(const int16_t *w, float *f24, float *g23) {
+  fx_r2_hyb(w, f24);
+  casc_gate_features(f24, g23);
+  for (int i = 0; i < 14; ++i) g23[CASC_NG + i] = f24[10 + i];
+}
+
+int casc_calibrate_g6(const casc_params_t *p, const int16_t (*w)[1024], int n, casc_cal_t *cal) {
+  float f24[24];
+  cal->valid = 0;
+  if (n < 2 || n > CASC_CAL_MAX) return -1;
+  for (int k = 0; k < n; ++k) casc_g6_features(w[k], f24, &s_G[k * CASC_G6_FEATS]);
+  return casc_calibrate_feats(s_G, n, CASC_G6_FEATS, p->ridge, p->rho6, cal);
+}
+
+int casc_g6_decide(const casc_cal_t *cal6, const float *g23) {
+  if (!cal6 || !cal6->valid) return -1;
+  return casc_mahal_n(g23, cal6->mu, cal6->ci, CASC_G6_FEATS) > cal6->thr;
+}
+#endif
+
+#endif  // !ARDUINO || BUNDLE_ID

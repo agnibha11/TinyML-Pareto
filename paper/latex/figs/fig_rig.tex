@@ -1,0 +1,50 @@
+% Fig. 2 -- energy rig (a) and measurement window (b). Included from main.tex. Width = one column.
+\begin{tikzpicture}[
+  font=\scriptsize, >={Stealth[length=3.5pt]},
+  box/.style={draw=#1!70!black, fill=#1!9, rounded corners=1.5pt, line width=0.5pt, align=center, inner sep=2.5pt},
+  pw/.style={line width=1.1pt, draw=#1},
+  sig/.style={->, line width=0.55pt, draw=black!70},
+  lab/.style={font=\tiny, text=black!70, inner sep=1pt},
+]
+\definecolor{cA}{HTML}{2A78D6}\definecolor{cB}{HTML}{EB6834}\definecolor{cC}{HTML}{1BAF7A}
+\definecolor{cD}{HTML}{EDA100}\definecolor{cG}{HTML}{6B6B66}\definecolor{vb}{HTML}{C0392B}
+% ---------------- (a) wiring
+\node[font=\scriptsize\bfseries, anchor=west] at (-0.15,2.75) {(a)};
+\node[box=cG, minimum width=1.1cm, minimum height=2.15cm] (pc) at (0.5,0.9) {Laptop\\[2pt]USB\\5\,V\\[2pt]\tiny host\\\tiny scripts};
+\node[box=cB, minimum width=1.7cm, minimum height=0.9cm] (ina) at (2.75,1.55) {INA219 module\\\tiny on-board R100 shunt\\\tiny $R_\mathrm{eff}=0.1139\,\Omega$};
+\node[box=cA, minimum width=1.7cm, minimum height=0.9cm] (dut) at (5.05,1.55) {Nano 33 BLE\\\tiny nRF52840, M4F, 64\,MHz\\\tiny device under test};
+\node[box=cC, minimum width=1.7cm, minimum height=0.8cm] (log) at (2.75,0.15) {ESP32 logger\\\tiny integrates $V\!\cdot\!I$ at 1\,kHz};
+\draw[pw=vb] (pc.east|-ina.west) -- node[lab, above, text=vb]{VBUS} (ina.west);
+\draw[pw=vb] (ina.east) -- node[lab, above, text=vb]{5\,V} (dut.west);
+\draw[sig, <->, draw=cG] (pc.north) -- ++(0,0.42) -| node[lab, pos=0.25, above]{USB data only: commands, VERIFY dumps} (dut.north);
+\draw[sig, <->] (ina.south) -- node[lab, right]{I$^2$C} (log.north);
+\draw[sig] (dut.south) |- (log.east);
+\node[lab, anchor=west, align=left] at (5.1,0.62) {D2 $\rightarrow$ 100\,$\Omega$\\$\rightarrow$ GPIO4};
+\draw[sig] (log.west) -- node[lab, above]{serial} (pc.east|-log.west);
+\draw[black!40, line width=0.4pt, dashed] (-0.05,-0.42) -- (6.0,-0.42);
+\node[lab, anchor=east] at (6.0,-0.3) {common ground};
+% ---------------- (b) one measurement block
+\begin{scope}[yshift=-2.75cm]
+\node[font=\scriptsize\bfseries, anchor=west] at (-0.15,1.95) {(b)};
+\def\tA{0.4}\def\tB{2.4}\def\tC{2.7}\def\tD{5.6}
+% D2 trace
+\node[lab, anchor=east] at (0.35,1.45) {D2};
+\draw[line width=0.7pt, cA] (0.4,1.25) -- (\tC,1.25) -- (\tC,1.6) -- (\tD,1.6) -- (\tD,1.25) -- (5.95,1.25);
+% power trace
+\fill[cB!12] (\tC,0.28) rectangle (\tD,0.95);
+\node[lab, anchor=east, align=right] at (0.35,0.55) {$P(t)$};
+\draw[black!25, line width=0.3pt] (0.4,0) -- (5.95,0);
+\draw[line width=0.6pt, cG, domain=0.4:\tB, samples=60, smooth, variable=\x] plot (\x, {0.28+0.03*sin(900*\x)});
+\draw[line width=0.6pt, cG] (\tB,0.28) -- (\tC,0.28);
+\draw[line width=0.6pt, cB, domain=\tC:\tD, samples=120, variable=\x] plot (\x, {0.95+0.06*sin(2400*\x)+0.04*sin(700*\x)});
+\draw[line width=0.6pt, cG] (\tD,0.28) -- (5.95,0.28);
+\draw[densely dashed, cG, line width=0.4pt] (\tC,0.28) -- (\tD,0.28);
+\draw[densely dashed, cB!80!black, line width=0.4pt] (\tC,0.95) -- (\tD,0.95);
+\node[lab, anchor=south] at (1.4,0.33) {IDLE window: $\bar P_\mathrm{idle}$};
+\node[lab, anchor=south, text=cB!80!black] at (4.15,1.03) {$N$ calls of FRONT, RUN or E2E: $\bar P$};
+\draw[<->, line width=0.4pt, black!60] (\tC,-0.18) -- node[lab, below]{$t$ (logger clock) $\geq$ 10\,s} (\tD,-0.18);
+\draw[<->, line width=0.4pt, black!60] (0.4,-0.18) -- node[lab, below]{10\,s} (\tB,-0.18);
+\draw[densely dashed, cG, line width=0.4pt] (\tC,0.28) -- (\tD,0.28);
+\node[font=\tiny, cB!70!black] at (4.15,0.6) {$E=(\bar P-\bar P_\mathrm{idle})\,t/N$};
+\end{scope}
+\end{tikzpicture}

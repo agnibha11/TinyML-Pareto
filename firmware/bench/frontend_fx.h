@@ -27,6 +27,9 @@ extern "C" {
 #define FX_LSB_PER_G 4096.0f   // +/-8 g full scale, 16 bit
 
 int fx_init(void);                                   // call once; 0 on success
+// Only the float FFT instances of the hybrid path (fx_r2_hyb, fx_r4_hyb). The board's Arduino_CMSIS-DSP 5.7.0 has no
+// arm_absmax_q15/q31, so the q15/q31 paths do not link there; the cascade bundle uses fx_r1 and the hybrids only.
+int fx_init_hyb(void);
 void fx_to_float(const int16_t *q, float *x);         // what a float front end must do first: x = q / FX_LSB_PER_G
 void fx_from_float(const float *x, int16_t *q);       // test helper: round and saturate g -> int16
 

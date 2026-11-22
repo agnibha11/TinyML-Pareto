@@ -47,11 +47,15 @@ def git_hash() -> str:
 
 
 def compile_bundle(cli: str, b: dict, gh: str, upload_port: str | None, sketch: Path = SKETCH,
-                   build_root: Path = REPO / "build" / "fw") -> dict:
+                   build_root: Path = REPO / "build" / "fw", float_log: bool = False) -> dict:
     # arduino-cli splits the recipe on spaces and strips quotes: single quotes keep the inner "" of the string macro
     flags = f'-DBUNDLE_ID={b["id"]} -DARENA_BYTES={max(b["arena_bytes"], 16)} \'-DBENCH_GIT_HASH="{gh}"\''
     if b["tflm"]:
         flags += " -DBUNDLE_TFLM=1"
+    if float_log:          # frontend.c: single-precision log10 for R2-R4 instead of newlib's (software double) log10f
+        flags += " -DFE_FLOAT_LOG=1"
+    if b.get("cascade"):   # CONTRACT.md 7.6 commands (firmware/bench/bench_cascade.cpp)
+        flags += " -DBENCH_CASCADE=1" + "".join(f" -D{k}={v}" for k, v in b.get("defines", {}).items())
     bp = build_root / f"b{b['id']}"
     cmd = [cli, "compile", "--fqbn", FQBN, "--build-path", str(bp),
            "--build-property", f"compiler.cpp.extra_flags={flags}", "--build-property", f"compiler.c.extra_flags={flags}"]
@@ -83,37 +87,46 @@ def main() -> None:
     ap.add_argument("--port")
     ap.add_argument("--arduino-cli", default=shutil.which("arduino-cli") or "arduino-cli")
     ap.add_argument("--dataset", choices=("cwru", "pu"), default="cwru")
+    ap.add_argument("--float-log", action="store_true",
+                    help="R2-R4 front ends with the single-precision log10 (frontend.c FE_FLOAT_LOG): stamp <hash>-flog, "
+                         "builds in build/fw_flog, build record in results/<dataset>/hardware/logfix/fw_build.csv")
     ap.add_argument("--allow-unpatched-lib", action="store_true",
                     help="build TFLM bundles even if the board library is not the patched one (firmware/patches/)")
     a = ap.parse_args()
     pu = a.dataset == "pu"
     sketch = REPO / "build" / "pu" / "sketch" / "bench" if pu else SKETCH
-    build_root = REPO / "build" / ("pu/fw" if pu else "fw")
+    build_root = REPO / "build" / (("pu/fw" if pu else "fw") + ("_flog" if a.float_log else ""))
     plan = json.loads((sketch / "models" / "bundles.json").read_text())
-    todo = plan if a.all else [b for b in plan if b["id"] == a.bundle]
+    # --all is the energy campaign's bundles; the cascade bundle (tools/bundle.py --cascade) is built by its id only
+    todo = [b for b in plan if not b.get("cascade")] if a.all else [b for b in plan if b["id"] == a.bundle]
     if not todo:
         sys.exit("give a bundle id or --all (run tools/bundle.py first)")
     lib = "none"
     if any(b["tflm"] for b in todo):
         lib = chirale_lib.label(*chirale_lib.state()) if a.allow_unpatched_lib else chirale_lib.check()
         print(f"TFLM library: {lib}")
-    gh = git_hash() + ("-pu" if pu else "")   # PING then says bench=<hash>-pu: no mixing up the two datasets
+    gh = git_hash() + ("-pu" if pu else "") + ("-flog" if a.float_log else "")   # PING: bench=<hash>[-pu][-flog]
     rows = []
     for b in todo:
-        res = compile_bundle(a.arduino_cli, b, gh, None if a.compile_only else a.port, sketch, build_root)
+        res = compile_bundle(a.arduino_cli, b, gh, None if a.compile_only else a.port, sketch, build_root, a.float_log)
         print(f"bundle {b['id']}: links={res['links']} flash={res['bundle_flash_B']} ram_static={res['bundle_ram_static_B']}"
               f" ({len(b['models'])} models)")
         if not res["links"]:
             print(res["log"])
         for m in b["models"]:
             cn = c_name(m)
-            fm = res["sym"].get(f"g_model_{cn}") if b["tflm"] else \
+            rt = b.get("runtimes", {}).get(m, b["runtime"])
+            fm = res["sym"].get(f"g_model_{cn}") if rt != "emlearn" else \
                 sum(v for k, v in res["sym"].items() if k.startswith(cn + "_")) or None
-            rows.append({"bundle": b["id"], "model_id": m, "runtime": b["runtime"], "links": res["links"],
+            rows.append({"bundle": b["id"], "model_id": m, "runtime": rt, "links": res["links"],
                          "bundle_flash_B": res["bundle_flash_B"], "bundle_ram_static_B": res["bundle_ram_static_B"],
                          "arena_B": b["arena_bytes"], "flash_model_B_board": fm, "git_hash": gh,
                          "tflm_lib": lib if b["tflm"] else "none"})
-    out = REPO / "results" / ("pu" if pu else "cwru") / "hardware" / "fw_build.csv"
+    sub = "cascade_hw" if any(b.get("cascade") for b in todo) else "hardware"   # cascade builds kept apart
+    if a.float_log:
+        sub += "/logfix"   # the float-log campaign never touches the original build record
+    out = REPO / "results" / ("pu" if pu else "cwru") / sub / "fw_build.csv"
+    out.parent.mkdir(parents=True, exist_ok=True)
     new = pd.DataFrame(rows)
     if out.exists() and not a.all:
         old = pd.read_csv(out)

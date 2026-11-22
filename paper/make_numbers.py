@@ -293,6 +293,7 @@ def build() -> dict[str, str]:
     m["NumExSleepLife"] = f"{batt / ps / year:.1f}"
     m.update(fixed_point_numbers())
     m.update(cascade_numbers())
+    m.update(cascade_hw_numbers())
     m.update(pu_numbers())
     return m
 
@@ -382,6 +383,179 @@ def cascade_numbers() -> dict[str, str]:
     m["NumCasSaveFamMin"] = f"{min(v['saving_pi0.01'] for v in fam.values()):.1f}"
     m["NumCasSaveFamMax"] = f"{max(v['saving_pi0.01'] for v in fam.values()):.1f}"
     m["NumCasMlpFOneSingle"], m["NumCasMlpFOneCascade"] = f3(fam["mlp"]["f1_single"]), f3(fam["mlp"]["f1_cascade"])
+    return m
+
+
+def spct(x: float, d: int = 1) -> str:
+    """Signed percentage, LaTeX minus."""
+    return f"{100 * x:+.{d}f}\\,\\%".replace("-", "$-$")
+
+
+def cascade_hw_numbers() -> dict[str, str]:
+    """Macros for the measured cascade (ml/cascade.py --hw -> results/<ds>/cascade_hw/analysis/; primary idle rule)."""
+    m: dict[str, str] = {}
+    dsn = {"cwru": "Cw", "pu": "Pu"}
+    if not all((RES / ds / "cascade_hw" / "analysis" / "summary.json").exists() for ds in dsn):
+        return m
+    deploy = {"cwru": (5, "selfcal32"), "pu": (6, "selfcal_r2")}
+    rng = lambda lo, hi, f: f"{f(lo)}--{f(hi)}"  # noqa: E731
+    prng = lambda lo, hi, d=0: f"{100 * lo:.{d}f}--{100 * hi:.{d}f}\\,\\%"  # noqa: E731
+    srng = lambda lo, hi: f"{spct(lo)} to {spct(hi)}"  # noqa: E731
+    windows = 0
+    ratio_est, ratio_cal, spread, image, idle_lo, idle_hi, temps, inb_all = [], [], [], [], [], [], [], []
+    inb_uj, reuse_exp, n_streams = [], [], 0
+    for ds, D in dsn.items():
+        an = RES / ds / "cascade_hw" / "analysis"
+        s = json.loads((an / "summary.json").read_text())
+        host = json.loads((REPO / "handoff" / "cascade" / ds / "summary.json").read_text())
+        rates = host["host_rates_test_split"]
+        q = s["quality"]
+        windows += sum(q["windows_accepted"].values())
+        idle_lo.append(min(v["min"] for v in q["idle_mW"].values()))
+        idle_hi.append(max(v["max"] for v in q["idle_mW"].values()))
+        temps += [t for v in q["die_temp_C"].values() for t in v]
+        m[f"NumCh{D}Checks"] = f"{s['rq1']['checks']:,}".replace(",", "{,}")
+        m[f"NumCh{D}CvMed"] = pct(q["repeat_cv_median"], 2)
+        m[f"NumCh{D}AnchorDrift"] = pct(max(q["anchor_drift_rel"].values()), 1)
+        gv = pd.read_csv(an / "rq1_gverify.csv")
+        m[f"NumCh{D}FxErr"] = f"\\num{{{gv.max_fx_rel_err.max():.0e}}}"
+        m[f"NumCh{D}Vectors"] = str(host["gverify"]["vectors"])
+        m[f"NumCh{D}Pool"] = str(host["pool"]["healthy"] + host["pool"]["fault_windows"])
+
+        # RQ2: stage-1 energy
+        r2 = pd.read_csv(an / "rq2_stage1.csv").set_index("gate")
+        ratio_est += list(r2.ratio_meas_est)
+        ratio_cal += list(r2.ratio_meas_hwcal)
+        spread += list(r2.input_spread_rel)
+        m[f"NumCh{D}EOneSup"] = f"{r2.loc[1, 'mean']:.1f}"
+        mid = r2.loc[[2, 3, 4, 5], "mean"]
+        m[f"NumCh{D}EOneMah"] = rng(mid.min(), mid.max(), lambda v: f"{v:.1f}")
+        m[f"NumCh{D}EOneSupEst"] = f"{r2.loc[1, 'E1_est_uJ']:.1f}"
+        if 6 in r2.index:
+            m[f"NumCh{D}EOneSix"] = f"{r2.loc[6, 'mean']:.1f}"
+            m[f"NumCh{D}EOneSixLo"] = f"{r2.loc[6, 'ci_lo']:.1f}"
+            m[f"NumCh{D}EOneSixHi"] = f"{r2.loc[6, 'ci_hi']:.1f}"
+        # S-6 front ends: integer R1 against float R1, and the firmware-image systematic
+        s6 = pd.read_csv(an / "s6_front_ends.csv").set_index("what")
+        r6 = pd.read_csv(an / "rq6_reuse.csv")
+        float_r1 = r6.float_R1_FRONT_uJ.iloc[0]
+        fx_r1 = s6.loc["FXFE FX_R1", "E_uJ"]
+        m[f"NumCh{D}FxROne"] = f"{fx_r1:.1f}"
+        m[f"NumCh{D}FloatROne"] = f"{float_r1:.1f}"
+        m[f"NumCh{D}FxROneSave"] = pct(1 - fx_r1 / float_r1, 0)
+        m[f"NumCh{D}HybRTwo"] = f"{s6.loc['FXFE HYB_R2', 'E_uJ']:.1f}"
+        img = s6.cascade_over_campaign.dropna()
+        image += list(img)
+        m[f"NumCh{D}ImageMax"] = pct(1 - img.min(), 0)
+
+        # RQ3: additivity
+        r3 = pd.read_csv(an / "rq3_additivity.csv")
+        m[f"NumCh{D}RqThreeFail"] = f"{int((~r3.rq3_pass_2pct).sum())} of {len(r3)}"
+        m[f"NumCh{D}RqThreeWorst"] = spct(r3.delta_rel_E2E.min())
+        inb = r3.delta_inbundle_rel.dropna()
+        m[f"NumCh{D}RqThreeInbN"] = str(len(inb))
+        inb_all += list(inb)
+        inb_uj += list(r3.delta_inbundle_uJ.dropna())
+        m[f"NumCh{D}RqThreeInb"] = srng(inb.min(), inb.max())
+        m[f"NumCh{D}RqThreeInbUj"] = rng(r3.delta_inbundle_uJ.min(), r3.delta_inbundle_uJ.max(),
+                                          lambda v: f"{v:.1f}")
+        # RQ4: streams
+        r4 = pd.read_csv(an / "rq4_streams.csv")
+        assert (r4.esc_rate_board * 100).round().eq(r4.host_alarms_per_100).all(), ds
+        m[f"NumCh{D}Streams"] = str(len(r4))
+        n_streams += len(r4)
+        m[f"NumCh{D}RqFourFail"] = f"{int((~r4.rq4_pass_3pct).sum())} of {len(r4)}"
+        m[f"NumCh{D}RqFour"] = srng(r4.rel_err.min(), r4.rel_err.max())
+        m[f"NumCh{D}RqFourInb"] = srng(r4.rel_err_inbundle.min(), r4.rel_err_inbundle.max())
+        g0 = r4[(r4.gate == deploy[ds][0]) & (r4.stream == "S0")].iloc[0]
+        m[f"NumCh{D}SZeroMeas"] = f"{g0.E_meas_uJ_per_window:.1f}"
+        m[f"NumCh{D}SZeroOver"] = f"{g0.E_meas_uJ_per_window - g0.E_pred_inbundle:.1f}"
+
+        # RQ5: gate front and E(pi = 1 %)
+        r5 = pd.read_csv(an / "rq5_gate_front.csv").set_index("gate")
+        for g, gt in ((1, "Sup"), (3, "Either"), (5, "Five"), (6, "Six")):
+            if g in r5.index:
+                m[f"NumCh{D}EPi{gt}"] = f"{r5.loc[g, 'E_pi1pct_uJ']:.1f}"
+                m[f"NumCh{D}Tpr{gt}"] = f"{r5.loc[g, 'tpr']:.3f}"
+                m[f"NumCh{D}Fpr{gt}"] = f"{r5.loc[g, 'fpr']:.3f}"
+        m[f"NumCh{D}ETwoStream"] = f"{r5.E2_stream_model_uJ.iloc[0]:.1f}"
+        dk = rates[deploy[ds][1]]
+        m[f"NumCh{D}DeployHealthyN"] = str(dk["n_eval_healthy"])
+
+        # RQ6: reuse
+        r1p = r6[r6.reused == "R1 part"]
+        m[f"NumCh{D}ReuseROne"] = rng(r1p.saving_uJ.min(), r1p.saving_uJ.max(), lambda v: f"{v:.1f}")
+        reuse_exp += list(r1p.saving_over_expected)
+        r4m = r1p[r1p.rep.isin(["r2", "r4"])]
+        m[f"NumCh{D}ReuseROnePct"] = prng(r4m.saving_rel_E2E.min(), r4m.saving_rel_E2E.max())
+        m[f"NumCh{D}ReuseOverExp"] = prng(r1p.saving_over_expected.min(), r1p.saving_over_expected.max())
+        whole = r6[r6.reused != "R1 part"]
+        if len(whole):
+            m[f"NumCh{D}ReuseRTwo"] = f"{whole.saving_uJ.mean():.1f}"
+            m[f"NumCh{D}ReuseRTwoPct"] = pct(whole.saving_over_expected.min(), 0)
+
+        # RQ7: on-device calibration
+        r7 = pd.read_csv(an / "rq7_calib.csv").set_index(["gate", "calib_n"])
+        for (g, n), r in r7.iterrows():
+            tag = {16: "Sixteen", 32: "ThirtyTwo", 128: "OneTwentyEight"}[n]
+            m[f"NumCh{D}Calib{tag}"] = f"{r['mean']:,.0f}".replace(",", "{,}")
+            m[f"NumCh{D}Calib{tag}PerWin"] = f"{r.uJ_per_window_calibrated:.0f}"
+
+        # RQ8: duty cycle
+        r8 = pd.read_csv(an / "rq8_duty.csv").set_index("T_ms")
+        m[f"NumCh{D}Period"] = f"{r8.E_period_fit_uJ.iloc[0]:.1f}"
+        m[f"NumCh{D}PeriodLo"] = f"{r8.E_period_fit_ci_lo.iloc[0]:.1f}"
+        m[f"NumCh{D}PeriodHi"] = f"{r8.E_period_fit_ci_hi.iloc[0]:.1f}"
+        m[f"NumCh{D}PeriodModel"] = f"{r8.E_model_per_period_uJ.loc[100]:.1f}"
+        m[f"NumCh{D}IncHourOne"] = f"{r8.E_inc_per_hour_fit_J.loc[1000]:.2f}"
+        m[f"NumCh{D}LifeIncOne"] = f"{r8.life_days_CR2032_fit_inc_only.loc[1000] / 365.25:.1f}"
+        m[f"NumCh{D}LifeIncTenth"] = f"{r8.life_days_CR2032_fit_inc_only.loc[100]:.0f}"
+        m[f"NumCh{D}BoardHour"] = f"{r8.E_board_per_hour_J.mean():.0f}"
+        m[f"NumCh{D}Sleep"] = f"{r8.P_sleep_mW.iloc[0]:.1f}"
+        m[f"NumCh{D}IncShare"] = pct(r8.E_inc_per_hour_fit_J.loc[1000] / r8.E_board_per_hour_J.loc[1000], 1)
+
+        # Break-even with the deployable gate (measured E1 and E2, host rates on the board's split)
+        e1 = r2.loc[deploy[ds][0], "mean"]
+        rows = []
+        for r in r3.itertuples():
+            e2 = r.E2E_inbundle if pd.notna(r.E2E_inbundle) else r.E2E_model
+            esc = 0.01 * dk["tpr"] + 0.99 * dk["fpr"]
+            rows.append((r.model_id, (e1 + esc * e2) / e2, e2))
+        be = pd.DataFrame(rows, columns=["model_id", "ratio", "e2"]).set_index("model_id")
+        m[f"NumCh{D}BeMin"] = f"{be.ratio.min():.2f}"
+        m[f"NumCh{D}BeMax"] = f"{be.ratio.max():.2f}"
+        m[f"NumCh{D}BeMinModel"] = "\\texttt{" + be.ratio.idxmin() + "}"
+        m[f"NumCh{D}BeMaxModel"] = "\\texttt{" + be.ratio.idxmax() + "}"
+        if ds == "pu":
+            r2m = be[be.index.str.contains("-r2-")]
+            m["NumChPuBeRTwo"] = rng(r2m.ratio.min(), r2m.ratio.max(), lambda v: f"{v:.2f}")
+            r4m_ = be[be.index.str.contains("-r4-")]
+            m["NumChPuBeRFour"] = rng(r4m_.ratio.min(), r4m_.ratio.max(), lambda v: f"{v:.2f}")
+            sav = whole.set_index("model_id").saving_uJ
+            reuse = [(e1 + (0.01 * dk["tpr"] + 0.99 * dk["fpr"]) * (be.e2[k] - sav[k])) / be.e2[k] for k in sav.index]
+            m["NumChPuBeRTwoReuse"] = rng(min(reuse), max(reuse), lambda v: f"{v:.2f}")
+            m["NumChPuDtROneE"] = f"{be.e2['dt-r1-d4-fp32']:.1f}"
+            m["NumChPuCalibWindows"] = f"{r7.loc[(6, 128), 'mean'] / r5.loc[6, 'E_pi1pct_uJ']:.0f}"
+    m["NumChWindows"] = f"{windows:,}".replace(",", "{,}")
+    m["NumChETwoMax"] = f"{max(pd.read_csv(RES / ds / 'cascade_hw' / 'analysis' / 'rq3_additivity.csv').E2E_model.max() for ds in dsn) / 1e3:.0f}"
+    m["NumChRatioEst"] = rng(min(ratio_est), max(ratio_est), lambda v: f"{v:.2f}")
+    m["NumChRatioCal"] = rng(min(ratio_cal), max(ratio_cal), lambda v: f"{v:.2f}")
+    m["NumChInputSpread"] = pct(max(spread), 1)
+    m["NumChImage"] = prng(1 - max(image), 1 - min(image))
+    m["NumChRqThreeInb"] = srng(min(inb_all), max(inb_all))
+    m["NumChRqThreeInbN"] = str(len(inb_all))
+    m["NumChRqThreeInbUj"] = rng(min(inb_uj), max(inb_uj), lambda v: f"{v:.1f}")
+    m["NumChReuseOverExp"] = prng(min(reuse_exp), max(reuse_exp))
+    m["NumChStreams"] = str(n_streams)
+    m["NumChIdle"] = rng(min(idle_lo), max(idle_hi), lambda v: f"{v:.1f}")
+    m["NumChTemp"] = rng(min(temps), max(temps), lambda v: f"{v:.1f}")
+    m["NumChBattery"] = f"{0.225 * 3600 * 3.0 / 1e3:.2f}"
+    hours = [json.loads((RES / ds / "cascade_hw" / "analysis" / "summary.json").read_text()) for ds in dsn]
+    board_jh = np.mean([pd.read_csv(RES / ds / "cascade_hw" / "analysis" / "rq8_duty.csv").E_board_per_hour_J.mean()
+                        for ds in dsn])
+    m["NumChBoardLifeH"] = f"{0.225 * 3600 * 3.0 / board_jh:.0f}"
+    wake = [h["rq8_E_period_fit_uJ"][0] - h["rq8_E_model_per_period_uJ"] for h in hours]
+    m["NumChWake"] = rng(min(wake), max(wake), lambda v: f"{v:.0f}")
     return m
 
 

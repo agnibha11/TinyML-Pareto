@@ -32,6 +32,10 @@ void fe_r3(const float *x, float *out256);
 #define FE_ENV_NB 256
 #define FE_ENV_NK 32
 void fe_r4(const float *x, float *out41);
+// Cascade feature reuse: only the part after R1. fe_r2_tail writes out24[10..23], fe_r4_tail writes out41[9..40];
+// the caller fills the R1 part (out24[0..9] = R1, out41[0..8] = R1[1..9]).
+void fe_r2_tail(const float *x, float *out24);
+void fe_r4_tail(const float *x, float *out41);
 // In-place z-score: f[i] = (f[i] - mean[i]) / std[i].
 void fe_zscore(float *f, const float *mean, const float *std, int n);
 

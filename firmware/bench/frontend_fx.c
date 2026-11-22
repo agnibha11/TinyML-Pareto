@@ -34,6 +34,12 @@ int fx_init(void) {
   return 0;
 }
 
+int fx_init_hyb(void) {
+  if (arm_rfft_fast_init_f32(&s_rf_1024, FX_N) != ARM_MATH_SUCCESS) return -1;
+  if (arm_rfft_fast_init_f32(&s_rf_256, ENV_NB) != ARM_MATH_SUCCESS) return -1;
+  return 0;
+}
+
 uint32_t fx_static_ram_bytes(int path) {
   if (path == 1) return (uint32_t)(sizeof s_rq31_1024 + sizeof s_rq31_256 + sizeof s_a31 + sizeof s_b31);
   if (path == 2) return (uint32_t)(sizeof s_rf_1024 + sizeof s_rf_256 + sizeof s_fa + sizeof s_fb);
