@@ -417,8 +417,8 @@ def cascade_hw_numbers() -> dict[str, str]:
         m[f"NumCh{D}Checks"] = f"{s['rq1']['checks']:,}".replace(",", "{,}")
         m[f"NumCh{D}CvMed"] = pct(q["repeat_cv_median"], 2)
         m[f"NumCh{D}AnchorDrift"] = pct(max(q["anchor_drift_rel"].values()), 1)
-        gv = pd.read_csv(RES / ds / "cascade_hw" / "gate_verify.csv")
-        m[f"NumCh{D}FxErr"] = f"\\num{{{gv.fx_max_rel_err.max():.0e}}}"
+        gv = pd.read_csv(an / "rq1_gverify.csv")
+        m[f"NumCh{D}FxErr"] = f"\\num{{{gv.max_fx_rel_err.max():.0e}}}"
         m[f"NumCh{D}Vectors"] = str(host["gverify"]["vectors"])
         m[f"NumCh{D}Pool"] = str(host["pool"]["healthy"] + host["pool"]["fault_windows"])
 

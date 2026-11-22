@@ -57,3 +57,7 @@ results/pu/progress.json
 # --- internal rig data and run logs (kept locally, never published) ---
 results/rig/
 results/*/hardware/hw_summary.csv
+
+# --- measured cascade: raw rig data stays local; the analysis tables are published ---
+results/*/cascade_hw/*
+!results/*/cascade_hw/analysis/
