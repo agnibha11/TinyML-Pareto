@@ -24,7 +24,8 @@ Differences of quantities measured in different sessions (RQ3: CASCADE, GATE and
 the standard errors in quadrature; paired quantities (RQ6: CASCADE m=1 vs m=2, same session) use the per-repeat
 differences.
 
-Outputs: results/<ds>/cascade_hw/analysis/*.csv and summary.json (local, not committed).
+Outputs: results/<ds>/cascade_hw/analysis/*.csv and summary.json (local, not committed); with --dataset both, the
+figures results/figs/fig_cascade_hw_{streams,gates,additivity,breakeven,duty}.{pdf,png} (window idle).
 
 Usage: python ml/cascade.py --hw [--dataset cwru|pu|both] [--idle window|session|both]
 """
@@ -401,6 +402,171 @@ def sensitivity(ds: str) -> pd.DataFrame:
     return j
 
 
+# ------------------------------------------------------------------------------------------------------------- figures
+DS_NAME = {"cwru": "CWRU", "pu": "Paderborn"}
+INK, MUTED = "#0b0b0b", "#8a8984"
+DEPLOY_GATE = {"cwru": 5, "pu": 6}            # the gate a deployment would use (Deviation 4, 5.6)
+
+
+def _load(ds: str, name: str) -> pd.DataFrame:
+    return pd.read_csv(REPO / "results" / ds / "cascade_hw" / "analysis" / f"{name}.csv")
+
+
+def figures() -> None:
+    """Paper figures from the window-idle tables of both datasets (results/figs/fig_cascade_hw_*)."""
+    import sys
+    sys.path.insert(0, str(REPO / "ml"))
+    from stats import COLORS, style  # noqa: E402
+    plt = style()
+    figs = REPO / "results" / "figs"
+    figs.mkdir(parents=True, exist_ok=True)
+    gate_col = {1: COLORS["DT"], 3: COLORS["DT"], 4: COLORS["RF"], 5: COLORS["MLP"], 6: COLORS["MLP"]}
+    fam_col = {"dt": COLORS["DT"], "rf": COLORS["RF"], "mlp": COLORS["MLP"], "cnn": COLORS["CNN"]}
+
+    def save(fig, name):
+        fig.tight_layout()
+        for ext in ("pdf", "png"):
+            fig.savefig(figs / f"{name}.{ext}", dpi=300, bbox_inches="tight")
+        plt.close(fig)
+
+    # 1. RQ4: measured stream energy vs the E(pi) prediction, as a function of the board's escalation rate
+    fig, axs = plt.subplots(1, 2, figsize=(7.0, 2.7))
+    for ax, ds in zip(axs, ("cwru", "pu")):
+        s = _load(ds, "rq4_streams")
+        e1 = _load(ds, "rq2_stage1").set_index("gate")["mean"]
+        e2 = _load(ds, "rq3_additivity").set_index("model_id")
+        model = STREAM_MODEL[ds]
+        x = np.linspace(0, 1, 50)
+        for g, d in s.groupby("gate"):
+            c = gate_col[g]
+            ax.plot(x, e1[g] + x * e2.loc[model, "E2E_model"], color=c, lw=1.0, ls="--")
+            ax.plot(x, e1[g] + x * e2.loc[model, "E2E_inbundle"], color=c, lw=1.4)
+            ax.scatter(d.esc_rate_board, d.E_meas_uJ_per_window, s=22, color=c, edgecolors="white", lw=0.8,
+                       zorder=3, label=GATE_NAME[g])
+        ax.set_xlabel("escalation rate on the stream (board)")
+        ax.set_ylabel("energy per window (µJ)")
+        ax.set_title(f"{DS_NAME[ds]}: streams with {model}")
+        ax.set_xlim(-0.03, 1.03)
+        ax.set_ylim(0, None)
+        ax.legend(loc="upper left", fontsize=6)
+    axs[1].text(0.98, 0.04, "dots: measured (5 streams per gate)\nsolid: E₁ + rate·E₂ (in-bundle E₂)\n"
+                "dashed: E₁ + rate·E₂ (energy-campaign E₂)", transform=axs[1].transAxes, ha="right", va="bottom",
+                fontsize=6, color="#52514e")
+    save(fig, "fig_cascade_hw_streams")
+
+    # 2. RQ5: gate front, measured E1 vs host FPR
+    fig, axs = plt.subplots(1, 2, figsize=(7.0, 2.5))
+    for ax, ds in zip(axs, ("cwru", "pu")):
+        t = _load(ds, "rq5_gate_front").sort_values("E1_uJ")
+        ok = t.tpr >= 0.98
+        fr = t[t.on_front_tpr098].sort_values("E1_uJ")
+        ax.step(fr.E1_uJ, fr.fpr, where="post", color=COLORS["DT"], lw=1.0, alpha=0.6)
+        ax.scatter(t[ok].E1_uJ, t[ok].fpr, s=26, color=COLORS["DT"], zorder=3, label="TPR ≥ 0.98")
+        ax.scatter(t[~ok].E1_uJ, t[~ok].fpr, s=26, facecolors="white", edgecolors=MUTED, lw=1.0, zorder=3,
+                   label="TPR < 0.98")
+        # gates that sit close on the plot (E1 within 6 % of the axis span, same TPR class, FPR within 0.05) share
+        # one label: above the point for TPR >= 0.98, below it otherwise
+        span = t.E1_uJ.max() - t.E1_uJ.min()
+        groups: list[list] = []
+        for _, r in t.iterrows():
+            for gr in groups:
+                if (abs(gr[0].E1_uJ - r.E1_uJ) < 0.06 * span and abs(gr[0].fpr - r.fpr) < 0.05
+                        and (gr[0].tpr >= 0.98) == (r.tpr >= 0.98)):
+                    gr.append(r)
+                    break
+            else:
+                groups.append([r])
+        for gr in groups:
+            up = gr[0].tpr >= 0.98
+            x = float(np.mean([r.E1_uJ for r in gr]))
+            ax.annotate(", ".join(f"G{int(r.gate)}" for r in gr), (x, gr[0].fpr), xytext=(0, 7 if up else -12),
+                        textcoords="offset points", fontsize=6.5, color=INK, ha="center")
+        ax.set_xlim(t.E1_uJ.min() - 0.12 * span, t.E1_uJ.max() + 0.12 * span)
+        ax.set_xlabel("stage-1 energy E₁ (µJ per window, measured)")
+        ax.set_ylabel("false-alarm rate\n(host, deployed split)")
+        ax.set_ylim(-0.17, 1.15)
+        ax.set_title(f"{DS_NAME[ds]}: gate front")
+        ax.legend(loc="upper left" if ds == "cwru" else "center right", fontsize=6)
+    save(fig, "fig_cascade_hw_gates")
+
+    # 3. RQ3: additivity, pre-registered and in-bundle reference
+    fig, axs = plt.subplots(1, 2, figsize=(7.0, 2.8))
+    for ax, ds in zip(axs, ("cwru", "pu")):
+        t = _load(ds, "rq3_additivity").sort_values("E2E_model")
+        y = np.arange(len(t))
+        ax.axvspan(-2, 2, color="#e4e3df", alpha=0.6, lw=0)
+        ax.axvline(0, color=MUTED, lw=0.6)
+        ax.scatter(100 * t.delta_rel_E2E, y, s=22, color=COLORS["RF"], zorder=3, label="E₂ from the energy campaign")
+        ax.scatter(100 * t.delta_inbundle_rel, y, s=22, color=COLORS["DT"], zorder=3, label="E₂ in-bundle")
+        ax.set_yticks(y, [f"{m} ({e:,.0f} µJ)" for m, e in zip(t.model_id, t.E2E_model)], fontsize=6)
+        ax.set_xlabel("Δ / E₂ (%)   Δ = E(CASCADE on) − E₁ − E₂")
+        ax.set_title(f"{DS_NAME[ds]}: additivity (grey band ±2 %)")
+        ax.grid(axis="y", visible=False)
+    h, lab = axs[0].get_legend_handles_labels()
+    fig.legend(h, lab, loc="lower center", ncol=2, fontsize=6.5, bbox_to_anchor=(0.5, -0.04))
+    fig.tight_layout(rect=(0, 0.06, 1, 1))
+    for ext in ("pdf", "png"):
+        fig.savefig(figs / f"fig_cascade_hw_additivity.{ext}", dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+    # 4. Break-even map: E(pi) / E2E for every stage-2 model with the deployable gate (measured E1, E2; host rates)
+    fig, axs = plt.subplots(1, 2, figsize=(7.0, 3.6), sharey=True)
+    pis = np.logspace(-3, 0, 80)
+    for ax, ds in zip(axs, ("cwru", "pu")):
+        g = DEPLOY_GATE[ds]
+        h = json.loads((REPO / "handoff" / "cascade" / ds / "summary.json").read_text())["host_rates_test_split"]
+        rate = h[HOST_KEY[g]]
+        e1 = _load(ds, "rq2_stage1").set_index("gate").loc[g, "mean"]
+        t = _load(ds, "rq3_additivity")
+        prot = {r.model_id: p for p, ms in _stage2_protocols(ds).items() for r in ms.itertuples()}
+        for _, r in t.sort_values("E2E_model").iterrows():
+            e2 = r.E2E_inbundle if pd.notna(r.E2E_inbundle) else r.E2E_model
+            e = e1 + (pis * rate["tpr"] + (1 - pis) * rate["fpr"]) * e2
+            fam = r.model_id.split("-")[0]
+            ax.plot(pis, e / e2, color=fam_col[fam], lw=1.3, ls="-" if prot.get(r.model_id, 0) == 0 else "--",
+                    label=f"{r.model_id} ({e2:,.0f} µJ)")
+        ax.axhline(1.0, color=INK, lw=0.8, ls=":")
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.set_xlabel("fault prevalence π")
+        ax.set_title(f"{DS_NAME[ds]}: {GATE_NAME[g]} (E₁ {e1:.1f} µJ, FPR {rate['fpr']:.3f})", fontsize=8)
+        p = {"cwru": ("P2", "P3"), "pu": ("P3", "P4")}[ds]
+        ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.2), ncol=2, fontsize=5.5,
+                  title=f"solid: best on {p[0]}, dashed: best on {p[1]}", title_fontsize=5.5)
+    axs[0].set_ylabel("cascade energy / model alone")
+    axs[0].text(1.2e-3, 1.12, "model alone", fontsize=6, color=INK)
+    save(fig, "fig_cascade_hw_breakeven")
+
+    # 5. RQ8: incremental energy per hour vs monitoring interval
+    fig, ax = plt.subplots(figsize=(3.5, 2.6))
+    for ds, c in (("cwru", COLORS["DT"]), ("pu", COLORS["RF"])):
+        t = _load(ds, "rq8_duty").sort_values("T_ms")
+        T = t.T_ms / 1000
+        lo = t.E_period_fit_ci_lo.clip(lower=1e-3) * 3600 / T / 1e6
+        hi = t.E_period_fit_ci_hi * 3600 / T / 1e6
+        ax.fill_between(T, lo, hi, color=c, alpha=0.15, lw=0)
+        ax.plot(T, t.E_inc_per_hour_fit_J, color=c, marker="o", ms=4, lw=1.4,
+                label=f"{DS_NAME[ds]} ({GATE_NAME[int(t.gate.iloc[0])].split()[0]} + {t.model_id.iloc[0]})")
+        ax.plot(T, t.E_model_per_hour_J, color=c, lw=1.0, ls="--")
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_xlabel("monitoring interval T (s)")
+    ax.set_ylabel("incremental energy per hour (J)")
+    ax.set_title("Duty cycle: measured (fit over T) vs E₁ + escalations (dashed)", fontsize=7)
+    ax.text(0.03, 0.04, "board level ≈ 64 J/h at every T (sleeps at 17.7 mW, mostly USB)", transform=ax.transAxes,
+            fontsize=5.5, color="#52514e")
+    ax.legend(fontsize=6, loc="upper right")
+    save(fig, "fig_cascade_hw_duty")
+
+
+def _stage2_protocols(ds: str) -> dict[int, pd.DataFrame]:
+    """Stage-2 models by protocol order (0: first protocol, solid line; 1: second, dashed), from §4.5."""
+    first = {"cwru": ["rf-r2-t25d10-fp32", "dt-r4-d12-fp32", "mlp-r3-h128-int8", "cnn-r0-w050d4-int8qat"],
+             "pu": ["dt-r2-d6-fp32", "cnn-r0-w025d4-fp32", "rf-r2-t25d6-fp32", "mlp-r4-h32-fp32"]}[ds]
+    t = _load(ds, "rq3_additivity")[["model_id"]]
+    return {0: t[t.model_id.isin(first)], 1: t[~t.model_id.isin(first)]}
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--hw", action="store_true", help=argparse.SUPPRESS)
@@ -416,6 +582,8 @@ def main(argv: list[str] | None = None) -> None:
             print(f"{ds}: idle session vs window, per condition: median {j.rel_diff.median():+.4f}, "
                   f"max |{j.rel_diff.abs().max():.4f}|; repeat CV median window {j.cv_window.median():.4f}, "
                   f"session {j.cv_session.median():.4f}")
+    if a.dataset == "both":
+        figures()
 
 
 if __name__ == "__main__":
