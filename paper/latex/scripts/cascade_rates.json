@@ -1,0 +1,11 @@
+{
+ "_source": "TinyML-Pareto docs/cascade_preregistration.md (committed): section 4.2 host-rate table (from handoff/cascade/cwru/summary.json), Deviation 4 (G6 choice) and Deviation 5.6 (E at pi = 1 %). Transcribed verbatim; make_numbers.py turns them into macros.",
+ "cwru_board_split": {"G1": [1.0, 0.42], "G2": [1.0, 1.0], "G3": [1.0, 1.0], "G4": [0.99, 0.98], "G5n16": [0.999, 0.023], "G5n32": [0.999, 0.037]},
+ "cwru_factory_fpr_all_p2_folds": 0.26,
+ "cwru_selfcal_all_p2_folds_n32": 0.075,
+ "pu_rule_gate": {"name": "fxr1 tree1 1of1", "fpr": 1.0, "n_pass": 8, "n_gates": 45, "E_cascade_pi1": 102, "E_model_alone": 93},
+ "pu_G6": {"n64": {"p3": [0.994, 0.032], "p4": [1.0, 0.051], "E_pi1": 61}, "n128": {"p3": [0.989, 0.012], "p4": [1.0, 0.016], "E_pi1": 59}},
+ "E_pi1_stream": {"cwru_G5": 12.3, "cwru_G1": 31.3, "pu_G6": 54.2, "pu_G1": 100.5},
+ "window_samples": 1024,
+ "fs_hz": 12000
+}

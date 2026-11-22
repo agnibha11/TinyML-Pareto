@@ -61,3 +61,12 @@ results/*/hardware/hw_summary.csv
 # --- measured cascade: raw rig data stays local; the analysis tables are published ---
 results/*/cascade_hw/*
 !results/*/cascade_hw/analysis/
+
+# --- TrueJoule paper (paper/latex): LaTeX by-products and Python caches ---
+paper/latex/*.aux
+paper/latex/*.bbl
+paper/latex/*.blg
+paper/latex/*.out
+paper/latex/*.log
+paper/latex/*.synctex.gz
+paper/latex/main.pdf

@@ -1,14 +1,86 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TinyML-Pareto</title>
-<meta http-equiv="refresh" content="0; url=selector/">
-<link rel="canonical" href="selector/">
-</head>
-<body style="font-family: system-ui, sans-serif; padding: 24px;">
-<p>Opening the <a href="selector/">bearing-sensor model selector</a>. The code and paper are at
-<a href="https://github.com/agnibha11/TinyML-Pareto">github.com/agnibha11/TinyML-Pareto</a>.</p>
-</body>
-</html>
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TrueJoule · verified, leakage-free TinyML for bearing fault monitoring</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{--page:#f3f4f6;--bg:#fff;--ink:#1f2329;--muted:#69717c;--line:#e3e6ea;--soft:#f4f5f7;--acc:#1baf7a;
+--shadow:0 1px 2px rgba(17,24,39,.05),0 1px 1px rgba(17,24,39,.03);--r:14px;
+--f-sans:"IBM Plex Sans","Helvetica Neue",Arial,sans-serif;--f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--ink);font:15px/1.6 var(--f-sans);padding:0 max(16px,env(safe-area-inset-left,0px)) 48px}
+.wrap{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+nav.top{display:flex;gap:18px;font-size:13px;padding-top:18px}
+nav.top a{color:var(--muted);text-decoration:none} nav.top a:hover,nav.top a[aria-current]{color:var(--ink)}
+header{padding:26px 2px 0} h1{font-weight:600;font-size:clamp(26px,4vw,38px);letter-spacing:-.015em;line-height:1.1;margin:0}
+.lede{font-size:17px;color:var(--muted);max-width:68ch;margin:10px 0 0}
+h2{font-size:20px;font-weight:600;margin:0 0 6px;letter-spacing:-.01em}
+.block{border:1px solid var(--line);background:var(--bg);border-radius:var(--r);box-shadow:var(--shadow);padding:20px 22px}
+.block p{margin:8px 0;max-width:78ch} .muted{color:var(--muted)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+.tile{background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;box-shadow:var(--shadow)}
+.tile b{display:block;font:500 24px var(--f-mono);letter-spacing:-.02em} .tile span{font-size:12.5px;color:var(--muted)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.card{display:block;text-decoration:none;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:var(--r);
+padding:18px 20px;box-shadow:var(--shadow);transition:border-color .15s} .card:hover{border-color:var(--muted)}
+.card b{font-size:16px} .card p{margin:6px 0 0;font-size:13.5px;color:var(--muted)}
+figure{margin:10px 0 0} figure img{width:100%;height:auto;display:block;background:#fff;border-radius:8px}
+figure.narrow img{max-width:660px;margin:0 auto}
+a{color:var(--ink)}
+figcaption{font-size:13px;color:var(--muted);margin-top:6px}
+table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums;margin-top:10px}
+th{font-weight:500;color:var(--muted);text-align:right;padding:7px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{text-align:right;padding:6px 10px;border-bottom:1px solid var(--line);font-family:var(--f-mono);white-space:nowrap}
+th:first-child,td:first-child{text-align:left} td.l{text-align:left;font-family:var(--f-sans);white-space:normal}
+tr:last-child td{border-bottom:0} .tw{overflow-x:auto}
+ul{margin:8px 0;padding-left:20px} li{margin:4px 0;max-width:78ch}
+code{font-family:var(--f-mono);font-size:.92em;background:var(--soft);padding:1px 5px;border-radius:5px}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px} @media(max-width:820px){.two{grid-template-columns:1fr}}
+footer{font-size:12.5px;color:var(--muted);padding:4px 2px} footer a{color:var(--ink)}
+</style></head><body><div class="wrap">
+<nav class="top"><a href="./" aria-current="page">TrueJoule</a><a href="./selector/">Model selector</a><a href="./hardware/">Hardware results</a></nav>
+
+<header><h1>TrueJoule</h1>
+<p class="lede">Verified, leakage-free TinyML for self-calibrating bearing fault monitoring. Every accuracy on this site
+is measured on bearings the model never saw in training, every energy is measured on the board, and every board output
+is checked bit for bit against the host before it is measured.</p></header>
+
+<div class="tiles">
+  <div class="tile"><b>15,108</b><span>GPIO-framed energy windows on an Arduino Nano 33 BLE</span></div>
+  <div class="tile"><b>0.17&nbsp;%</b><span>median repeat-to-repeat spread of measured energy</span></div>
+  <div class="tile"><b>80 × 2</b><span>tree, forest, MLP and fp32/int8 CNN models, CWRU and Paderborn</span></div>
+  <div class="tile"><b>4.7×</b><span>less energy per window with the self-calibrating gate (CWRU, 1&nbsp;% faults)</span></div>
+</div>
+
+<div class="cards">
+  <a class="card" href="selector/"><b>Model selector →</b><p>Set RAM, flash, inference rate, battery and target life;
+  get the most accurate model that fits, with measured energy, for either dataset and any evaluation protocol.</p></a>
+  <a class="card" href="hardware/"><b>Hardware results →</b><p>The energy rig, measured accuracy–energy fronts, where the
+  energy goes, estimate versus measurement, board verification and the self-calibrating monitor.</p></a>
+  <a class="card" href="https://github.com/agnibha11/TinyML-Pareto/tree/main/paper/latex"><b>Paper source →</b><p>IEEE conference paper (LaTeX), with the scripts that
+  turn the measured results into every number and figure.</p></a>
+</div>
+
+<section class="block"><h2>What TrueJoule found</h2><ul>
+<li><b>Unseen bearings change the answer.</b> Holding out whole bearings reverses the model ranking (Kendall τ
+−0.21 on CWRU) and leaves 2 of 9 Pareto-optimal models standing.
+The CNN that wins on random splits costs 44–4,729× the cheapest tree; on unseen
+bearings a forest (CWRU) or an envelope-feature MLP (Paderborn) is best.</li>
+<li><b>The front end is the cost.</b> 99.8&nbsp;% of a decision tree's energy is feature extraction; a
+float-only logarithm made the log-spectrum front end 3.18× cheaper.</li>
+<li><b>Estimates are rankings, not budgets.</b> Chip-level estimates miss the measured energy by
+0.31–5.35× and move models on and off the Pareto front.</li>
+<li><b>Verify before you measure.</b> The board check exposed an int8 kernel fault in the Arduino TFLM port that left
+energy unchanged and predictions wrong; after the fix 50 of 50 TFLM models are bit-exact.</li>
+<li><b>Calibrate on the machine.</b> A gate that re-fits itself from 1.4&nbsp;s of healthy vibration cut
+false alarms at an unseen load from 1.00 to 0.023.</li>
+</ul></section>
+
+<section class="block"><h2>Project documents</h2><ul>
+<li><a href="https://github.com/agnibha11/TinyML-Pareto/blob/main/docs/energy_rig_bringup.md">Energy rig bring-up</a> — wiring, calibration and acceptance rules</li>
+<li><a href="https://github.com/agnibha11/TinyML-Pareto/blob/main/docs/cascade_preregistration.md">Cascade pre-registration</a> — hypotheses fixed before the first cascade window, with every deviation</li>
+<li><a href="https://github.com/agnibha11/TinyML-Pareto/blob/main/CONTRACT.md">Interface contract</a> — model IDs, file formats, firmware commands</li>
+<li><a href="https://github.com/agnibha11/TinyML-Pareto/blob/main/docs/midsem/README.md">Mid-semester</a> and <a href="https://github.com/agnibha11/TinyML-Pareto/blob/main/docs/sprint2/README.md">sprint 2</a> status pages (pre-hardware)</li>
+</ul></section>
+<footer>Built 2026-11-22 from the measured results in the repository ·
+<a href="https://github.com/agnibha11/TinyML-Pareto">github.com/agnibha11/TinyML-Pareto</a></footer></div></body></html>

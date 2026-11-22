@@ -6,9 +6,25 @@ compares the Pareto frontiers under leaky (P1) and leakage-free (P2, P3) evaluat
 
 Interfaces between the three workstreams are fixed in **[CONTRACT.md](CONTRACT.md)**. Read it before writing code.
 
-**Model selector (interactive):** <https://agnibha11.github.io/TinyML-Pareto/selector/>. Give it RAM and flash
-budgets, an inference rate, a battery and a target life; it returns the most accurate model that fits. Source:
-`docs/selector/index.html`, built by `tools/make_selector.py` and served by GitHub Pages from `docs/`.
+**Website:** <https://agnibha11.github.io/TinyML-Pareto/> (served by GitHub Pages from `docs/`):
+- [Model selector](https://agnibha11.github.io/TinyML-Pareto/selector/): pick CWRU or Paderborn and an evaluation
+  protocol, give it RAM and flash budgets, an inference rate, a battery and a target life; it returns the most accurate
+  model that fits, with **energy and latency measured on the board** (optionally behind the measured self-calibrating
+  wake-up gate).
+- [Hardware results](https://agnibha11.github.io/TinyML-Pareto/hardware/): the INA219/ESP32 rig, measured
+  accuracy-energy fronts, front-end energy, estimate vs. measurement, board verification and the measured cascade.
+
+Rebuild the site after new measurements:
+
+```bash
+python paper/latex/scripts/make_numbers.py   # every number (paper and site) from results/
+python paper/latex/scripts/make_figs.py      # data figures (PDF for the paper, SVG for the site)
+python tools/make_selector.py                # docs/selector/index.html
+python tools/make_site.py                    # docs/index.html, docs/hardware/index.html
+```
+
+**Paper:** `paper/latex/` (IEEEtran conference, upload the folder to Overleaf). The earlier pre-hardware draft stays
+in `paper/`.
 
 ## Layout
 
@@ -33,8 +49,9 @@ logger/                ESP32 INA219 logger firmware
 hardware/energy_rig/   KiCad project, BOM and wiring of the INA219/ESP32 energy rig
 results/               script-written outputs only: cwru/ and pu/ (same layout), vmcu/, vrig/, figs/, demo/;
                        index in results/README.md
-docs/                  related-work gap table, notes for the paper, midsem/ and sprint2/ status pages, selector/,
-                       energy_rig_bringup.md (rig bring-up, calibration, idle-dip finding)
+docs/                  website: index.html (home), selector/, hardware/ (measured results); related-work notes,
+                       midsem/ and sprint2/ status pages, energy_rig_bringup.md, cascade_preregistration.md
+paper/latex/           TrueJoule paper (IEEEtran) with scripts/make_numbers.py and scripts/make_figs.py
 tests/                 host-side tests (pytest)
 ```
 

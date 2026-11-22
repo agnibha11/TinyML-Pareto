@@ -3,8 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Bearing Sensor Model Selector</title>
-<meta name="claude:viewport-fit-sides" content="cover">
+<title>TrueJoule · Bearing Sensor Model Selector</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -56,7 +55,7 @@ select:focus-visible, input:focus-visible, button:focus-visible { outline: 2px s
 input[type=range] { accent-color: var(--inv-bg) }
 input[type=checkbox] { accent-color: var(--inv-bg); width: 15px; height: 15px; margin: 0 }
 .readout { font: 12px var(--f-mono); color: var(--muted) }
-.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; padding: 3px; background: var(--soft);
+.seg { display: grid; grid-template-columns: repeat(var(--n, 3), 1fr); gap: 3px; padding: 3px; background: var(--soft);
   border: 1px solid var(--line); border-radius: var(--r-s) }
 .seg button { font: 500 12.5px var(--f-sans); border: 0; border-radius: 6px; background: transparent; color: var(--muted);
   padding: 6px 2px; cursor: pointer }
@@ -97,14 +96,19 @@ tr.best td { background: var(--soft); font-weight: 500 }
 footer { padding: 4px 2px 0; font-size: 12px; color: var(--muted);
   display: flex; justify-content: space-between; gap: 6px 24px; flex-wrap: wrap }
 footer a { color: var(--ink) }
+nav.top { display: flex; gap: 18px; font-size: 13px; padding-top: 18px }
+nav.top a { color: var(--muted); text-decoration: none } nav.top a:hover, nav.top a[aria-current] { color: var(--ink) }
+.badge { display: inline-block; font: 500 11px var(--f-sans); padding: 2px 7px; border-radius: 999px; background: var(--soft);
+  border: 1px solid var(--line); color: var(--muted); margin-left: 6px; vertical-align: 2px }
 </style>
 </head>
 <body>
 <div class="wrap">
+  <nav class="top"><a href="../">TrueJoule</a><a href="./" aria-current="page">Model selector</a><a href="../hardware/">Hardware results</a></nav>
   <header>
     <div>
       <h1>Bearing Sensor Model Selector</h1>
-      <div class="sub">TinyML bearing-fault diagnosis · Arm Cortex-M4 · nRF52840</div>
+      <div class="sub">Every energy and latency measured on an Arduino Nano 33 BLE (nRF52840, Cortex-M4F, 64 MHz)</div>
     </div>
     <div class="meta" id="meta"></div>
   </header>
@@ -114,12 +118,15 @@ footer a { color: var(--ink) }
       <div class="bh">Constraints</div>
       <div class="bb">
         <div class="ctl">
-          <span class="lab" id="lens-lab">Evaluation protocol</span>
-          <div class="seg" role="group" aria-labelledby="lens-lab" id="lens">
-            <button type="button" data-p="P3" aria-pressed="true">Bearing</button>
-            <button type="button" data-p="P2" aria-pressed="false">Load</button>
-            <button type="button" data-p="P1" aria-pressed="false">Random</button>
+          <span class="lab" id="ds-lab">Dataset</span>
+          <div class="seg" role="group" aria-labelledby="ds-lab" id="dsseg" style="--n:2">
+            <button type="button" data-d="cwru" aria-pressed="true">CWRU</button>
+            <button type="button" data-d="pu" aria-pressed="false">Paderborn</button>
           </div>
+        </div>
+        <div class="ctl">
+          <span class="lab" id="lens-lab">Evaluation protocol</span>
+          <div class="seg" role="group" aria-labelledby="lens-lab" id="lens"></div>
           <div class="hint" id="lens-hint"></div>
         </div>
         <div class="ctl">
@@ -132,7 +139,7 @@ footer a { color: var(--ink) }
         </div>
         <div class="ctl">
           <label for="rate">Inference rate</label>
-          <input type="range" id="rate" min="-4" max="2" step="0.125" value="-1">
+          <input type="range" id="rate" min="-4" max="1" step="0.125" value="-1">
           <div class="readout" id="rate-out"></div>
         </div>
         <div class="ctl">
@@ -140,23 +147,24 @@ footer a { color: var(--ink) }
           <select id="batt">
             <option value="2430">CR2032 · 225 mAh, 3 V</option>
             <option value="27000">2 × AA · 2,500 mAh, 3 V</option>
-            <option value="39960">18650 Li-ion · 3,000 mAh, 3.7 V</option>
+            <option value="39960" selected>18650 Li-ion · 3,000 mAh, 3.7 V</option>
           </select>
         </div>
         <div class="ctl">
           <label for="life">Target battery life</label>
           <select id="life">
-            <option value="0.5">6 months</option><option value="1">1 year</option>
-            <option value="2" selected>2 years</option><option value="3">3 years</option><option value="5">5 years</option>
+            <option value="0.5">6 months</option><option value="1" selected>1 year</option>
+            <option value="2">2 years</option><option value="3">3 years</option><option value="5">5 years</option>
           </select>
         </div>
         <div class="ctl">
-          <label for="sleep">Idle power</label>
+          <label for="sleep">Power between windows</label>
           <select id="sleep"></select>
+          <div class="hint">Board values are measured at the 5 V USB input; the chip value is the nRF52840 datasheet sleep current.</div>
         </div>
         <hr class="sep">
         <div class="ctl">
-          <label class="check"><input type="checkbox" id="gate"> Detect-then-diagnose gate</label>
+          <label class="check"><input type="checkbox" id="gate"> Self-calibrating wake-up gate</label>
           <label for="pi">Fault prevalence</label>
           <input type="range" id="pi" min="-3" max="0" step="0.125" value="-2" disabled>
           <div class="readout" id="pi-out"></div>
@@ -170,7 +178,7 @@ footer a { color: var(--ink) }
         <div class="bb pick" id="pick"></div>
       </section>
       <section class="block">
-        <div class="bh">Accuracy vs. energy per window</div>
+        <div class="bh">Accuracy vs. measured energy per window</div>
         <div class="legend" id="legend"></div>
         <div id="plot"></div>
       </section>
@@ -183,7 +191,8 @@ footer a { color: var(--ink) }
   </div>
 
   <footer>
-    <div>Accuracy: host macro-F1, mean ± sd over folds and seeds. Energy and latency: virtual Cortex-M4 estimates, pending hardware measurement.</div>
+    <div>Accuracy: host macro-F1, mean ± sd over folds and seeds; the board reproduces the host outputs (VERIFY, bit-exact for int8).
+      Energy: board-level dynamic energy per window, E = (P̄ − P̄idle)·t/N, mean of three repeats. Est.: pre-hardware chip-level estimate, for comparison.</div>
     <div id="built"></div>
   </footer>
 </div>
@@ -192,35 +201,32 @@ footer a { color: var(--ink) }
 const DATA = /*__DATA__*/null;
 const FAM = { dt: "Decision tree", rf: "Random forest", mlp: "MLP", cnn: "1-D CNN" };
 const REP = { r0: "raw window", r1: "10 statistics", r2: "statistics + 14 bands", r3: "256-bin spectrum", r4: "statistics + envelope spectrum" };
-const PREC = { fp32: "float32", int8: "int8 PTQ", int8qat: "int8 QAT", int8ref: "int8, reference kernels" };
-const LENS = {
-  P3: "Bearing-disjoint · test bearings unseen in training · 4 classes",
-  P2: "Load-disjoint · one motor load held out · 10 classes",
-  P1: "Random split · overlapping windows, optimistic · 10 classes"
-};
+const PREC = { fp32: "float32", int8: "int8 PTQ", int8qat: "int8 QAT" };
 const YEAR = 365.25 * 86400;
 const $ = (id) => document.getElementById(id);
-let lens = "P3";
+let ds = "cwru", lens = "P3";
+const D = () => DATA.datasets[ds];
 
 function fill(sel, opts, def) { sel.innerHTML = opts.map(([v, t]) => `<option value="${v}"${v === def ? " selected" : ""}>${t}</option>`).join(""); }
-fill($("ram"), [2, 4, 8, 16, 32, 64, 128, 256].map((k) => [String(k * 1024), `${k} KB`]), String(32 * 1024));
-fill($("flash"), [4, 16, 64, 256, 960].map((k) => [String(k * 1024), k === 960 ? "960 KB (all)" : `${k} KB`]), String(64 * 1024));
-fill($("sleep"), [[String(DATA.energy.P_sleep_chip_uW * 1e-6), `Chip sleep · ${fmt(DATA.energy.P_sleep_chip_uW, 1)} µW`],
-                  [String(DATA.energy.P_sleep_board_mW * 1e-3), `Board idle · ${fmt(DATA.energy.P_sleep_board_mW, 2)} mW`]],
-     String(DATA.energy.P_sleep_chip_uW * 1e-6));
-
 function fmt(x, d = 2) { return Number(x).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d }); }
 function sig(x) { if (x >= 100) return fmt(x, 0); if (x >= 10) return fmt(x, 1); if (x >= 1) return fmt(x, 2); return fmt(x, 3); }
 function kb(b) { return b >= 1024 ? `${sig(b / 1024)} KB` : `${b} B`; }
 function period(r) { const s = 1 / r; if (s >= 3600) return `${sig(s / 3600)} h`; if (s >= 60) return `${sig(s / 60)} min`; if (s >= 1) return `${sig(s)} s`; return `${sig(s * 1000)} ms`; }
-function years(y) { return !isFinite(y) ? "∞" : y >= 1 ? `${fmt(y, 1)} y` : `${fmt(y * 12, 1)} mo`; }
+function years(y) { return !isFinite(y) || y > 20 ? "> 20 y" : y >= 1 ? `${fmt(y, 1)} y` : y * 12 >= 1 ? `${fmt(y * 12, 1)} mo` : `${fmt(y * 365.25, 1)} d`; }
 
-// Markers: family = shape, precision = fill (float32 solid, int8 hollow; reference kernels dashed).
+fill($("ram"), [2, 4, 8, 16, 32, 64, 128, 256].map((k) => [String(k * 1024), `${k} KB`]), String(64 * 1024));
+fill($("flash"), [4, 16, 64, 256, 960].map((k) => [String(k * 1024), k === 960 ? "960 KB (all)" : `${k} KB`]), String(256 * 1024));
+function fillSleep() {
+  const o = [[String(DATA.chip_sleep_uW * 1e-6), `Chip sleep (datasheet) · ${fmt(DATA.chip_sleep_uW, 1)} µW`]];
+  if (D().sleep_mW) o.push([String(D().sleep_mW * 1e-3), `Board sleep (measured) · ${fmt(D().sleep_mW, 2)} mW`]);
+  o.push([String(D().idle_mW * 1e-3), `Board idle (measured) · ${fmt(D().idle_mW, 2)} mW`]);
+  const cur = $("sleep").value; fill($("sleep"), o, o.some(([v]) => v === cur) ? cur : o[0][0]);
+}
+
 const SHAPE = { dt: "circle", rf: "square", mlp: "triangle", cnn: "diamond" };
 function marker(fam, prec, cx, cy, s, cls, extra = "") {
   const solid = prec === "fp32";
-  const st = `stroke:${cls};fill:${solid ? cls : "var(--bg)"}${prec === "int8ref" ? ";stroke-dasharray:2 1.5" : ""}`;
-  const a = `style="${st}" stroke-width="1.4" ${extra}`;
+  const a = `style="stroke:${cls};fill:${solid ? cls : "var(--bg)"}" stroke-width="1.4" ${extra}`;
   switch (SHAPE[fam]) {
     case "circle": return `<circle cx="${cx}" cy="${cy}" r="${s}" ${a}`;
     case "square": return `<rect x="${cx - s * .9}" y="${cy - s * .9}" width="${s * 1.8}" height="${s * 1.8}" ${a}`;
@@ -233,20 +239,20 @@ const GLYPH = { dt: "●", rf: "■", mlp: "▲", cnn: "◆" };
 function state() {
   const r = Math.pow(10, +$("rate").value);
   return { r, ram: +$("ram").value, flash: +$("flash").value, batt: +$("batt").value, life: +$("life").value, ps: +$("sleep").value,
-           gate: $("gate").checked && lens !== "P1" && !!DATA.cascade, pi: Math.pow(10, +$("pi").value) };
+           gate: $("gate").checked, pi: Math.pow(10, +$("pi").value) };
 }
 
-// Energy and accuracy of a model as deployed: alone, or behind the gate (ml/cascade.py: stage 1 = integer R1 + gate,
-// escalation reuses R1 for feature models; rates are the gate's mean TPR/FPR on the chosen protocol's test folds).
+// Behind the gate: every window pays the measured gate energy E1; an alarm runs the model, which reuses the gate's
+// features where its representation contains them (measured saving). Detection rates: gate on the deployed split.
 function deployed(m, s) {
-  if (!s.gate || !m.cas) return { e: m.e2e, f1: m.f1[lens][0], sd: m.f1[lens][1], esc: 1 };
-  const g = DATA.cascade.rate[lens], esc = s.pi * g.tpr + (1 - s.pi) * g.fpr;
-  return { e: DATA.cascade.E1 + esc * m.esc, f1: m.cas[lens][0], sd: m.cas[lens][1], esc };
+  if (!s.gate) return { e: m.e2e, esc: 1 };
+  const g = D().gate, esc = s.pi * g.tpr + (1 - s.pi) * g.fpr, reuse = g.reuse[m.rep] || 0;
+  return { e: g.E1 + esc * Math.max(m.e2e - reuse, 0), esc };
 }
 
 function evaluate(s) {
-  const Emax = ((s.batt / (s.life * YEAR)) - s.ps) / s.r * 1e6;      // µJ per window allowed by the life target
-  const rows = DATA.models.map((m) => {
+  const Emax = ((s.batt / (s.life * YEAR)) - s.ps) / s.r * 1e6;
+  const rows = D().models.map((m) => {
     const why = [];
     if (m.ram > s.ram) why.push("RAM");
     if (m.flash > s.flash) why.push("flash");
@@ -254,7 +260,7 @@ function evaluate(s) {
     const d = deployed(m, s);
     if (!(d.e <= Emax)) why.push("energy");
     const lifeY = s.batt / (s.r * d.e * 1e-6 + s.ps) / YEAR;
-    return { m, why, lifeY, f1: d.f1, sd: d.sd, e: d.e, esc: d.esc };
+    return { m, why, lifeY, f1: m.f1[lens][0], sd: m.f1[lens][1], e: d.e, esc: d.esc };
   });
   rows.sort((a, b) => (a.why.length > 0) - (b.why.length > 0) || b.f1 - a.f1 || a.e - b.e);
   return { rows, Emax, best: rows.find((x) => x.why.length === 0) || null };
@@ -265,7 +271,7 @@ function renderPick(s, ev) {
   if (!b) {
     const sleepOnly = s.batt / s.ps / YEAR;
     const msg = ev.Emax <= 0
-      ? `Idle power alone empties this battery in ${years(sleepOnly)}. Lower the target life or choose a larger battery.`
+      ? `The power between windows alone empties this battery in ${years(sleepOnly)}. Choose chip sleep, a larger battery or a shorter life.`
       : `Binding constraint: ${tightest(ev.rows)}.`;
     el.innerHTML = `<div><p class="none">No configuration fits.</p><p class="why">${msg}</p></div>
       <div class="kv"><div><span>Energy budget / window</span><b class="warn">${ev.Emax > 0 ? sig(ev.Emax) + " µJ" : "none"}</b></div>
@@ -273,11 +279,11 @@ function renderPick(s, ev) {
     return;
   }
   const m = b.m, p1 = m.f1.P1[0];
-  const gap = lens !== "P1" && p1 - b.f1 > 0.05 ? ` Random-split score: ${fmt(p1, 3)}.` : "";
+  const gap = lens !== "P1" && p1 - b.f1 > 0.05 ? ` Its random-split score would have been ${fmt(p1, 3)}.` : "";
   el.innerHTML = `<div>
-      <div class="mid">${m.id}</div>
+      <div class="mid">${m.id}${m.ok ? '<span class="badge">verified on board</span>' : ""}</div>
       <p class="desc">${FAM[m.fam]} · ${REP[m.rep]} · ${PREC[m.prec]}</p>
-      <p class="why">Best of ${ev.rows.filter((x) => !x.why.length).length} fitting configurations.${gap}</p>
+      <p class="why">Best of ${ev.rows.filter((x) => !x.why.length).length} fitting configurations on ${D().name}.${gap}</p>
     </div>
     <div class="kv">
       <div><span>Macro-F1</span><b>${fmt(b.f1, 3)} ± ${fmt(b.sd, 3)}</b></div>
@@ -287,7 +293,8 @@ function renderPick(s, ev) {
       <div><span>Peak RAM</span><b>${kb(m.ram)}</b></div>
       <div><span>Flash</span><b>${kb(m.flash)}</b></div>
       ${s.gate ? `<div><span>Model duty</span><b>${fmt(100 * b.esc, 1)} %</b></div><div><span>Without gate</span><b>${sig(m.e2e)} µJ</b></div>`
-               : `<div><span>Front-end share</span><b>${fmt(100 * m.fe / m.e2e, 0)} %</b></div>`}
+               : `<div><span>Front-end share</span><b>${fmt(100 * Math.min(m.fe / m.e2e, 1), 0)} %</b></div><div><span>Measured / estimate</span><b>${fmt(m.e2e / m.est, 2)}×</b></div>`}
+      <div><span>Repeat spread</span><b>${fmt(100 * m.cv, 2)} %</b></div>
       <div><span>Energy budget</span><b>${ev.Emax > 0 ? sig(ev.Emax) + " µJ" : "none"}</b></div>
     </div>`;
 }
@@ -299,7 +306,7 @@ function tightest(rows) {
 
 function renderPlot(s, ev) {
   const W = 760, H = 330, L = 50, R = 14, T = 12, B = 40;
-  const xs = ev.rows.map((r) => r.e).concat(DATA.models.map((m) => m.e2e));
+  const xs = ev.rows.map((r) => r.e).concat(D().models.map((m) => m.e2e));
   const x0 = Math.floor(Math.log10(Math.min(...xs))), x1 = Math.ceil(Math.log10(Math.max(...xs)));
   const f1s = ev.rows.map((r) => r.f1);
   const yLo = Math.max(0, Math.floor((Math.min(...f1s) - 0.02) * 10) / 10), yHi = 1;
@@ -317,8 +324,8 @@ function renderPlot(s, ev) {
     if (v > yLo + 1e-9 && v < yHi - 1e-9) g += `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" style="stroke:var(--line)" stroke-width="1"/>`;
     g += `<text x="${L - 7}" y="${y + 4}" text-anchor="end">${fmt(v, 1)}</text>`;
   }
-  g += `<text x="${(L + W - R) / 2}" y="${H - 4}" text-anchor="middle">energy per window, µJ (log)</text>`;
-  g += `<text transform="translate(12 ${(T + H - B) / 2}) rotate(-90)" text-anchor="middle">macro-F1 (${lens})</text>`;
+  g += `<text x="${(L + W - R) / 2}" y="${H - 4}" text-anchor="middle">measured energy per window, µJ (log)</text>`;
+  g += `<text transform="translate(12 ${(T + H - B) / 2}) rotate(-90)" text-anchor="middle">macro-F1 (${D().name} ${lens})</text>`;
   if (ev.Emax > 0 && Math.log10(ev.Emax) > x0 && Math.log10(ev.Emax) < x1) {
     const x = X(ev.Emax);
     g += `<rect x="${x}" y="${T}" width="${W - R - x}" height="${H - T - B}" style="fill:var(--soft)"/>`;
@@ -327,7 +334,7 @@ function renderPlot(s, ev) {
   }
   for (const r of ev.rows.slice().reverse()) {
     const m = r.m, col = `var(--${m.fam})`, op = r.why.length ? 0.2 : 0.95;
-    const t = `<title>${m.id} · F1 ${fmt(r.f1, 3)} · ${sig(r.e)} µJ · ${kb(m.ram)} RAM${r.why.length ? " · exceeds: " + r.why.join(", ") : ""}</title>`;
+    const t = `<title>${m.id} · F1 ${fmt(r.f1, 3)} · ${sig(r.e)} µJ measured · ${kb(m.ram)} RAM${r.why.length ? " · exceeds: " + r.why.join(", ") : ""}</title>`;
     g += marker(m.fam, m.prec, X(r.e), Y(r.f1), 4.2, col, `opacity="${op}"`) + `>${t}</${SHAPE[m.fam] === "circle" ? "circle" : SHAPE[m.fam] === "square" ? "rect" : "path"}>`;
   }
   if (ev.best) {
@@ -335,51 +342,56 @@ function renderPlot(s, ev) {
     g += `<circle cx="${cx}" cy="${cy}" r="10" fill="none" style="stroke:var(--ink)" stroke-width="1.6"/>`;
     g += `<text x="${cx + 13}" y="${cy - 8}" style="fill:var(--ink);font-weight:500">selected</text>`;
   }
-  $("plot").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Accuracy against energy per window for every configuration; configurations that fit are solid, the others faded">${g}</svg>`;
+  $("plot").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Accuracy against measured energy per window for every configuration; configurations that fit are solid, the others faded">${g}</svg>`;
 }
 
 function renderLegend() {
-  const fams = Object.keys(FAM).filter((f) => DATA.models.some((m) => m.fam === f));
   const ico = (f, p) => `<svg viewBox="-6 -6 12 12">${marker(f, p, 0, 0, 4.2, `var(--${f})`)}/></svg>`;
-  $("legend").innerHTML = fams.map((f) => `<span>${ico(f, "fp32")}${FAM[f]}</span>`).join("")
+  $("legend").innerHTML = Object.keys(FAM).map((f) => `<span>${ico(f, "fp32")}${FAM[f]}</span>`).join("")
     + `<span>solid float32 · hollow int8</span><span>faded: exceeds a constraint</span>`;
 }
 
 function renderTable(s, ev) {
   const hide = $("hide").checked;
-  let h = `<thead><tr><th>#</th><th>Model</th><th>F1 ${lens}</th><th>F1 P1</th><th>µJ</th><th>ms</th><th>RAM</th><th>Flash</th><th>Life</th><th>Exceeds</th></tr></thead><tbody>`;
+  let h = `<thead><tr><th>#</th><th>Model</th><th>F1 ${lens}</th><th>F1 P1</th><th>µJ</th><th>Est. µJ</th><th>ms</th><th>RAM</th><th>Flash</th><th>Life</th><th>Exceeds</th></tr></thead><tbody>`;
   ev.rows.forEach((r, i) => {
     if (hide && r.why.length) return;
     const m = r.m, cls = r.why.length ? "out" : (ev.best && r === ev.best ? "best" : "");
     h += `<tr class="${cls}"><td>${i + 1}</td><td><span class="glyph" style="color:var(--${m.fam})">${GLYPH[m.fam]}</span>${m.id}</td>
-      <td>${fmt(r.f1, 3)} ± ${fmt(r.sd, 3)}</td><td>${fmt(m.f1.P1[0], 3)}</td><td>${sig(r.e)}</td><td>${sig(m.lat / 1000)}</td>
+      <td>${fmt(r.f1, 3)} ± ${fmt(r.sd, 3)}</td><td>${fmt(m.f1.P1[0], 3)}</td><td>${sig(r.e)}</td><td>${sig(m.est)}</td><td>${sig(m.lat / 1000)}</td>
       <td>${kb(m.ram)}</td><td>${kb(m.flash)}</td><td>${years(r.lifeY)}</td><td>${r.why.length ? r.why.join(", ") : "—"}</td></tr>`;
   });
   $("tbl").innerHTML = h + "</tbody>";
 }
 
+function renderLens() {
+  const P = D().protocols; if (!P.includes(lens)) lens = P[0];
+  $("lens").style.setProperty("--n", P.length);
+  $("lens").innerHTML = P.map((p) => `<button type="button" data-p="${p}" aria-pressed="${p === lens}">${D().label[p]}</button>`).join("");
+  $("lens").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { lens = b.dataset.p; renderLens(); render(); }));
+}
+
 function render() {
-  const s = state();
+  const s = state(), g = D().gate;
   $("rate-out").textContent = `${s.r >= 1 ? fmt(s.r, s.r < 10 ? 1 : 0) : s.r.toPrecision(2)} /s · every ${period(s.r)}`;
-  $("lens-hint").textContent = LENS[lens];
+  $("lens-hint").textContent = D().lens[lens];
   $("pi").disabled = !$("gate").checked;
   $("pi-out").textContent = !$("gate").checked ? "Off"
-    : lens === "P1" ? "Not evaluated on the random split"
-    : `${s.pi < 0.01 ? fmt(100 * s.pi, 2) : fmt(100 * s.pi, 1)} % · recall ${fmt(100 * DATA.cascade.rate[lens].tpr, 1)} % · false alarms ${fmt(100 * DATA.cascade.rate[lens].fpr, 1)} %`;
+    : `${s.pi < 0.01 ? fmt(100 * s.pi, 2) : fmt(100 * s.pi, 1)} % · ${g.name}, ${sig(g.E1)} µJ/window measured · recall ${fmt(100 * g.tpr, 1)} %, false alarms ${fmt(100 * g.fpr, 1)} % on ${g.split}`;
+  $("meta").textContent = `${D().models.length} configurations · ${D().windows.toLocaleString("en-US")} measured windows · repeat spread ${fmt(100 * D().cv_med, 2)} %`;
   const ev = evaluate(s);
   renderPick(s, ev); renderPlot(s, ev); renderTable(s, ev);
 }
 
-document.querySelectorAll("#lens button").forEach((b) => b.addEventListener("click", () => {
-  lens = b.dataset.p;
-  document.querySelectorAll("#lens button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
-  render();
+document.querySelectorAll("#dsseg button").forEach((b) => b.addEventListener("click", () => {
+  ds = b.dataset.d;
+  document.querySelectorAll("#dsseg button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  fillSleep(); renderLens(); render();
 }));
 ["ram", "flash", "rate", "batt", "life", "sleep", "hide", "gate", "pi"].forEach((id) => $(id).addEventListener("input", render));
 $("form").addEventListener("submit", (e) => e.preventDefault());
-$("meta").textContent = `${DATA.models.length} configurations · ${DATA.n_runs.toLocaleString("en-US")} training runs`;
 $("built").innerHTML = `Updated ${DATA.built} · <a href="https://github.com/agnibha11/TinyML-Pareto">github.com/agnibha11/TinyML-Pareto</a>`;
-renderLegend(); render();
+fillSleep(); renderLens(); renderLegend(); render();
 </script>
 </body>
 </html>
