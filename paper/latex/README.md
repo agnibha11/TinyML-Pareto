@@ -20,5 +20,5 @@ Regenerate after new data (e.g. when the float-log campaign finishes), from the 
     python paper/latex/scripts/make_figs.py
     python tools/make_selector.py && python tools/make_site.py     # refresh the website with the same numbers
 
-The float-log (FE_FLOAT_LOG) numbers were computed from the repeats finished on 22 Nov 2026 (CWRU 1, Paderborn 2).
-Re-running the two commands picks up repeats 2-3 automatically; the sentence in Section V-B prints the repeat counts.
+The float-log (FE_FLOAT_LOG) numbers come from the complete campaign (22-23 Nov 2026): 3 repeats of every R2, R3
+and R4 model plus R0/R1 anchors on both datasets; the sentence in Section V-B prints the repeat counts.
