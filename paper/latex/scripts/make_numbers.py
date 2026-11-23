@@ -31,6 +31,7 @@ from scipy.stats import kendalltau, spearmanr
 
 DIG = dict(zip("0123456789", ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"]))
 MACROS: dict[str, str] = {}
+LF_SHIFT: list[float] = []   # largest anchor shift per dataset (float-log campaign)
 
 
 def name(*parts) -> str:
@@ -378,9 +379,17 @@ def main() -> None:
                     put(D + "LfSave" + rp, pct(1 - (g.E_FRONT_log / g.E_FRONT).median(), 0))
                     put(D + "LfFactor" + rp, f((g.E_FRONT / g.E_FRONT_log).median(), 2))
             put(D + "LfEtoeSaveMax", pct((1 - lw.E_E2E_log / lw.E_E2E).max(), 0))
-            r1 = lw[lw.rep == "R1"]
-            if len(r1):
-                put(D + "LfImageShift", f(100 * abs(1 - (r1.E_FRONT_log / r1.E_FRONT).median()), 0))
+            # anchors (R0/R1) take no logarithm: any change is the rebuilt image (code placement)
+            an = lw[lw.rep.isin(["R0", "R1"])]
+            if len(an):
+                chg = an.E_FRONT_log / an.E_FRONT - 1
+                LF_SHIFT.append(chg.abs().max())
+                put(D + "LfImageShiftMax", f(100 * chg.abs().max(), 0))
+                put("LfImageShiftMax", f(100 * max(LF_SHIFT), 0))
+                r1 = an[an.rep == "R1"]   # R0 anchors move both ways, so only R1 gets a median change
+                if len(r1):
+                    s = pct((r1.E_FRONT_log / r1.E_FRONT).median() - 1, 0)
+                    put(D + "LfChangeROne", s if s.startswith("$-$") else "+" + s)
 
         # ---- board verification
         bv = pd.read_csv(R / ds / "hardware" / "board_verify.csv")

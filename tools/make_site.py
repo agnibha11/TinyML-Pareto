@@ -219,8 +219,8 @@ best CNN {N['CwruPThreeBestCNN']}, best MLP {N['CwruPThreeBestMLP']}.</li>
 <th>PU µJ</th><th>float-log µJ</th></tr></thead><tbody>{frontend_rows(N)}</tbody></table></div>
 <p class="muted">The float-log build replaces newlib's double-precision <code>log10f</code> ({N['RigLogfCycles']} cycles)
 with a float-only version ({N['RigFloatLogCycles']} cycles). R0 and R1 take no logarithm, so their change
-(up to {N['PuLfImageShift']}&nbsp;%) is the effect of rebuilding the firmware image alone. Float-log campaign:
-{N['CwruLfReps']} (CWRU) and {N['PuLfReps']} (Paderborn) repeats so far.</p></section>
+(up to {N['LfImageShiftMax']}&nbsp;% in either direction) is the effect of rebuilding the firmware image alone.
+Float-log campaign: {N['CwruLfReps']} repeats per model on CWRU, {N['PuLfReps']} on Paderborn.</p></section>
 
 <section class="block"><h2>Estimated versus measured energy</h2>
 <figure class="narrow"><img src="img/fig_est.svg" alt="Measured against estimated energy and ratio per family"></figure>

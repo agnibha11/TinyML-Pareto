@@ -406,10 +406,11 @@ single-precision FPU. A float-only logarithm (\NumRigFloatLogCycles{} instead of
 below $\NumRigFloatLogErr$) cuts the R3 front end from \NumCwruFrontRThree{} to \NumCwruLfFrontRThree\uJ{}
 (\NumCwruLfFactorRThree$\times$; Paderborn \NumPuLfFactorRThree$\times$) and the E2E energy of R3 MLPs by up to
 \NumCwruLfEtoeSaveMax{}. R2 and R4, which take 14 and 32 logarithms, become \NumCwruLfSaveRTwo{} and
-\NumCwruLfSaveRFour{} cheaper, but R1, which takes none, also moves (\NumCwruLfSaveROne{} cheaper on CWRU,
-\NumPuLfSaveROne{} on Paderborn): rebuilding the firmware alone shifts a float front end by up to
-\NumPuLfImageShift\,\%. \TJ{} therefore treats the firmware image as a systematic and reports both builds (measured
-over \NumCwruLfReps{} and \NumPuLfReps{} repeats for CWRU and Paderborn in this version).
+\NumCwruLfSaveRFour{} cheaper. R1, which takes none, also moves (\NumCwruLfChangeROne{} on CWRU,
+\NumPuLfChangeROne{} on Paderborn), and single R0 and R1 front ends move by up to \NumLfImageShiftMax\,\% in either
+direction: rebuilding the firmware alone changes the time and power of unchanged code, as it already did between
+bundles of the original campaign. \TJ{} therefore treats the firmware image as a systematic and reports both builds
+(\NumCwruLfReps{} repeats per model on CWRU, \NumPuLfReps{} on Paderborn).
 
 \subsection{Why the energy must be measured}\label{sec:res-est}
 \begin{figure}[t]
@@ -445,7 +446,7 @@ Per-channel int8 dense layers ignored by Arduino TFLM port & wrong int8 outputs;
 \NumPuVerIntAgreeMin{}; energy unchanged & VERIFY \\
 int8 MEAN rounding & 1 LSB in \NumRigMeanLsbLo--\NumRigMeanLsbHi\,\% of pooled values & layer-wise VERIFY \\
 newlib \texttt{log10f} in double precision & R3 front end \NumCwruLfFactorRThree$\times$ too costly & estimate audit \\
-Firmware image layout & same front end up to $\pm$\NumPuLfImageShift\,\% & repeated builds \\
+Firmware image layout & same front end up to $\pm$\NumLfImageShiftMax\,\% & repeated builds \\
 RF soft vs.\ hard voting & host and board predictions differ & emulator VERIFY \\
 \bottomrule
 \end{tabular}

@@ -87,8 +87,8 @@ best CNN 0.594, best MLP 0.653.</li>
 <th>PU µJ</th><th>float-log µJ</th></tr></thead><tbody><tr><td class='l'>R0 raw window (CNN input)</td><td>0</td><td>0.17</td><td>4.81</td><td>4.13</td><td>5.27</td><td>4.14</td></tr><tr><td class='l'>R1 ten statistics</td><td>0</td><td>0.64</td><td>13.6</td><td>12.0</td><td>13.5</td><td>13.8</td></tr><tr><td class='l'>R2 statistics + 14 log bands</td><td>14</td><td>2.50</td><td>55.9</td><td>49.4</td><td>55.3</td><td>49.9</td></tr><tr><td class='l'>R4 envelope spectrum</td><td>32</td><td>3.90</td><td>86.4</td><td>71.6</td><td>85.2</td><td>71.5</td></tr><tr><td class='l'>R3 256-bin log spectrum</td><td>256</td><td>7.26</td><td>157</td><td>49.3</td><td>157</td><td>50.4</td></tr></tbody></table></div>
 <p class="muted">The float-log build replaces newlib's double-precision <code>log10f</code> (1,343 cycles)
 with a float-only version (100 cycles). R0 and R1 take no logarithm, so their change
-(up to 15&nbsp;%) is the effect of rebuilding the firmware image alone. Float-log campaign:
-3 (CWRU) and 3 (Paderborn) repeats so far.</p></section>
+(up to 20&nbsp;% in either direction) is the effect of rebuilding the firmware image alone.
+Float-log campaign: 3 repeats per model on CWRU, 3 on Paderborn.</p></section>
 
 <section class="block"><h2>Estimated versus measured energy</h2>
 <figure class="narrow"><img src="img/fig_est.svg" alt="Measured against estimated energy and ratio per family"></figure>
