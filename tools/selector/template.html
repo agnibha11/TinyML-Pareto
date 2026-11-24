@@ -96,15 +96,22 @@ tr.best td { background: var(--soft); font-weight: 500 }
 footer { padding: 4px 2px 0; font-size: 12px; color: var(--muted);
   display: flex; justify-content: space-between; gap: 6px 24px; flex-wrap: wrap }
 footer a { color: var(--ink) }
-nav.top { display: flex; gap: 18px; font-size: 13px; padding-top: 18px }
-nav.top a { color: var(--muted); text-decoration: none } nav.top a:hover, nav.top a[aria-current] { color: var(--ink) }
+.bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--soft); margin: 10px 0 6px; gap: 2px }
+.bar i { display: block; height: 100% }
+.barkey { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted) }
+.barkey span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px;
+  background: var(--c); vertical-align: -1px }
+.note { font-size: 12.5px; color: var(--muted); margin: 8px 0 0; max-width: 62ch }
+.note b { color: var(--ink); font-weight: 500 }
+.btns { display: flex; gap: 8px; flex-wrap: wrap }
+.btns button { font: 500 12px var(--f-sans); padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--ink); cursor: pointer } .btns button:hover { border-color: var(--muted) }
 .badge { display: inline-block; font: 500 11px var(--f-sans); padding: 2px 7px; border-radius: 999px; background: var(--soft);
   border: 1px solid var(--line); color: var(--muted); margin-left: 6px; vertical-align: 2px }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <nav class="top"><a href="../">TrueJoule</a><a href="./" aria-current="page">Model selector</a><a href="../hardware/">Hardware results</a></nav>
   <header>
     <div>
       <h1>Bearing Sensor Model Selector</h1>
@@ -162,6 +169,10 @@ nav.top a { color: var(--muted); text-decoration: none } nav.top a:hover, nav.to
           <select id="sleep"></select>
           <div class="hint">Board values are measured at the 5 V USB input; the chip value is the nRF52840 datasheet sleep current.</div>
         </div>
+        <div class="ctl">
+          <label class="check"><input type="checkbox" id="flog"> Float-only <code>log10</code> firmware</label>
+          <div class="hint" id="flog-hint"></div>
+        </div>
         <hr class="sep">
         <div class="ctl">
           <label class="check"><input type="checkbox" id="gate"> Self-calibrating wake-up gate</label>
@@ -169,6 +180,8 @@ nav.top a { color: var(--muted); text-decoration: none } nav.top a:hover, nav.to
           <input type="range" id="pi" min="-3" max="0" step="0.125" value="-2" disabled>
           <div class="readout" id="pi-out"></div>
         </div>
+        <hr class="sep">
+        <div class="btns"><button type="button" id="share">Copy link to this setup</button><button type="button" id="csv">Download table (CSV)</button></div>
       </div>
     </form>
 
@@ -239,15 +252,22 @@ const GLYPH = { dt: "●", rf: "■", mlp: "▲", cnn: "◆" };
 function state() {
   const r = Math.pow(10, +$("rate").value);
   return { r, ram: +$("ram").value, flash: +$("flash").value, batt: +$("batt").value, life: +$("life").value, ps: +$("sleep").value,
-           gate: $("gate").checked, pi: Math.pow(10, +$("pi").value) };
+           gate: $("gate").checked, pi: Math.pow(10, +$("pi").value), flog: $("flog").checked, est: false };
 }
 
 // Behind the gate: every window pays the measured gate energy E1; an alarm runs the model, which reuses the gate's
 // features where its representation contains them (measured saving). Detection rates: gate on the deployed split.
+// Measured cost of one window for the selected firmware build (float-only log10 where that build was measured).
+function cost(m, s) {
+  if (s.est) return { e2e: m.est, fe: m.fe * m.est / m.e2e, lat: m.lat, lf: false };
+  if (s.flog && m.lf) return { e2e: m.lf.e2e, fe: Math.min(m.lf.fe, m.lf.e2e), lat: m.lf.lat, lf: true };
+  return { e2e: m.e2e, fe: Math.min(m.fe, m.e2e), lat: m.lat, lf: false };
+}
 function deployed(m, s) {
-  if (!s.gate) return { e: m.e2e, esc: 1 };
-  const g = D().gate, esc = s.pi * g.tpr + (1 - s.pi) * g.fpr, reuse = g.reuse[m.rep] || 0;
-  return { e: g.E1 + esc * Math.max(m.e2e - reuse, 0), esc };
+  const c = cost(m, s);
+  if (!s.gate) return { e: c.e2e, esc: 1, c, parts: [0, c.fe, c.e2e - c.fe] };
+  const g = D().gate, esc = s.pi * g.tpr + (1 - s.pi) * g.fpr, reuse = Math.min(g.reuse[m.rep] || 0, c.fe);
+  return { e: g.E1 + esc * Math.max(c.e2e - reuse, 0), esc, c, parts: [g.E1, esc * (c.fe - reuse), esc * (c.e2e - c.fe)] };
 }
 
 function evaluate(s) {
@@ -256,11 +276,11 @@ function evaluate(s) {
     const why = [];
     if (m.ram > s.ram) why.push("RAM");
     if (m.flash > s.flash) why.push("flash");
-    if (m.lat * 1e-6 > 1 / s.r) why.push("rate");
     const d = deployed(m, s);
+    if (d.c.lat * 1e-6 > 1 / s.r) why.push("rate");
     if (!(d.e <= Emax)) why.push("energy");
     const lifeY = s.batt / (s.r * d.e * 1e-6 + s.ps) / YEAR;
-    return { m, why, lifeY, f1: m.f1[lens][0], sd: m.f1[lens][1], e: d.e, esc: d.esc };
+    return { m, why, lifeY, f1: m.f1[lens][0], sd: m.f1[lens][1], e: d.e, esc: d.esc, c: d.c, parts: d.parts };
   });
   rows.sort((a, b) => (a.why.length > 0) - (b.why.length > 0) || b.f1 - a.f1 || a.e - b.e);
   return { rows, Emax, best: rows.find((x) => x.why.length === 0) || null };
@@ -289,14 +309,34 @@ function renderPick(s, ev) {
       <div><span>Macro-F1</span><b>${fmt(b.f1, 3)} ± ${fmt(b.sd, 3)}</b></div>
       <div><span>Battery life</span><b>${years(b.lifeY)}</b></div>
       <div><span>Energy / window</span><b>${sig(b.e)} µJ</b></div>
-      <div><span>Latency</span><b>${sig(m.lat / 1000)} ms</b></div>
+      <div><span>Latency</span><b>${sig(b.c.lat / 1000)} ms</b></div>
       <div><span>Peak RAM</span><b>${kb(m.ram)}</b></div>
       <div><span>Flash</span><b>${kb(m.flash)}</b></div>
       ${s.gate ? `<div><span>Model duty</span><b>${fmt(100 * b.esc, 1)} %</b></div><div><span>Without gate</span><b>${sig(m.e2e)} µJ</b></div>`
-               : `<div><span>Front-end share</span><b>${fmt(100 * Math.min(m.fe / m.e2e, 1), 0)} %</b></div><div><span>Measured / estimate</span><b>${fmt(m.e2e / m.est, 2)}×</b></div>`}
+               : `<div><span>Front-end share</span><b>${fmt(100 * b.c.fe / b.c.e2e, 0)} %</b></div><div><span>Measured / estimate</span><b>${fmt(b.c.e2e / m.est, 2)}×</b></div>`}
       <div><span>Repeat spread</span><b>${fmt(100 * m.cv, 2)} %</b></div>
       <div><span>Energy budget</span><b>${ev.Emax > 0 ? sig(ev.Emax) + " µJ" : "none"}</b></div>
-    </div>`;
+    </div>
+    <div style="grid-column:1/-1">${breakdown(b)}${estimateNote(s, ev)}</div>`;
+}
+// Where the measured energy of one window goes.
+function breakdown(b) {
+  const lab = ["wake-up gate", "feature front end", "classifier"], col = ["var(--mlp)", "var(--dt)", "var(--rf)"];
+  const tot = b.parts.reduce((a, x) => a + Math.max(x, 0), 0) || 1;
+  const segs = b.parts.map((x, i) => x > 0 ? `<i style="width:${100 * x / tot}%;background:${col[i]}" title="${lab[i]}: ${sig(x)} µJ"></i>` : "").join("");
+  const key = b.parts.map((x, i) => x > 0 ? `<span style="--c:${col[i]}">${lab[i]} ${sig(x)} µJ (${fmt(100 * x / tot, 0)} %)</span>` : "").join("");
+  return `<div class="bar" role="img" aria-label="Energy per window by stage">${segs}</div><div class="barkey">${key}</div>`;
+}
+// What the same constraints would have chosen with the pre-hardware (cycle-model x datasheet) energy.
+function estimateNote(s, ev) {
+  if (s.gate || !ev.best) return "";
+  const e = evaluate(Object.assign({}, s, { est: true })), pe = e.best;
+  if (!pe) return `<p class="note">With the pre-hardware energy estimate, no configuration would have looked feasible.</p>`;
+  if (pe.m.id === ev.best.m.id) return `<p class="note">The pre-hardware energy estimate gives the same choice; on the board it draws <b>${fmt(ev.best.c.e2e / ev.best.m.est, 2)}×</b> the estimate.</p>`;
+  const real = ev.rows.find((r) => r.m.id === pe.m.id);
+  const fits = real && real.why.length === 0;
+  return `<p class="note">With the pre-hardware energy estimate this tool would have picked <b>${pe.m.id}</b>; measured on the board it draws
+    <b>${sig(real.e)} µJ</b> (${fmt(real.e / pe.m.est, 2)}× the estimate)${fits ? `, lasting ${years(real.lifeY)}` : `, so it <b>misses ${real.why.join(" and ")}</b> for this setup`}.</p>`;
 }
 function tightest(rows) {
   const c = {}; rows.forEach((x) => x.why.forEach((w) => (c[w] = (c[w] || 0) + 1)));
@@ -337,6 +377,16 @@ function renderPlot(s, ev) {
     const t = `<title>${m.id} · F1 ${fmt(r.f1, 3)} · ${sig(r.e)} µJ measured · ${kb(m.ram)} RAM${r.why.length ? " · exceeds: " + r.why.join(", ") : ""}</title>`;
     g += marker(m.fam, m.prec, X(r.e), Y(r.f1), 4.2, col, `opacity="${op}"`) + `>${t}</${SHAPE[m.fam] === "circle" ? "circle" : SHAPE[m.fam] === "square" ? "rect" : "path"}>`;
   }
+  // Pareto front (higher F1, lower energy) of all configurations under the current settings
+  const fr = ev.rows.slice().sort((a, b) => a.e - b.e || b.f1 - a.f1);
+  let bestF = -1, pts = [];
+  for (const r of fr) if (r.f1 > bestF + 1e-9) { pts.push([X(r.e), Y(r.f1)]); bestF = r.f1; }
+  if (pts.length) {
+    let d = `M${pts[0][0]} ${pts[0][1]}`;
+    for (let i = 1; i < pts.length; i++) d += ` H${pts[i][0]} V${pts[i][1]}`;
+    d += ` H${W - R}`;
+    g += `<path d="${d}" fill="none" style="stroke:var(--ink)" stroke-width="1.1" opacity="0.55"/>`;
+  }
   if (ev.best) {
     const cx = X(ev.best.e), cy = Y(ev.best.f1);
     g += `<circle cx="${cx}" cy="${cy}" r="10" fill="none" style="stroke:var(--ink)" stroke-width="1.6"/>`;
@@ -348,7 +398,7 @@ function renderPlot(s, ev) {
 function renderLegend() {
   const ico = (f, p) => `<svg viewBox="-6 -6 12 12">${marker(f, p, 0, 0, 4.2, `var(--${f})`)}/></svg>`;
   $("legend").innerHTML = Object.keys(FAM).map((f) => `<span>${ico(f, "fp32")}${FAM[f]}</span>`).join("")
-    + `<span>solid float32 · hollow int8</span><span>faded: exceeds a constraint</span>`;
+    + `<span>solid float32 · hollow int8</span><span>faded: exceeds a constraint</span><span>line: Pareto front</span>`;
 }
 
 function renderTable(s, ev) {
@@ -358,7 +408,7 @@ function renderTable(s, ev) {
     if (hide && r.why.length) return;
     const m = r.m, cls = r.why.length ? "out" : (ev.best && r === ev.best ? "best" : "");
     h += `<tr class="${cls}"><td>${i + 1}</td><td><span class="glyph" style="color:var(--${m.fam})">${GLYPH[m.fam]}</span>${m.id}</td>
-      <td>${fmt(r.f1, 3)} ± ${fmt(r.sd, 3)}</td><td>${fmt(m.f1.P1[0], 3)}</td><td>${sig(r.e)}</td><td>${sig(m.est)}</td><td>${sig(m.lat / 1000)}</td>
+      <td>${fmt(r.f1, 3)} ± ${fmt(r.sd, 3)}</td><td>${fmt(m.f1.P1[0], 3)}</td><td>${sig(r.e)}</td><td>${sig(m.est)}</td><td>${sig(r.c.lat / 1000)}</td>
       <td>${kb(m.ram)}</td><td>${kb(m.flash)}</td><td>${years(r.lifeY)}</td><td>${r.why.length ? r.why.join(", ") : "—"}</td></tr>`;
   });
   $("tbl").innerHTML = h + "</tbody>";
@@ -376,6 +426,12 @@ function render() {
   $("rate-out").textContent = `${s.r >= 1 ? fmt(s.r, s.r < 10 ? 1 : 0) : s.r.toPrecision(2)} /s · every ${period(s.r)}`;
   $("lens-hint").textContent = D().lens[lens];
   $("pi").disabled = !$("gate").checked;
+  const lfm = D().models.filter((m) => m.lf && m.rep === "r3");
+  if (lfm.length) {
+    const r = lfm.map((m) => m.fe / m.lf.fe).sort((a, b) => a - b)[Math.floor(lfm.length / 2)];
+    $("flog-hint").textContent = `Same models rebuilt with a single-precision logarithm and re-measured: the 256-bin spectrum front end is ${fmt(r, 1)}× cheaper. Off: the standard newlib build.`;
+  } else $("flog-hint").textContent = "Not measured for this dataset.";
+  $("flog").disabled = !lfm.length;
   $("pi-out").textContent = !$("gate").checked ? "Off"
     : `${s.pi < 0.01 ? fmt(100 * s.pi, 2) : fmt(100 * s.pi, 1)} % · ${g.name}, ${sig(g.E1)} µJ/window measured · recall ${fmt(100 * g.tpr, 1)} %, false alarms ${fmt(100 * g.fpr, 1)} % on ${g.split}`;
   $("meta").textContent = `${D().models.length} configurations · ${D().windows.toLocaleString("en-US")} measured windows · repeat spread ${fmt(100 * D().cv_med, 2)} %`;
@@ -388,10 +444,43 @@ document.querySelectorAll("#dsseg button").forEach((b) => b.addEventListener("cl
   document.querySelectorAll("#dsseg button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
   fillSleep(); renderLens(); render();
 }));
-["ram", "flash", "rate", "batt", "life", "sleep", "hide", "gate", "pi"].forEach((id) => $(id).addEventListener("input", render));
+["ram", "flash", "rate", "batt", "life", "sleep", "hide", "gate", "pi", "flog"].forEach((id) => $(id).addEventListener("input", render));
+// Shareable setup: every control is mirrored in the URL fragment.
+const KEYS = ["ram", "flash", "rate", "batt", "life", "sleep", "pi"], BOX = ["gate", "flog", "hide"];
+function toHash() {
+  const q = new URLSearchParams({ ds, p: lens });
+  KEYS.forEach((k) => q.set(k, $(k).value)); BOX.forEach((k) => q.set(k, $(k).checked ? 1 : 0));
+  return "#" + q.toString();
+}
+function fromHash() {
+  const q = new URLSearchParams(location.hash.slice(1));
+  if (q.get("ds") && DATA.datasets[q.get("ds")]) {
+    ds = q.get("ds");
+    document.querySelectorAll("#dsseg button").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.d === ds)));
+  }
+  if (q.get("p")) lens = q.get("p");
+  fillSleep();
+  KEYS.forEach((k) => { if (q.has(k)) $(k).value = q.get(k); });
+  BOX.forEach((k) => { if (q.has(k)) $(k).checked = q.get(k) === "1"; });
+}
+$("share").addEventListener("click", () => {
+  history.replaceState(null, "", toHash());
+  const done = () => { $("share").textContent = "Link copied"; setTimeout(() => ($("share").textContent = "Copy link to this setup"), 1500); };
+  (navigator.clipboard ? navigator.clipboard.writeText(location.href) : Promise.reject()).then(done, () => { $("share").textContent = "Link is in the address bar"; });
+});
+$("csv").addEventListener("click", () => {
+  const s = state(), ev = evaluate(s);
+  const head = ["model", "family", "representation", "precision", `macro_f1_${lens}`, "f1_sd", "macro_f1_P1", "energy_uJ_per_window",
+    "estimate_uJ", "latency_ms", "peak_ram_B", "flash_B", "battery_life_years", "exceeds"];
+  const lines = [head.join(",")].concat(ev.rows.map((r) => [r.m.id, r.m.fam, r.m.rep, r.m.prec, r.f1, r.sd, r.m.f1.P1[0],
+    r.e.toFixed(3), r.m.est, (r.c.lat / 1000).toFixed(3), r.m.ram, r.m.flash, r.lifeY.toFixed(3), r.why.join(" ")].join(",")));
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" }));
+  a.download = `bearing_models_${ds}_${lens}.csv`; a.click(); URL.revokeObjectURL(a.href);
+});
 $("form").addEventListener("submit", (e) => e.preventDefault());
 $("built").innerHTML = `Updated ${DATA.built} · <a href="https://github.com/agnibha11/TinyML-Pareto">github.com/agnibha11/TinyML-Pareto</a>`;
-fillSleep(); renderLens(); renderLegend(); render();
+fromHash(); renderLens(); renderLegend(); render();
 </script>
 </body>
 </html>

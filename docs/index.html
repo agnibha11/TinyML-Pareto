@@ -1,86 +1,486 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TrueJoule · verified, leakage-free TinyML for bearing fault monitoring</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TrueJoule · Bearing Sensor Model Selector</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-:root{--page:#f3f4f6;--bg:#fff;--ink:#1f2329;--muted:#69717c;--line:#e3e6ea;--soft:#f4f5f7;--acc:#1baf7a;
---shadow:0 1px 2px rgba(17,24,39,.05),0 1px 1px rgba(17,24,39,.03);--r:14px;
---f-sans:"IBM Plex Sans","Helvetica Neue",Arial,sans-serif;--f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace}
-*{box-sizing:border-box}
-body{margin:0;background:var(--page);color:var(--ink);font:15px/1.6 var(--f-sans);padding:0 max(16px,env(safe-area-inset-left,0px)) 48px}
-.wrap{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
-nav.top{display:flex;gap:18px;font-size:13px;padding-top:18px}
-nav.top a{color:var(--muted);text-decoration:none} nav.top a:hover,nav.top a[aria-current]{color:var(--ink)}
-header{padding:26px 2px 0} h1{font-weight:600;font-size:clamp(26px,4vw,38px);letter-spacing:-.015em;line-height:1.1;margin:0}
-.lede{font-size:17px;color:var(--muted);max-width:68ch;margin:10px 0 0}
-h2{font-size:20px;font-weight:600;margin:0 0 6px;letter-spacing:-.01em}
-.block{border:1px solid var(--line);background:var(--bg);border-radius:var(--r);box-shadow:var(--shadow);padding:20px 22px}
-.block p{margin:8px 0;max-width:78ch} .muted{color:var(--muted)}
-.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
-.tile{background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;box-shadow:var(--shadow)}
-.tile b{display:block;font:500 24px var(--f-mono);letter-spacing:-.02em} .tile span{font-size:12.5px;color:var(--muted)}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
-.card{display:block;text-decoration:none;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:var(--r);
-padding:18px 20px;box-shadow:var(--shadow);transition:border-color .15s} .card:hover{border-color:var(--muted)}
-.card b{font-size:16px} .card p{margin:6px 0 0;font-size:13.5px;color:var(--muted)}
-figure{margin:10px 0 0} figure img{width:100%;height:auto;display:block;background:#fff;border-radius:8px}
-figure.narrow img{max-width:660px;margin:0 auto}
-a{color:var(--ink)}
-figcaption{font-size:13px;color:var(--muted);margin-top:6px}
-table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums;margin-top:10px}
-th{font-weight:500;color:var(--muted);text-align:right;padding:7px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
-td{text-align:right;padding:6px 10px;border-bottom:1px solid var(--line);font-family:var(--f-mono);white-space:nowrap}
-th:first-child,td:first-child{text-align:left} td.l{text-align:left;font-family:var(--f-sans);white-space:normal}
-tr:last-child td{border-bottom:0} .tw{overflow-x:auto}
-ul{margin:8px 0;padding-left:20px} li{margin:4px 0;max-width:78ch}
-code{font-family:var(--f-mono);font-size:.92em;background:var(--soft);padding:1px 5px;border-radius:5px}
-.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px} @media(max-width:820px){.two{grid-template-columns:1fr}}
-footer{font-size:12.5px;color:var(--muted);padding:4px 2px} footer a{color:var(--ink)}
-</style></head><body><div class="wrap">
-<nav class="top"><a href="./" aria-current="page">TrueJoule</a><a href="./selector/">Model selector</a><a href="./hardware/">Hardware results</a></nav>
+/* Neutral engineering palette: soft grey page, white cards, charcoal ink, rounded corners.
+   Model families are told apart by marker shape, precision by fill; nothing depends on colour. */
+:root {
+  --page: #f3f4f6; --bg: #ffffff; --ink: #1f2329; --muted: #69717c; --faint: #c3c8cf; --line: #e3e6ea; --rule: #cfd4da;
+  --soft: #f4f5f7; --inv-bg: #2b3038; --inv-ink: #ffffff; --shadow: 0 1px 2px rgba(17, 24, 39, .05), 0 1px 1px rgba(17, 24, 39, .03);
+  --r: 14px; --r-s: 9px;
+  --dt: #2f6db0; --rf: #c4552f; --mlp: #23936a; --cnn: #7457c2;
+  --f-sans: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --page: #131518; --bg: #1b1e22; --ink: #e7e9ec; --muted: #9aa2ad; --faint: #4a5059; --line: #2c3036; --rule: #3a3f46;
+  --soft: #23272c; --inv-bg: #e7e9ec; --inv-ink: #1b1e22; --shadow: none;
+  --dt: #6aa3e6; --rf: #ec8a62; --mlp: #4fc897; --cnn: #a38df0; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --page: #131518; --bg: #1b1e22; --ink: #e7e9ec; --muted: #9aa2ad; --faint: #4a5059; --line: #2c3036; --rule: #3a3f46;
+  --soft: #23272c; --inv-bg: #e7e9ec; --inv-ink: #1b1e22; --shadow: none;
+  --dt: #6aa3e6; --rf: #ec8a62; --mlp: #4fc897; --cnn: #a38df0; color-scheme: dark }
+* { box-sizing: border-box }
+body { margin: 0; background: var(--page); color: var(--ink); font: 14px/1.5 var(--f-sans);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 40px }
+.wrap { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px }
+header { display: flex; justify-content: space-between; align-items: flex-end; gap: 8px 24px; flex-wrap: wrap; padding: 30px 2px 4px }
+h1 { font-weight: 600; font-size: clamp(22px, 3vw, 28px); letter-spacing: -0.01em; line-height: 1.15; margin: 0 }
+.sub { font-size: 13px; color: var(--muted); margin-top: 4px }
+.meta { font-family: var(--f-mono); font-size: 12px; color: var(--muted); text-align: right }
+.grid { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 20px; align-items: start }
+@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr) } }
+.block { border: 1px solid var(--line); background: var(--bg); border-radius: var(--r); box-shadow: var(--shadow); overflow: hidden }
+.bh { font: 600 12px var(--f-sans); letter-spacing: .04em; color: var(--muted); padding: 12px 16px 0;
+  display: flex; justify-content: space-between; align-items: center; gap: 12px }
+.bb { padding: 12px 16px 16px }
+.controls { position: sticky; top: calc(12px + env(safe-area-inset-top, 0px)) }
+@media (max-width: 860px) { .controls { position: static } }
+.controls .bb { display: flex; flex-direction: column; gap: 15px }
+.ctl { display: flex; flex-direction: column; gap: 6px }
+.ctl > label, .ctl > .lab { font-size: 12.5px; font-weight: 500 }
+.hint { font-size: 12px; color: var(--muted); line-height: 1.4 }
+select, input[type=range] { width: 100%; font: inherit; color: var(--ink) }
+select { background: var(--bg); border: 1px solid var(--rule); border-radius: var(--r-s); padding: 7px 10px; appearance: auto }
+select:hover { border-color: var(--muted) }
+select:focus-visible, input:focus-visible, button:focus-visible { outline: 2px solid var(--muted); outline-offset: 2px }
+input[type=range] { accent-color: var(--inv-bg) }
+input[type=checkbox] { accent-color: var(--inv-bg); width: 15px; height: 15px; margin: 0 }
+.readout { font: 12px var(--f-mono); color: var(--muted) }
+.seg { display: grid; grid-template-columns: repeat(var(--n, 3), 1fr); gap: 3px; padding: 3px; background: var(--soft);
+  border: 1px solid var(--line); border-radius: var(--r-s) }
+.seg button { font: 500 12.5px var(--f-sans); border: 0; border-radius: 6px; background: transparent; color: var(--muted);
+  padding: 6px 2px; cursor: pointer }
+.seg button:hover { color: var(--ink) }
+.seg button[aria-pressed="true"] { background: var(--inv-bg); color: var(--inv-ink) }
+.check { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer }
+hr.sep { border: 0; border-top: 1px solid var(--line); margin: 0 }
+.results { display: flex; flex-direction: column; gap: 20px; min-width: 0 }
+.pick { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 20px }
+@media (max-width: 720px) { .pick { grid-template-columns: minmax(0, 1fr) } }
+.mid { font: 500 clamp(18px, 2.4vw, 22px) var(--f-mono); overflow-wrap: anywhere; margin: 2px 0 6px }
+.desc { font-size: 13px; color: var(--muted); margin: 0 }
+.why { margin: 10px 0 0; font-size: 13px; color: var(--muted); max-width: 56ch }
+.kv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-content: start }
+.kv div { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; background: var(--soft);
+  border-radius: var(--r-s); padding: 7px 11px; min-width: 0 }
+.kv span { font-size: 12px; color: var(--muted) }
+.kv b { font: 500 14px var(--f-mono); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap }
+.kv b.warn { text-decoration: underline; text-underline-offset: 3px }
+.none { font-weight: 600; margin: 0 }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--muted); padding: 10px 16px 0 }
+.legend svg { display: inline-block; width: 12px; height: 12px; vertical-align: -1px; margin-right: 5px; overflow: visible }
+#plot { padding: 4px 16px 16px }
+svg { display: block; width: 100%; height: auto; overflow: visible }
+#plot svg text { font-family: var(--f-mono); font-size: 10.5px; fill: var(--muted) }
+.tablewrap { overflow-x: auto; margin-top: 8px }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; font-variant-numeric: tabular-nums }
+th { font: 500 12px var(--f-sans); text-align: right; color: var(--muted);
+  padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; position: sticky; top: 0; background: var(--bg) }
+td { text-align: right; padding: 6px 10px; border-bottom: 1px solid var(--line); font-family: var(--f-mono); white-space: nowrap }
+tr:last-child td { border-bottom: 0 }
+th:first-child, td:first-child { padding-left: 16px }
+th:nth-child(2), td:nth-child(2) { text-align: left }
+th:last-child, td:last-child { text-align: left; padding-right: 16px }
+tr.out td { color: var(--faint) }
+tr.best td { background: var(--soft); font-weight: 500 }
+.glyph { display: inline-block; width: 1.4em; font-family: var(--f-mono) }
+footer { padding: 4px 2px 0; font-size: 12px; color: var(--muted);
+  display: flex; justify-content: space-between; gap: 6px 24px; flex-wrap: wrap }
+footer a { color: var(--ink) }
+.bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--soft); margin: 10px 0 6px; gap: 2px }
+.bar i { display: block; height: 100% }
+.barkey { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted) }
+.barkey span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px;
+  background: var(--c); vertical-align: -1px }
+.note { font-size: 12.5px; color: var(--muted); margin: 8px 0 0; max-width: 62ch }
+.note b { color: var(--ink); font-weight: 500 }
+.btns { display: flex; gap: 8px; flex-wrap: wrap }
+.btns button { font: 500 12px var(--f-sans); padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--ink); cursor: pointer } .btns button:hover { border-color: var(--muted) }
+.badge { display: inline-block; font: 500 11px var(--f-sans); padding: 2px 7px; border-radius: 999px; background: var(--soft);
+  border: 1px solid var(--line); color: var(--muted); margin-left: 6px; vertical-align: 2px }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Bearing Sensor Model Selector</h1>
+      <div class="sub">Every energy and latency measured on an Arduino Nano 33 BLE (nRF52840, Cortex-M4F, 64 MHz)</div>
+    </div>
+    <div class="meta" id="meta"></div>
+  </header>
 
-<header><h1>TrueJoule</h1>
-<p class="lede">Verified, leakage-free TinyML for self-calibrating bearing fault monitoring. Every accuracy on this site
-is measured on bearings the model never saw in training, every energy is measured on the board, and every board output
-is checked bit for bit against the host before it is measured.</p></header>
+  <div class="grid">
+    <form class="block controls" id="form" autocomplete="off">
+      <div class="bh">Constraints</div>
+      <div class="bb">
+        <div class="ctl">
+          <span class="lab" id="ds-lab">Dataset</span>
+          <div class="seg" role="group" aria-labelledby="ds-lab" id="dsseg" style="--n:2">
+            <button type="button" data-d="cwru" aria-pressed="true">CWRU</button>
+            <button type="button" data-d="pu" aria-pressed="false">Paderborn</button>
+          </div>
+        </div>
+        <div class="ctl">
+          <span class="lab" id="lens-lab">Evaluation protocol</span>
+          <div class="seg" role="group" aria-labelledby="lens-lab" id="lens"></div>
+          <div class="hint" id="lens-hint"></div>
+        </div>
+        <div class="ctl">
+          <label for="ram">RAM budget (of 256 KB)</label>
+          <select id="ram"></select>
+        </div>
+        <div class="ctl">
+          <label for="flash">Flash budget</label>
+          <select id="flash"></select>
+        </div>
+        <div class="ctl">
+          <label for="rate">Inference rate</label>
+          <input type="range" id="rate" min="-4" max="1" step="0.125" value="-1">
+          <div class="readout" id="rate-out"></div>
+        </div>
+        <div class="ctl">
+          <label for="batt">Battery</label>
+          <select id="batt">
+            <option value="2430">CR2032 · 225 mAh, 3 V</option>
+            <option value="27000">2 × AA · 2,500 mAh, 3 V</option>
+            <option value="39960" selected>18650 Li-ion · 3,000 mAh, 3.7 V</option>
+          </select>
+        </div>
+        <div class="ctl">
+          <label for="life">Target battery life</label>
+          <select id="life">
+            <option value="0.5">6 months</option><option value="1" selected>1 year</option>
+            <option value="2">2 years</option><option value="3">3 years</option><option value="5">5 years</option>
+          </select>
+        </div>
+        <div class="ctl">
+          <label for="sleep">Power between windows</label>
+          <select id="sleep"></select>
+          <div class="hint">Board values are measured at the 5 V USB input; the chip value is the nRF52840 datasheet sleep current.</div>
+        </div>
+        <div class="ctl">
+          <label class="check"><input type="checkbox" id="flog"> Float-only <code>log10</code> firmware</label>
+          <div class="hint" id="flog-hint"></div>
+        </div>
+        <hr class="sep">
+        <div class="ctl">
+          <label class="check"><input type="checkbox" id="gate"> Self-calibrating wake-up gate</label>
+          <label for="pi">Fault prevalence</label>
+          <input type="range" id="pi" min="-3" max="0" step="0.125" value="-2" disabled>
+          <div class="readout" id="pi-out"></div>
+        </div>
+        <hr class="sep">
+        <div class="btns"><button type="button" id="share">Copy link to this setup</button><button type="button" id="csv">Download table (CSV)</button></div>
+      </div>
+    </form>
 
-<div class="tiles">
-  <div class="tile"><b>15,108</b><span>GPIO-framed energy windows on an Arduino Nano 33 BLE</span></div>
-  <div class="tile"><b>0.17&nbsp;%</b><span>median repeat-to-repeat spread of measured energy</span></div>
-  <div class="tile"><b>80 × 2</b><span>tree, forest, MLP and fp32/int8 CNN models, CWRU and Paderborn</span></div>
-  <div class="tile"><b>4.7×</b><span>less energy per window with the self-calibrating gate (CWRU, 1&nbsp;% faults)</span></div>
+    <div class="results">
+      <section class="block" aria-live="polite">
+        <div class="bh">Recommendation</div>
+        <div class="bb pick" id="pick"></div>
+      </section>
+      <section class="block">
+        <div class="bh">Accuracy vs. measured energy per window</div>
+        <div class="legend" id="legend"></div>
+        <div id="plot"></div>
+      </section>
+      <section class="block">
+        <div class="bh"><span>All configurations</span>
+          <label class="check" style="font:400 12px var(--f-sans);letter-spacing:0;color:var(--ink)"><input type="checkbox" id="hide"> Fitting only</label></div>
+        <div class="tablewrap"><table id="tbl"></table></div>
+      </section>
+    </div>
+  </div>
+
+  <footer>
+    <div>Accuracy: host macro-F1, mean ± sd over folds and seeds; the board reproduces the host outputs (VERIFY, bit-exact for int8).
+      Energy: board-level dynamic energy per window, E = (P̄ − P̄idle)·t/N, mean of three repeats. Est.: pre-hardware chip-level estimate, for comparison.</div>
+    <div id="built"></div>
+  </footer>
 </div>
 
-<div class="cards">
-  <a class="card" href="selector/"><b>Model selector →</b><p>Set RAM, flash, inference rate, battery and target life;
-  get the most accurate model that fits, with measured energy, for either dataset and any evaluation protocol.</p></a>
-  <a class="card" href="hardware/"><b>Hardware results →</b><p>The energy rig, measured accuracy–energy fronts, where the
-  energy goes, estimate versus measurement, board verification and the self-calibrating monitor.</p></a>
-  <a class="card" href="https://github.com/agnibha11/TinyML-Pareto/tree/main/paper/latex"><b>Paper source →</b><p>IEEE conference paper (LaTeX), with the scripts that
-  turn the measured results into every number and figure.</p></a>
-</div>
+<script>
+const DATA = {"built":"2026-11-24","datasets":{"cwru":{"name":"CWRU","protocols":["P3","P2","P1"],"label":{"P3":"Bearing","P2":"Recording","P1":"Random"},"lens":{"P3":"Bearing-disjoint \u00b7 one fault size (the physical bearing) held out \u00b7 4 classes","P2":"Recording-disjoint \u00b7 one motor load held out \u00b7 10 classes","P1":"Random windows \u00b7 overlapping windows on both sides, optimistic \u00b7 10 classes"},"models":[{"id":"cnn-r0-w025d2-fp32","fam":"cnn","rep":"r0","prec":"fp32","ram":18048,"flash":4136,"e2e":1147.297,"fe":5.172,"inf":1133.579,"lat":52565.0,"est":1581.881,"cv":0.0052,"ok":true,"f1":{"P3":[0.5706,0.1713],"P2":[0.8285,0.1577],"P1":[0.9895,0.0055]},"runs":40,"lf":{"e2e":1171.822,"fe":4.135,"lat":53079.7}},{"id":"cnn-r0-w025d2-int8","fam":"cnn","rep":"r0","prec":"int8","ram":9840,"flash":4320,"e2e":606.726,"fe":5.334,"inf":600.498,"lat":28179.2,"est":295.697,"cv":0.0006,"ok":true,"f1":{"P3":[0.563,0.1717],"P2":[0.8252,0.1685],"P1":[0.9842,0.0046]},"runs":40},{"id":"cnn-r0-w025d2-int8qat","fam":"cnn","rep":"r0","prec":"int8qat","ram":9744,"flash":4416,"e2e":611.472,"fe":5.249,"inf":605.094,"lat":28247.9,"est":295.836,"cv":0.0024,"ok":true,"f1":{"P3":[0.5771,0.1671],"P2":[0.8293,0.1457],"P1":[0.9889,0.0049]},"runs":40},{"id":"cnn-r0-w025d4-fp32","fam":"cnn","rep":"r0","prec":"fp32","ram":18624,"flash":10552,"e2e":2108.538,"fe":5.057,"inf":2108.361,"lat":92919.1,"est":4281.544,"cv":0.0051,"ok":true,"f1":{"P3":[0.5815,0.1909],"P2":[0.9217,0.096],"P1":[0.9999,0.0003]},"runs":40},{"id":"cnn-r0-w025d4-int8","fam":"cnn","rep":"r0","prec":"int8","ram":10720,"flash":8040,"e2e":891.125,"fe":5.344,"inf":885.012,"lat":39768.7,"est":401.456,"cv":0.001,"ok":true,"f1":{"P3":[0.5793,0.1904],"P2":[0.9148,0.1065],"P1":[0.9989,0.0007]},"runs":40},{"id":"cnn-r0-w025d4-int8qat","fam":"cnn","rep":"r0","prec":"int8qat","ram":10624,"flash":8296,"e2e":896.572,"fe":5.296,"inf":890.136,"lat":39824.7,"est":401.461,"cv":0.0019,"ok":true,"f1":{"P3":[0.5685,0.1768],"P2":[0.9197,0.1012],"P1":[0.9994,0.0005]},"runs":40},{"id":"cnn-r0-w050d2-fp32","fam":"cnn","rep":"r0","prec":"fp32","ram":30336,"flash":5800,"e2e":2584.392,"fe":5.109,"inf":2574.578,"lat":116477.8,"est":4402.672,"cv":0.008,"ok":true,"f1":{"P3":[0.5669,0.1526],"P2":[0.9175,0.0959],"P1":[0.9972,0.0024]},"runs":40},{"id":"cnn-r0-w050d2-int8","fam":"cnn","rep":"r0","prec":"int8","ram":13056,"flash":5064,"e2e":1002.078,"fe":5.299,"inf":995.767,"lat":45552.5,"est":470.851,"cv":0.0009,"ok":true,"f1":{"P3":[0.5668,0.1551],"P2":[0.8755,0.147],"P1":[0.9897,0.0062]},"runs":40},{"id":"cnn-r0-w050d2-int8qat","fam":"cnn","rep":"r0","prec":"int8qat","ram":12960,"flash":5160,"e2e":1003.311,"fe":5.289,"inf":997.366,"lat":45545.2,"est":471.059,"cv":0.0009,"ok":true,"f1":{"P3":[0.5679,0.1536],"P2":[0.9128,0.0926],"P1":[0.9975,0.0016]},"runs":40},{"id":"cnn-r0-w050d4-fp32","fam":"cnn","rep":"r0","prec":"fp32","ram":30912,"flash":26488,"e2e":5856.359,"fe":4.127,"inf":5862.812,"lat":250347.8,"est":14789.969,"cv":0.0041,"ok":true,"f1":{"P3":[0.5685,0.158],"P2":[0.9538,0.0689],"P1":[1.0,0.0]},"runs":40,"lf":{"e2e":5841.438,"fe":4.122,"lat":248862.7}},{"id":"cnn-r0-w050d4-int8","fam":"cnn","rep":"r0","prec":"int8","ram":14240,"flash":13216,"e2e":1934.353,"fe":4.12,"inf":1929.323,"lat":82302.4,"est":799.098,"cv":0.0011,"ok":true,"f1":{"P3":[0.5662,0.159],"P2":[0.926,0.0937],"P1":[0.9992,0.0007]},"runs":40},{"id":"cnn-r0-w050d4-int8qat","fam":"cnn","rep":"r0","prec":"int8qat","ram":14144,"flash":13472,"e2e":1942.469,"fe":4.125,"inf":1937.438,"lat":82315.0,"est":799.465,"cv":0.0009,"ok":true,"f1":{"P3":[0.5645,0.155],"P2":[0.9553,0.0611],"P1":[1.0,0.0]},"runs":40},{"id":"cnn-r0-w100d2-fp32","fam":"cnn","rep":"r0","prec":"fp32","ram":54912,"flash":11432,"e2e":6524.141,"fe":5.085,"inf":6518.763,"lat":284450.6,"est":13806.945,"cv":0.0023,"ok":true,"f1":{"P3":[0.5652,0.1404],"P2":[0.924,0.0751],"P1":[0.9997,0.0003]},"runs":40},{"id":"cnn-r0-w100d2-int8","fam":"cnn","rep":"r0","prec":"int8","ram":19488,"flash":7120,"e2e":2083.977,"fe":5.286,"inf":2078.44,"lat":91710.2,"est":925.208,"cv":0.0016,"ok":true,"f1":{"P3":[0.5648,0.1435],"P2":[0.8793,0.1179],"P1":[0.9703,0.0563]},"runs":40},{"id":"cnn-r0-w100d2-int8qat","fam":"cnn","rep":"r0","prec":"int8qat","ram":19392,"flash":7216,"e2e":2090.112,"fe":5.208,"inf":2084.187,"lat":91788.9,"est":925.212,"cv":0.0016,"ok":true,"f1":{"P3":[0.5619,0.1392],"P2":[0.9258,0.0755],"P1":[0.9993,0.0]},"runs":40},{"id":"cnn-r0-w100d4-fp32","fam":"cnn","rep":"r0","prec":"fp32","ram":55488,"flash":88312,"e2e":18589.465,"fe":4.137,"inf":18558.733,"lat":765882.9,"est":54541.674,"cv":0.004,"ok":true,"f1":{"P3":[0.5746,0.1605],"P2":[0.9484,0.0651],"P1":[1.0,0.0]},"runs":40},{"id":"cnn-r0-w100d4-int8","fam":"cnn","rep":"r0","prec":"int8","ram":21280,"flash":31048,"e2e":5519.502,"fe":4.121,"inf":5515.997,"lat":225283.7,"est":2118.71,"cv":0.0006,"ok":true,"f1":{"P3":[0.5725,0.1617],"P2":[0.9232,0.0911],"P1":[0.999,0.0016]},"runs":40},{"id":"cnn-r0-w100d4-int8qat","fam":"cnn","rep":"r0","prec":"int8qat","ram":21184,"flash":31304,"e2e":5537.286,"fe":4.123,"inf":5532.566,"lat":225501.7,"est":2119.107,"cv":0.0008,"ok":true,"f1":{"P3":[0.5684,0.1609],"P2":[0.9496,0.0665],"P1":[0.9999,0.0003]},"runs":40},{"id":"cnn-r0-w200d2-fp32","fam":"cnn","rep":"r0","prec":"fp32","ram":104064,"flash":31912,"e2e":18423.997,"fe":4.125,"inf":18448.551,"lat":780979.8,"est":47666.251,"cv":0.0031,"ok":true,"f1":{"P3":[0.5851,0.155],"P2":[0.9397,0.0626],"P1":[1.0,0.0]},"runs":40},{"id":"cnn-r0-w200d2-int8","fam":"cnn","rep":"r0","prec":"int8","ram":32352,"flash":13536,"e2e":5438.004,"fe":4.117,"inf":5435.722,"lat":230698.9,"est":2254.329,"cv":0.0008,"ok":true,"f1":{"P3":[0.5859,0.1563],"P2":[0.8894,0.1124],"P1":[0.9861,0.0173]},"runs":40},{"id":"cnn-r0-w200d2-int8qat","fam":"cnn","rep":"r0","prec":"int8qat","ram":32256,"flash":13632,"e2e":5471.543,"fe":4.123,"inf":5468.132,"lat":230880.9,"est":2254.549,"cv":0.0008,"ok":true,"f1":{"P3":[0.5801,0.1498],"P2":[0.929,0.0803],"P1":[0.9997,0.0003]},"runs":40},{"id":"cnn-r0-w200d4-fp32","fam":"cnn","rep":"r0","prec":"fp32","ram":104640,"flash":331768,"e2e":64756.939,"fe":4.562,"inf":64921.137,"lat":2618907.1,"est":208984.509,"cv":0.002,"ok":true,"f1":{"P3":[0.5938,0.176],"P2":[0.9485,0.065],"P1":[1.0,0.0]},"runs":40,"lf":{"e2e":65258.591,"fe":5.192,"lat":2618445.3}},{"id":"cnn-r0-w200d4-int8","fam":"cnn","rep":"r0","prec":"int8","ram":35360,"flash":96664,"e2e":18681.703,"fe":4.119,"inf":18673.386,"lat":743833.6,"est":6858.545,"cv":0.0013,"ok":true,"f1":{"P3":[0.5921,0.1773],"P2":[0.9213,0.0909],"P1":[0.9999,0.0003]},"runs":40},{"id":"cnn-r0-w200d4-int8qat","fam":"cnn","rep":"r0","prec":"int8qat","ram":35264,"flash":96920,"e2e":18293.336,"fe":4.437,"inf":18289.893,"lat":741785.3,"est":6858.55,"cv":0.0016,"ok":true,"f1":{"P3":[0.5733,0.1685],"P2":[0.9515,0.0679],"P1":[1.0,0.0]},"runs":40},{"id":"dt-r1-d12-fp32","fam":"dt","rep":"r1","prec":"fp32","ram":128,"flash":1948,"e2e":13.701,"fe":13.51,"inf":0.103,"lat":643.0,"est":5.417,"cv":0.001,"ok":true,"f1":{"P3":[0.4641,0.1094],"P2":[0.8998,0.0718],"P1":[0.9713,0.0015]},"runs":40},{"id":"dt-r1-d4-fp32","fam":"dt","rep":"r1","prec":"fp32","ram":128,"flash":296,"e2e":13.716,"fe":13.572,"inf":0.092,"lat":642.8,"est":5.417,"cv":0.0017,"ok":true,"f1":{"P3":[0.5472,0.142],"P2":[0.6306,0.0145],"P1":[0.6397,0.0007]},"runs":40},{"id":"dt-r1-d6-fp32","fam":"dt","rep":"r1","prec":"fp32","ram":128,"flash":464,"e2e":13.701,"fe":13.539,"inf":0.091,"lat":642.6,"est":5.417,"cv":0.0019,"ok":true,"f1":{"P3":[0.5195,0.1205],"P2":[0.831,0.0869],"P1":[0.8351,0.0006]},"runs":40},{"id":"dt-r1-d8-fp32","fam":"dt","rep":"r1","prec":"fp32","ram":128,"flash":768,"e2e":13.693,"fe":13.505,"inf":0.114,"lat":642.8,"est":5.417,"cv":0.0008,"ok":true,"f1":{"P3":[0.4607,0.113],"P2":[0.9018,0.0536],"P1":[0.9603,0.0006]},"runs":40,"lf":{"e2e":12.118,"fe":11.991,"lat":629.0}},{"id":"dt-r2-d12-fp32","fam":"dt","rep":"r2","prec":"fp32","ram":9704,"flash":520,"e2e":56.675,"fe":56.572,"inf":0.097,"lat":2506.1,"est":19.395,"cv":0.0028,"ok":true,"f1":{"P3":[0.5675,0.2019],"P2":[0.7775,0.1833],"P1":[0.9887,0.0012]},"runs":40,"lf":{"e2e":50.507,"fe":50.302,"lat":2248.7}},{"id":"dt-r2-d4-fp32","fam":"dt","rep":"r2","prec":"fp32","ram":9704,"flash":248,"e2e":56.664,"fe":56.606,"inf":0.102,"lat":2505.6,"est":19.395,"cv":0.0012,"ok":true,"f1":{"P3":[0.5837,0.2118],"P2":[0.6301,0.1231],"P1":[0.7464,0.0]},"runs":40,"lf":{"e2e":50.547,"fe":50.373,"lat":2248.1}},{"id":"dt-r2-d6-fp32","fam":"dt","rep":"r2","prec":"fp32","ram":9704,"flash":376,"e2e":56.688,"fe":56.609,"inf":0.089,"lat":2505.7,"est":19.395,"cv":0.0009,"ok":true,"f1":{"P3":[0.5842,0.2165],"P2":[0.8045,0.1761],"P1":[0.9569,0.0]},"runs":40,"lf":{"e2e":50.453,"fe":50.268,"lat":2248.4}},{"id":"dt-r2-d8-fp32","fam":"dt","rep":"r2","prec":"fp32","ram":9704,"flash":472,"e2e":56.716,"fe":56.619,"inf":0.094,"lat":2505.9,"est":19.395,"cv":0.0015,"ok":true,"f1":{"P3":[0.5674,0.202],"P2":[0.7957,0.1492],"P1":[0.9883,0.0006]},"runs":40,"lf":{"e2e":50.54,"fe":50.347,"lat":2248.7}},{"id":"dt-r4-d12-fp32","fam":"dt","rep":"r4","prec":"fp32","ram":9812,"flash":2168,"e2e":88.773,"fe":88.615,"inf":0.097,"lat":3943.7,"est":28.53,"cv":0.0077,"ok":true,"f1":{"P3":[0.7075,0.1793],"P2":[0.9134,0.0393],"P1":[0.9511,0.0013]},"runs":40,"lf":{"e2e":73.25,"fe":73.078,"lat":3326.0}},{"id":"dt-r4-d4-fp32","fam":"dt","rep":"r4","prec":"fp32","ram":9812,"flash":244,"e2e":88.708,"fe":88.584,"inf":0.093,"lat":3943.3,"est":28.53,"cv":0.005,"ok":true,"f1":{"P3":[0.7194,0.1821],"P2":[0.6024,0.0554],"P1":[0.6418,0.0007]},"runs":40,"lf":{"e2e":73.264,"fe":73.091,"lat":3325.6}},{"id":"dt-r4-d6-fp32","fam":"dt","rep":"r4","prec":"fp32","ram":9812,"flash":372,"e2e":88.761,"fe":88.618,"inf":0.096,"lat":3943.4,"est":28.53,"cv":0.0077,"ok":true,"f1":{"P3":[0.7127,0.1858],"P2":[0.8191,0.0764],"P1":[0.839,0.0004]},"runs":40,"lf":{"e2e":73.393,"fe":73.23,"lat":3325.7}},{"id":"dt-r4-d8-fp32","fam":"dt","rep":"r4","prec":"fp32","ram":9812,"flash":708,"e2e":88.793,"fe":88.622,"inf":0.098,"lat":3943.5,"est":28.53,"cv":0.0079,"ok":true,"f1":{"P3":[0.7019,0.1896],"P2":[0.9113,0.0418],"P1":[0.9478,0.0006]},"runs":40,"lf":{"e2e":73.263,"fe":73.129,"lat":3325.6}},{"id":"mlp-r2-h16-fp32","fam":"mlp","rep":"r2","prec":"fp32","ram":10560,"flash":3976,"e2e":62.912,"fe":54.244,"inf":8.634,"lat":2867.6,"est":21.313,"cv":0.0024,"ok":true,"f1":{"P3":[0.5965,0.2544],"P2":[0.8954,0.176],"P1":[0.9994,0.0005]},"runs":40,"lf":{"e2e":58.657,"fe":48.339,"lat":2625.2}},{"id":"mlp-r2-h16-int8","fam":"mlp","rep":"r2","prec":"int8","ram":11200,"flash":3248,"e2e":59.403,"fe":54.141,"inf":5.174,"lat":2723.5,"est":21.568,"cv":0.0008,"ok":true,"f1":{"P3":[0.5906,0.2544],"P2":[0.9,0.1686],"P1":[0.9994,0.0005]},"runs":40,"lf":{"e2e":55.07,"fe":48.212,"lat":2483.9}},{"id":"mlp-r2-h32-fp32","fam":"mlp","rep":"r2","prec":"fp32","ram":10624,"flash":6216,"e2e":65.644,"fe":54.317,"inf":11.242,"lat":2976.7,"est":22.332,"cv":0.0016,"ok":true,"f1":{"P3":[0.5946,0.2284],"P2":[0.901,0.1695],"P1":[0.9999,0.0003]},"runs":40,"lf":{"e2e":61.207,"fe":48.33,"lat":2732.0}},{"id":"mlp-r2-h32-int8","fam":"mlp","rep":"r2","prec":"int8","ram":11344,"flash":4240,"e2e":60.721,"fe":54.033,"inf":6.581,"lat":2790.6,"est":22.255,"cv":0.0013,"ok":true,"f1":{"P3":[0.5932,0.2284],"P2":[0.9029,0.1656],"P1":[0.9999,0.0003]},"runs":40,"lf":{"e2e":56.414,"fe":48.183,"lat":2550.4}},{"id":"mlp-r2-h32x32-fp32","fam":"mlp","rep":"r2","prec":"fp32","ram":10832,"flash":10832,"e2e":70.547,"fe":54.149,"inf":16.305,"lat":3189.3,"est":24.405,"cv":0.0041,"ok":true,"f1":{"P3":[0.6001,0.2396],"P2":[0.8977,0.1717],"P1":[0.9999,0.0003]},"runs":40,"lf":{"e2e":66.353,"fe":48.358,"lat":2948.3}},{"id":"mlp-r2-h32x32-int8","fam":"mlp","rep":"r2","prec":"int8","ram":11776,"flash":6616,"e2e":63.679,"fe":54.004,"inf":9.543,"lat":2931.4,"est":23.581,"cv":0.0025,"ok":true,"f1":{"P3":[0.5978,0.2399],"P2":[0.9041,0.1609],"P1":[0.9999,0.0003]},"runs":40,"lf":{"e2e":59.839,"fe":48.555,"lat":2691.1}},{"id":"mlp-r2-h64-fp32","fam":"mlp","rep":"r2","prec":"fp32","ram":10752,"flash":10696,"e2e":70.501,"fe":54.142,"inf":16.357,"lat":3187.8,"est":24.368,"cv":0.0026,"ok":true,"f1":{"P3":[0.6083,0.2523],"P2":[0.9054,0.1611],"P1":[1.0,0.0]},"runs":40,"lf":{"e2e":66.349,"fe":48.333,"lat":2945.6}},{"id":"mlp-r2-h64-int8","fam":"mlp","rep":"r2","prec":"int8","ram":11632,"flash":6224,"e2e":63.384,"fe":53.965,"inf":9.321,"lat":2921.0,"est":23.47,"cv":0.0022,"ok":true,"f1":{"P3":[0.6072,0.2522],"P2":[0.9054,0.1606],"P1":[1.0,0.0]},"runs":40,"lf":{"e2e":59.507,"fe":48.46,"lat":2680.8}},{"id":"mlp-r2-h64x64-fp32","fam":"mlp","rep":"r2","prec":"fp32","ram":11088,"flash":27728,"e2e":89.476,"fe":54.846,"inf":34.558,"lat":3957.0,"est":31.883,"cv":0.0015,"ok":true,"f1":{"P3":[0.5928,0.222],"P2":[0.9052,0.1592],"P1":[0.9997,0.0003]},"runs":40,"lf":{"e2e":81.396,"fe":47.812,"lat":3683.2}},{"id":"mlp-r2-h64x64-int8","fam":"mlp","rep":"r2","prec":"int8","ram":12352,"flash":12568,"e2e":73.916,"fe":55.317,"inf":18.63,"lat":3369.1,"est":27.608,"cv":0.0005,"ok":true,"f1":{"P3":[0.5908,0.2214],"P2":[0.9114,0.1491],"P1":[0.9997,0.0003]},"runs":40,"lf":{"e2e":66.947,"fe":47.843,"lat":3087.8}},{"id":"mlp-r3-h128-fp32","fam":"mlp","rep":"r3","prec":"fp32","ram":12864,"flash":138440,"e2e":306.793,"fe":159.838,"inf":146.368,"lat":13706.2,"est":82.965,"cv":0.002,"ok":true,"f1":{"P3":[0.4307,0.1767],"P2":[0.9458,0.0792],"P1":[1.0,0.0]},"runs":40,"lf":{"e2e":200.301,"fe":49.677,"lat":8656.8}},{"id":"mlp-r3-h128-int8","fam":"mlp","rep":"r3","prec":"int8","ram":13360,"flash":39888,"e2e":229.997,"fe":155.197,"inf":74.841,"lat":10603.1,"est":54.867,"cv":0.0005,"ok":true,"f1":{"P3":[0.4296,0.176],"P2":[0.949,0.0736],"P1":[1.0,0.0]},"runs":40,"lf":{"e2e":124.636,"fe":49.649,"lat":5727.5}},{"id":"mlp-r3-h32-fp32","fam":"mlp","rep":"r3","prec":"fp32","ram":12480,"flash":35912,"e2e":202.119,"fe":159.435,"inf":42.681,"lat":9106.0,"est":38.636,"cv":0.0025,"ok":true,"f1":{"P3":[0.4263,0.1652],"P2":[0.9326,0.0882],"P1":[1.0,0.0]},"runs":40,"lf":{"e2e":91.85,"fe":49.324,"lat":4131.9}},{"id":"mlp-r3-h32-int8","fam":"mlp","rep":"r3","prec":"int8","ram":12496,"flash":11664,"e2e":178.51,"fe":153.928,"inf":24.212,"lat":8287.6,"est":33.396,"cv":0.0012,"ok":true,"f1":{"P3":[0.4252,0.1648],"P2":[0.9354,0.0834],"P1":[1.0,0.0]},"runs":40,"lf":{"e2e":74.043,"fe":49.266,"lat":3435.1}},{"id":"mlp-r3-h64-fp32","fam":"mlp","rep":"r3","prec":"fp32","ram":12608,"flash":70088,"e2e":237.523,"fe":159.004,"inf":78.499,"lat":10620.9,"est":53.413,"cv":0.0029,"ok":true,"f1":{"P3":[0.4355,0.1765],"P2":[0.9326,0.0903],"P1":[1.0,0.0]},"runs":40,"lf":{"e2e":126.863,"fe":49.301,"lat":5652.9}},{"id":"mlp-r3-h64-int8","fam":"mlp","rep":"r3","prec":"int8","ram":12784,"flash":21072,"e2e":195.448,"fe":154.301,"inf":40.835,"lat":9050.5,"est":40.556,"cv":0.0012,"ok":true,"f1":{"P3":[0.4343,0.1765],"P2":[0.9354,0.0851],"P1":[1.0,0.0]},"runs":40,"lf":{"e2e":90.704,"fe":49.346,"lat":4186.3}},{"id":"mlp-r4-h16-fp32","fam":"mlp","rep":"r4","prec":"fp32","ram":10724,"flash":5064,"e2e":93.798,"fe":84.009,"inf":9.811,"lat":4283.8,"est":30.926,"cv":0.0025,"ok":true,"f1":{"P3":[0.6411,0.1526],"P2":[0.923,0.0196],"P1":[0.9471,0.0026]},"runs":40,"lf":{"e2e":80.101,"fe":70.11,"lat":3661.7}},{"id":"mlp-r4-h16-int8","fam":"mlp","rep":"r4","prec":"int8","ram":11284,"flash":3520,"e2e":89.591,"fe":83.948,"inf":5.568,"lat":4112.6,"est":30.821,"cv":0.001,"ok":true,"f1":{"P3":[0.6422,0.1508],"P2":[0.903,0.0405],"P1":[0.9094,0.0118]},"runs":40,"lf":{"e2e":75.931,"fe":70.11,"lat":3487.4}},{"id":"mlp-r4-h32-fp32","fam":"mlp","rep":"r4","prec":"fp32","ram":10788,"flash":8392,"e2e":97.805,"fe":84.105,"inf":13.577,"lat":4440.4,"est":32.411,"cv":0.0015,"ok":true,"f1":{"P3":[0.6354,0.1412],"P2":[0.9204,0.0189],"P1":[0.9439,0.0013]},"runs":40,"lf":{"e2e":83.921,"fe":70.246,"lat":3815.2}},{"id":"mlp-r4-h32-int8","fam":"mlp","rep":"r4","prec":"int8","ram":11428,"flash":4784,"e2e":91.449,"fe":83.89,"inf":7.459,"lat":4202.1,"est":31.508,"cv":0.0002,"ok":true,"f1":{"P3":[0.6413,0.144],"P2":[0.909,0.0294],"P1":[0.9283,0.0072]},"runs":40,"lf":{"e2e":77.702,"fe":70.043,"lat":3575.5}},{"id":"mlp-r4-h32x32-fp32","fam":"mlp","rep":"r4","prec":"fp32","ram":10964,"flash":13008,"e2e":102.767,"fe":84.189,"inf":18.547,"lat":4652.7,"est":34.485,"cv":0.0016,"ok":true,"f1":{"P3":[0.6258,0.1159],"P2":[0.9155,0.027],"P1":[0.9435,0.0053]},"runs":40,"lf":{"e2e":86.898,"fe":68.634,"lat":3999.9}},{"id":"mlp-r4-h32x32-int8","fam":"mlp","rep":"r4","prec":"int8","ram":11860,"flash":7160,"e2e":94.614,"fe":83.874,"inf":10.582,"lat":4349.7,"est":32.913,"cv":0.0007,"ok":true,"f1":{"P3":[0.6421,0.1174],"P2":[0.9079,0.033],"P1":[0.9243,0.0169]},"runs":40,"lf":{"e2e":80.883,"fe":70.067,"lat":3723.0}},{"id":"mlp-r4-h64-fp32","fam":"mlp","rep":"r4","prec":"fp32","ram":10916,"flash":15048,"e2e":104.848,"fe":83.997,"inf":20.787,"lat":4745.4,"est":35.382,"cv":0.003,"ok":true,"f1":{"P3":[0.6434,0.1307],"P2":[0.9212,0.0176],"P1":[0.944,0.003]},"runs":40,"lf":{"e2e":88.892,"fe":68.559,"lat":4090.4}},{"id":"mlp-r4-h64-int8","fam":"mlp","rep":"r4","prec":"int8","ram":11716,"flash":7312,"e2e":94.966,"fe":82.404,"inf":12.501,"lat":4406.5,"est":33.598,"cv":0.0002,"ok":true,"f1":{"P3":[0.6534,0.1374],"P2":[0.9135,0.024],"P1":[0.933,0.0031]},"runs":40,"lf":{"e2e":82.479,"fe":70.078,"lat":3807.5}},{"id":"mlp-r4-h64x64-fp32","fam":"mlp","rep":"r4","prec":"fp32","ram":11172,"flash":32080,"e2e":123.541,"fe":84.315,"inf":39.245,"lat":5521.5,"est":42.897,"cv":0.0011,"ok":true,"f1":{"P3":[0.6356,0.1112],"P2":[0.918,0.0218],"P1":[0.9436,0.0038]},"runs":40,"lf":{"e2e":106.859,"fe":68.691,"lat":4869.7}},{"id":"mlp-r4-h64x64-int8","fam":"mlp","rep":"r4","prec":"int8","ram":12420,"flash":13656,"e2e":105.917,"fe":84.436,"inf":21.408,"lat":4870.4,"est":37.642,"cv":0.0009,"ok":true,"f1":{"P3":[0.6457,0.1141],"P2":[0.9127,0.0248],"P1":[0.9361,0.0021]},"runs":40,"lf":{"e2e":90.381,"fe":68.574,"lat":4204.6}},{"id":"rf-r1-t10d10-fp32","fam":"rf","rep":"r1","prec":"fp32","ram":128,"flash":15702,"e2e":15.577,"fe":13.558,"inf":0.471,"lat":673.4,"est":5.492,"cv":0.0017,"ok":true,"f1":{"P3":[0.4702,0.1241],"P2":[0.9084,0.0704],"P1":[0.9629,0.002]},"runs":40},{"id":"rf-r1-t10d6-fp32","fam":"rf","rep":"r1","prec":"fp32","ram":128,"flash":5578,"e2e":14.997,"fe":13.559,"inf":0.391,"lat":665.1,"est":5.493,"cv":0.0023,"ok":true,"f1":{"P3":[0.4911,0.1248],"P2":[0.8661,0.0706],"P1":[0.9015,0.029]},"runs":40},{"id":"rf-r1-t25d10-fp32","fam":"rf","rep":"r1","prec":"fp32","ram":128,"flash":40528,"e2e":16.093,"fe":13.602,"inf":1.173,"lat":695.8,"est":5.617,"cv":0.0032,"ok":true,"f1":{"P3":[0.4612,0.1037],"P2":[0.9184,0.0546],"P1":[0.9677,0.0042]},"runs":40,"lf":{"e2e":13.309,"fe":12.046,"lat":668.8}},{"id":"rf-r1-t25d6-fp32","fam":"rf","rep":"r1","prec":"fp32","ram":128,"flash":13716,"e2e":15.749,"fe":13.625,"inf":1.004,"lat":687.5,"est":5.608,"cv":0.0037,"ok":true,"f1":{"P3":[0.4803,0.1172],"P2":[0.8926,0.0488],"P1":[0.9308,0.0181]},"runs":40},{"id":"rf-r1-t5d10-fp32","fam":"rf","rep":"r1","prec":"fp32","ram":128,"flash":7836,"e2e":14.463,"fe":13.655,"inf":0.251,"lat":654.1,"est":5.448,"cv":0.0003,"ok":true,"f1":{"P3":[0.4506,0.1109],"P2":[0.8912,0.1099],"P1":[0.9605,0.0033]},"runs":40},{"id":"rf-r1-t5d6-fp32","fam":"rf","rep":"r1","prec":"fp32","ram":128,"flash":2924,"e2e":14.28,"fe":13.633,"inf":0.24,"lat":651.9,"est":5.448,"cv":0.0018,"ok":true,"f1":{"P3":[0.4985,0.1257],"P2":[0.8471,0.115],"P1":[0.8841,0.0481]},"runs":40},{"id":"rf-r2-t10d10-fp32","fam":"rf","rep":"r2","prec":"fp32","ram":9704,"flash":9538,"e2e":57.261,"fe":56.613,"inf":0.46,"lat":2522.7,"est":19.472,"cv":0.0009,"ok":true,"f1":{"P3":[0.5944,0.199],"P2":[0.9356,0.0948],"P1":[0.9962,0.0011]},"runs":40,"lf":{"e2e":50.912,"fe":50.335,"lat":2261.6}},{"id":"rf-r2-t10d6-fp32","fam":"rf","rep":"r2","prec":"fp32","ram":9704,"flash":4614,"e2e":57.336,"fe":56.739,"inf":0.401,"lat":2520.7,"est":19.463,"cv":0.0052,"ok":true,"f1":{"P3":[0.5667,0.1828],"P2":[0.9005,0.1026],"P1":[0.9703,0.0168]},"runs":40,"lf":{"e2e":50.828,"fe":50.333,"lat":2259.6}},{"id":"rf-r2-t25d10-fp32","fam":"rf","rep":"r2","prec":"fp32","ram":9704,"flash":25074,"e2e":57.992,"fe":56.677,"inf":1.119,"lat":2545.5,"est":19.586,"cv":0.0013,"ok":true,"f1":{"P3":[0.6031,0.1995],"P2":[0.9621,0.0543],"P1":[0.997,0.001]},"runs":40,"lf":{"e2e":51.596,"fe":50.374,"lat":2284.4}},{"id":"rf-r2-t25d6-fp32","fam":"rf","rep":"r2","prec":"fp32","ram":9704,"flash":12100,"e2e":57.897,"fe":56.676,"inf":0.995,"lat":2541.4,"est":19.573,"cv":0.0029,"ok":true,"f1":{"P3":[0.6234,0.2074],"P2":[0.9506,0.0472],"P1":[0.9868,0.0041]},"runs":40,"lf":{"e2e":51.392,"fe":50.276,"lat":2280.6}},{"id":"rf-r2-t5d10-fp32","fam":"rf","rep":"r2","prec":"fp32","ram":9704,"flash":4664,"e2e":57.076,"fe":56.685,"inf":0.267,"lat":2514.0,"est":19.428,"cv":0.001,"ok":true,"f1":{"P3":[0.5334,0.1626],"P2":[0.8939,0.1252],"P1":[0.9945,0.0017]},"runs":40,"lf":{"e2e":50.653,"fe":50.324,"lat":2253.4}},{"id":"rf-r2-t5d6-fp32","fam":"rf","rep":"r2","prec":"fp32","ram":9704,"flash":2408,"e2e":56.935,"fe":56.625,"inf":0.238,"lat":2512.7,"est":19.423,"cv":0.0006,"ok":true,"f1":{"P3":[0.5335,0.1637],"P2":[0.8576,0.12],"P1":[0.938,0.044]},"runs":40,"lf":{"e2e":50.621,"fe":50.334,"lat":2252.3}},{"id":"rf-r4-t10d10-fp32","fam":"rf","rep":"r4","prec":"fp32","ram":9812,"flash":19408,"e2e":89.143,"fe":88.411,"inf":0.501,"lat":3961.3,"est":28.607,"cv":0.0025,"ok":true,"f1":{"P3":[0.7115,0.2442],"P2":[0.9393,0.0189],"P1":[0.9561,0.0043]},"runs":40,"lf":{"e2e":73.631,"fe":73.02,"lat":3339.9}},{"id":"rf-r4-t10d6-fp32","fam":"rf","rep":"r4","prec":"fp32","ram":9812,"flash":5546,"e2e":89.013,"fe":88.437,"inf":0.416,"lat":3956.6,"est":28.604,"cv":0.0038,"ok":true,"f1":{"P3":[0.7092,0.2461],"P2":[0.8849,0.0359],"P1":[0.9118,0.0233]},"runs":40,"lf":{"e2e":73.615,"fe":73.166,"lat":3336.5}},{"id":"rf-r4-t25d10-fp32","fam":"rf","rep":"r4","prec":"fp32","ram":9812,"flash":48712,"e2e":90.374,"fe":88.73,"inf":1.325,"lat":3991.6,"est":28.734,"cv":0.004,"ok":true,"f1":{"P3":[0.7383,0.2529],"P2":[0.9435,0.0186],"P1":[0.959,0.0034]},"runs":40,"lf":{"e2e":74.401,"fe":73.018,"lat":3369.0}},{"id":"rf-r4-t25d6-fp32","fam":"rf","rep":"r4","prec":"fp32","ram":9812,"flash":14488,"e2e":90.132,"fe":88.618,"inf":1.097,"lat":3985.3,"est":28.73,"cv":0.0091,"ok":true,"f1":{"P3":[0.7418,0.2555],"P2":[0.9152,0.0195],"P1":[0.9356,0.0023]},"runs":40,"lf":{"e2e":74.391,"fe":73.249,"lat":3360.9}},{"id":"rf-r4-t5d10-fp32","fam":"rf","rep":"r4","prec":"fp32","ram":9812,"flash":9026,"e2e":88.987,"fe":88.633,"inf":0.258,"lat":3950.8,"est":28.562,"cv":0.0019,"ok":true,"f1":{"P3":[0.663,0.2176],"P2":[0.931,0.0197],"P1":[0.95,0.002]},"runs":40,"lf":{"e2e":73.43,"fe":73.05,"lat":3333.3}},{"id":"rf-r4-t5d6-fp32","fam":"rf","rep":"r4","prec":"fp32","ram":9812,"flash":2704,"e2e":89.053,"fe":88.683,"inf":0.209,"lat":3949.9,"est":28.564,"cv":0.0074,"ok":true,"f1":{"P3":[0.6551,0.216],"P2":[0.8628,0.0428],"P1":[0.8923,0.0113]},"runs":40,"lf":{"e2e":73.529,"fe":73.148,"lat":3333.1}}],"windows":7527,"idle_mW":18.78,"sleep_mW":17.73,"cv_med":0.0017,"gate":{"name":"G5 selfcal","E1":9.714,"tpr":0.999,"fpr":0.023,"reuse":{"r1":12.03,"r2":12.03,"r4":12.03},"split":"CWRU P2 fold 0 (unseen load)"}},"pu":{"name":"Paderborn","protocols":["P3","P4","P2","P1"],"label":{"P3":"Bearing","P4":"Art\u2192real","P2":"Recording","P1":"Random"},"lens":{"P3":"Bearing-disjoint \u00b7 a quarter of the bearings of each class held out \u00b7 3 classes","P4":"Artificial \u2192 real damage \u00b7 trained on artificial, tested on real damage \u00b7 3 classes","P2":"Recording-disjoint \u00b7 one operating condition held out \u00b7 3 classes","P1":"Random windows \u00b7 recordings shared between train and test, optimistic \u00b7 3 classes"},"models":[{"id":"cnn-r0-w025d2-fp32","fam":"cnn","rep":"r0","prec":"fp32","ram":18048,"flash":3884,"e2e":1142.094,"fe":5.135,"inf":1133.129,"lat":52365.2,"est":1581.881,"cv":0.0017,"ok":true,"f1":{"P3":[0.5167,0.0849],"P4":[0.4385,0.0311],"P2":[0.678,0.1205],"P1":[0.8044,0.0122]},"runs":50,"lf":{"e2e":1160.381,"fe":4.131,"lat":52772.8}},{"id":"cnn-r0-w025d2-int8","fam":"cnn","rep":"r0","prec":"int8","ram":9840,"flash":4064,"e2e":607.34,"fe":5.25,"inf":601.953,"lat":28203.6,"est":295.697,"cv":0.0008,"ok":true,"f1":{"P3":[0.5119,0.0879],"P4":[0.4384,0.0317],"P2":[0.6768,0.1218],"P1":[0.7985,0.0112]},"runs":50},{"id":"cnn-r0-w025d2-int8qat","fam":"cnn","rep":"r0","prec":"int8qat","ram":9744,"flash":4336,"e2e":607.957,"fe":5.322,"inf":602.732,"lat":28189.8,"est":295.836,"cv":0.0013,"ok":true,"f1":{"P3":[0.5118,0.0879],"P4":[0.4361,0.0285],"P2":[0.6819,0.1237],"P1":[0.8038,0.0159]},"runs":50},{"id":"cnn-r0-w025d4-fp32","fam":"cnn","rep":"r0","prec":"fp32","ram":18624,"flash":10076,"e2e":2156.792,"fe":4.842,"inf":2150.632,"lat":94318.1,"est":4281.544,"cv":0.0045,"ok":true,"f1":{"P3":[0.5196,0.1007],"P4":[0.4313,0.0271],"P2":[0.7709,0.1179],"P1":[0.8974,0.0109]},"runs":50,"lf":{"e2e":2157.344,"fe":4.972,"lat":94308.3}},{"id":"cnn-r0-w025d4-int8","fam":"cnn","rep":"r0","prec":"int8","ram":10720,"flash":7728,"e2e":892.152,"fe":5.286,"inf":886.728,"lat":39766.9,"est":401.456,"cv":0.0007,"ok":true,"f1":{"P3":[0.5137,0.1019],"P4":[0.4326,0.0276],"P2":[0.7658,0.1222],"P1":[0.8978,0.0099]},"runs":50},{"id":"cnn-r0-w025d4-int8qat","fam":"cnn","rep":"r0","prec":"int8qat","ram":10624,"flash":8160,"e2e":889.37,"fe":5.271,"inf":884.114,"lat":39627.7,"est":401.461,"cv":0.0018,"ok":true,"f1":{"P3":[0.5191,0.0958],"P4":[0.4361,0.0194],"P2":[0.7701,0.1224],"P1":[0.8979,0.0106]},"runs":50},{"id":"cnn-r0-w050d2-fp32","fam":"cnn","rep":"r0","prec":"fp32","ram":30336,"flash":5324,"e2e":2591.163,"fe":5.148,"inf":2584.059,"lat":116218.5,"est":4402.672,"cv":0.0016,"ok":true,"f1":{"P3":[0.4878,0.109],"P4":[0.3852,0.0256],"P2":[0.7017,0.1616],"P1":[0.8751,0.0043]},"runs":50},{"id":"cnn-r0-w050d2-int8","fam":"cnn","rep":"r0","prec":"int8","ram":13056,"flash":4744,"e2e":981.397,"fe":5.278,"inf":975.365,"lat":45395.2,"est":470.851,"cv":0.0016,"ok":true,"f1":{"P3":[0.4873,0.1067],"P4":[0.3826,0.023],"P2":[0.6984,0.1629],"P1":[0.8717,0.0065]},"runs":50},{"id":"cnn-r0-w050d2-int8qat","fam":"cnn","rep":"r0","prec":"int8qat","ram":12960,"flash":5016,"e2e":1000.514,"fe":5.307,"inf":995.307,"lat":45461.3,"est":471.059,"cv":0.0009,"ok":true,"f1":{"P3":[0.4858,0.1025],"P4":[0.3765,0.0221],"P2":[0.6974,0.1702],"P1":[0.8732,0.0059]},"runs":50},{"id":"cnn-r0-w050d4-fp32","fam":"cnn","rep":"r0","prec":"fp32","ram":30912,"flash":25564,"e2e":5978.192,"fe":4.851,"inf":5974.518,"lat":254358.4,"est":14789.969,"cv":0.0024,"ok":true,"f1":{"P3":[0.5177,0.0981],"P4":[0.3871,0.0347],"P2":[0.7966,0.1221],"P1":[0.9321,0.0075]},"runs":50},{"id":"cnn-r0-w050d4-int8","fam":"cnn","rep":"r0","prec":"int8","ram":14240,"flash":12784,"e2e":1888.929,"fe":5.327,"inf":1883.254,"lat":81910.9,"est":799.098,"cv":0.0014,"ok":true,"f1":{"P3":[0.5125,0.1003],"P4":[0.3841,0.0364],"P2":[0.7951,0.1222],"P1":[0.9335,0.0047]},"runs":50},{"id":"cnn-r0-w050d4-int8qat","fam":"cnn","rep":"r0","prec":"int8qat","ram":14144,"flash":13216,"e2e":1889.54,"fe":5.311,"inf":1883.96,"lat":81808.3,"est":799.465,"cv":0.001,"ok":true,"f1":{"P3":[0.5014,0.0943],"P4":[0.3951,0.0456],"P2":[0.7956,0.1309],"P1":[0.9391,0.0023]},"runs":50},{"id":"cnn-r0-w100d2-fp32","fam":"cnn","rep":"r0","prec":"fp32","ram":54912,"flash":10508,"e2e":6621.116,"fe":4.836,"inf":6605.615,"lat":288364.3,"est":13806.945,"cv":0.0014,"ok":true,"f1":{"P3":[0.4761,0.117],"P4":[0.354,0.0075],"P2":[0.7404,0.1496],"P1":[0.8988,0.0066]},"runs":50},{"id":"cnn-r0-w100d2-int8","fam":"cnn","rep":"r0","prec":"int8","ram":19488,"flash":6688,"e2e":2085.09,"fe":5.239,"inf":2079.768,"lat":91688.3,"est":925.208,"cv":0.001,"ok":true,"f1":{"P3":[0.4743,0.1157],"P4":[0.3506,0.0063],"P2":[0.7353,0.1515],"P1":[0.8957,0.0052]},"runs":50},{"id":"cnn-r0-w100d2-int8qat","fam":"cnn","rep":"r0","prec":"int8qat","ram":19392,"flash":6960,"e2e":2089.571,"fe":5.323,"inf":2085.004,"lat":91681.1,"est":925.212,"cv":0.0006,"ok":true,"f1":{"P3":[0.4777,0.1091],"P4":[0.3458,0.0095],"P2":[0.7384,0.1526],"P1":[0.9019,0.0024]},"runs":50},{"id":"cnn-r0-w100d4-fp32","fam":"cnn","rep":"r0","prec":"fp32","ram":55488,"flash":86492,"e2e":18793.699,"fe":4.846,"inf":18768.198,"lat":776047.8,"est":54541.674,"cv":0.0029,"ok":true,"f1":{"P3":[0.4833,0.1164],"P4":[0.3793,0.0294],"P2":[0.8126,0.1383],"P1":[0.9548,0.0054]},"runs":50},{"id":"cnn-r0-w100d4-int8","fam":"cnn","rep":"r0","prec":"int8","ram":21280,"flash":30392,"e2e":5434.876,"fe":5.278,"inf":5430.011,"lat":224422.7,"est":2118.71,"cv":0.0005,"ok":true,"f1":{"P3":[0.4808,0.1182],"P4":[0.3768,0.0282],"P2":[0.811,0.1372],"P1":[0.9533,0.0056]},"runs":50},{"id":"cnn-r0-w100d4-int8qat","fam":"cnn","rep":"r0","prec":"int8qat","ram":21184,"flash":30824,"e2e":5434.467,"fe":5.365,"inf":5428.401,"lat":224430.2,"est":2119.107,"cv":0.0002,"ok":true,"f1":{"P3":[0.4848,0.1059],"P4":[0.3806,0.0249],"P2":[0.8061,0.1435],"P1":[0.9569,0.006]},"runs":50},{"id":"cnn-r0-w200d2-fp32","fam":"cnn","rep":"r0","prec":"fp32","ram":104064,"flash":30092,"e2e":18693.564,"fe":4.851,"inf":18684.069,"lat":791268.1,"est":47666.251,"cv":0.0041,"ok":true,"f1":{"P3":[0.4751,0.1093],"P4":[0.3681,0.0214],"P2":[0.7589,0.149],"P1":[0.9146,0.0095]},"runs":50},{"id":"cnn-r0-w200d2-int8","fam":"cnn","rep":"r0","prec":"int8","ram":32352,"flash":12880,"e2e":5347.904,"fe":5.3,"inf":5342.623,"lat":229999.2,"est":2254.329,"cv":0.0012,"ok":true,"f1":{"P3":[0.4745,0.1097],"P4":[0.36,0.0169],"P2":[0.7527,0.1556],"P1":[0.9137,0.011]},"runs":50},{"id":"cnn-r0-w200d2-int8qat","fam":"cnn","rep":"r0","prec":"int8qat","ram":32256,"flash":13152,"e2e":5365.353,"fe":5.299,"inf":5360.508,"lat":229995.3,"est":2254.549,"cv":0.0002,"ok":true,"f1":{"P3":[0.4742,0.1064],"P4":[0.3526,0.0288],"P2":[0.7448,0.1667],"P1":[0.9203,0.0073]},"runs":50},{"id":"cnn-r0-w200d4-fp32","fam":"cnn","rep":"r0","prec":"fp32","ram":104640,"flash":328156,"e2e":65456.619,"fe":4.102,"inf":65563.069,"lat":2599137.6,"est":208984.509,"cv":0.0002,"ok":true,"f1":{"P3":[0.5034,0.1112],"P4":[0.3887,0.0518],"P2":[0.8131,0.1539],"P1":[0.9485,0.0076]},"runs":50,"lf":{"e2e":65684.193,"fe":4.135,"lat":2594330.8}},{"id":"cnn-r0-w200d4-int8","fam":"cnn","rep":"r0","prec":"int8","ram":35360,"flash":95560,"e2e":18384.946,"fe":5.308,"inf":18380.745,"lat":741654.1,"est":6858.545,"cv":0.0004,"ok":true,"f1":{"P3":[0.4982,0.1155],"P4":[0.3851,0.0492],"P2":[0.8126,0.1541],"P1":[0.9463,0.0087]},"runs":50},{"id":"cnn-r0-w200d4-int8qat","fam":"cnn","rep":"r0","prec":"int8qat","ram":35264,"flash":95992,"e2e":18561.487,"fe":4.1,"inf":18562.432,"lat":743845.9,"est":6858.55,"cv":0.0025,"ok":true,"f1":{"P3":[0.4992,0.1102],"P4":[0.3858,0.0215],"P2":[0.8003,0.1765],"P1":[0.9654,0.0026]},"runs":50},{"id":"dt-r1-d12-fp32","fam":"dt","rep":"r1","prec":"fp32","ram":128,"flash":10512,"e2e":14.094,"fe":13.541,"inf":0.063,"lat":644.8,"est":5.417,"cv":0.002,"ok":true,"f1":{"P3":[0.4683,0.0684],"P4":[0.4203,0.0039],"P2":[0.6987,0.1182],"P1":[0.8025,0.0011]},"runs":50},{"id":"dt-r1-d4-fp32","fam":"dt","rep":"r1","prec":"fp32","ram":128,"flash":336,"e2e":13.6,"fe":13.536,"inf":0.046,"lat":638.7,"est":5.417,"cv":0.0023,"ok":true,"f1":{"P3":[0.4222,0.0657],"P4":[0.4596,0.0],"P2":[0.6528,0.0639],"P1":[0.6768,0.0]},"runs":50},{"id":"dt-r1-d6-fp32","fam":"dt","rep":"r1","prec":"fp32","ram":128,"flash":896,"e2e":13.608,"fe":13.524,"inf":0.054,"lat":639.3,"est":5.417,"cv":0.002,"ok":true,"f1":{"P3":[0.4234,0.0675],"P4":[0.4221,0.0045],"P2":[0.6623,0.1051],"P1":[0.7207,0.0]},"runs":50},{"id":"dt-r1-d8-fp32","fam":"dt","rep":"r1","prec":"fp32","ram":128,"flash":2152,"e2e":13.639,"fe":13.537,"inf":0.053,"lat":639.5,"est":5.417,"cv":0.0014,"ok":true,"f1":{"P3":[0.4623,0.0548],"P4":[0.4204,0.0044],"P2":[0.6791,0.1201],"P1":[0.7637,0.0002]},"runs":50,"lf":{"e2e":12.101,"fe":12.026,"lat":626.5}},{"id":"dt-r2-d12-fp32","fam":"dt","rep":"r2","prec":"fp32","ram":9704,"flash":8554,"e2e":55.189,"fe":55.173,"inf":0.079,"lat":2499.9,"est":19.395,"cv":0.0008,"ok":true,"f1":{"P3":[0.5144,0.0754],"P4":[0.3711,0.0137],"P2":[0.7449,0.1598],"P1":[0.9214,0.0013]},"runs":50,"lf":{"e2e":51.027,"fe":50.96,"lat":2233.6}},{"id":"dt-r2-d4-fp32","fam":"dt","rep":"r2","prec":"fp32","ram":9704,"flash":392,"e2e":56.662,"fe":56.628,"inf":0.04,"lat":2504.8,"est":19.395,"cv":0.0018,"ok":true,"f1":{"P3":[0.4979,0.0636],"P4":[0.428,0.0],"P2":[0.6089,0.1296],"P1":[0.7257,0.0002]},"runs":50,"lf":{"e2e":50.031,"fe":49.944,"lat":2240.1}},{"id":"dt-r2-d6-fp32","fam":"dt","rep":"r2","prec":"fp32","ram":9704,"flash":1052,"e2e":56.677,"fe":56.624,"inf":0.056,"lat":2505.9,"est":19.395,"cv":0.0008,"ok":true,"f1":{"P3":[0.519,0.0818],"P4":[0.3979,0.0003],"P2":[0.6933,0.1152],"P1":[0.8263,0.0003]},"runs":50,"lf":{"e2e":50.204,"fe":50.1,"lat":2240.6}},{"id":"dt-r2-d8-fp32","fam":"dt","rep":"r2","prec":"fp32","ram":9704,"flash":2484,"e2e":56.676,"fe":56.613,"inf":0.057,"lat":2505.8,"est":19.395,"cv":0.0014,"ok":true,"f1":{"P3":[0.5153,0.1019],"P4":[0.3851,0.0008],"P2":[0.7148,0.1499],"P1":[0.888,0.0005]},"runs":50,"lf":{"e2e":50.056,"fe":49.95,"lat":2240.8}},{"id":"dt-r4-d12-fp32","fam":"dt","rep":"r4","prec":"fp32","ram":9812,"flash":13176,"e2e":88.819,"fe":88.738,"inf":0.068,"lat":3953.7,"est":28.53,"cv":0.0014,"ok":true,"f1":{"P3":[0.446,0.1377],"P4":[0.4096,0.0011],"P2":[0.5963,0.1809],"P1":[0.7556,0.0009]},"runs":50,"lf":{"e2e":72.572,"fe":72.468,"lat":3307.0}},{"id":"dt-r4-d4-fp32","fam":"dt","rep":"r4","prec":"fp32","ram":9812,"flash":372,"e2e":88.647,"fe":88.592,"inf":0.04,"lat":3952.3,"est":28.53,"cv":0.0025,"ok":true,"f1":{"P3":[0.4401,0.1016],"P4":[0.3922,0.0009],"P2":[0.5017,0.1178],"P1":[0.5787,0.0]},"runs":50,"lf":{"e2e":72.409,"fe":72.326,"lat":3305.6}},{"id":"dt-r4-d6-fp32","fam":"dt","rep":"r4","prec":"fp32","ram":9812,"flash":1084,"e2e":88.793,"fe":88.728,"inf":0.051,"lat":3952.8,"est":28.53,"cv":0.0012,"ok":true,"f1":{"P3":[0.4431,0.1349],"P4":[0.4153,0.0019],"P2":[0.5477,0.1375],"P1":[0.6552,0.0004]},"runs":50,"lf":{"e2e":72.456,"fe":72.397,"lat":3306.1}},{"id":"dt-r4-d8-fp32","fam":"dt","rep":"r4","prec":"fp32","ram":9812,"flash":3116,"e2e":88.854,"fe":88.748,"inf":0.062,"lat":3953.2,"est":28.53,"cv":0.0012,"ok":true,"f1":{"P3":[0.4685,0.1473],"P4":[0.3939,0.0013],"P2":[0.5833,0.1584],"P1":[0.7326,0.0004]},"runs":50,"lf":{"e2e":72.514,"fe":72.433,"lat":3306.5}},{"id":"mlp-r2-h16-fp32","fam":"mlp","rep":"r2","prec":"fp32","ram":10560,"flash":3500,"e2e":58.937,"fe":54.269,"inf":4.649,"lat":2686.2,"est":21.313,"cv":0.0007,"ok":true,"f1":{"P3":[0.5397,0.1046],"P4":[0.406,0.0215],"P2":[0.8087,0.1719],"P1":[0.9429,0.0048]},"runs":50,"lf":{"e2e":54.674,"fe":49.837,"lat":2442.7}},{"id":"mlp-r2-h16-int8","fam":"mlp","rep":"r2","prec":"int8","ram":11200,"flash":2936,"e2e":57.723,"fe":54.008,"inf":3.65,"lat":2643.7,"est":21.568,"cv":0.0012,"ok":true,"f1":{"P3":[0.5363,0.1049],"P4":[0.408,0.0211],"P2":[0.8082,0.1708],"P1":[0.9429,0.0043]},"runs":50,"lf":{"e2e":53.64,"fe":49.857,"lat":2403.0}},{"id":"mlp-r2-h32-fp32","fam":"mlp","rep":"r2","prec":"fp32","ram":10624,"flash":5292,"e2e":61.017,"fe":54.233,"inf":6.746,"lat":2773.8,"est":22.332,"cv":0.001,"ok":true,"f1":{"P3":[0.5405,0.1226],"P4":[0.4205,0.011],"P2":[0.8215,0.161],"P1":[0.9559,0.0021]},"runs":50,"lf":{"e2e":56.814,"fe":49.884,"lat":2529.7}},{"id":"mlp-r2-h32-int8","fam":"mlp","rep":"r2","prec":"int8","ram":11344,"flash":3816,"e2e":59.007,"fe":54.095,"inf":4.867,"lat":2701.4,"est":22.255,"cv":0.0016,"ok":true,"f1":{"P3":[0.5395,0.1244],"P4":[0.4199,0.012],"P2":[0.8204,0.1598],"P1":[0.9558,0.0018]},"runs":50,"lf":{"e2e":54.73,"fe":49.765,"lat":2460.7}},{"id":"mlp-r2-h32x32-fp32","fam":"mlp","rep":"r2","prec":"fp32","ram":10832,"flash":9908,"e2e":67.174,"fe":55.709,"inf":11.49,"lat":3021.4,"est":24.405,"cv":0.0016,"ok":true,"f1":{"P3":[0.5412,0.0962],"P4":[0.4076,0.0239],"P2":[0.8003,0.1972],"P1":[0.9621,0.0023]},"runs":50,"lf":{"e2e":61.254,"fe":49.297,"lat":2734.2}},{"id":"mlp-r2-h32x32-int8","fam":"mlp","rep":"r2","prec":"int8","ram":11776,"flash":6184,"e2e":61.816,"fe":53.993,"inf":7.791,"lat":2839.6,"est":23.581,"cv":0.0019,"ok":true,"f1":{"P3":[0.5403,0.096],"P4":[0.4081,0.0256],"P2":[0.7997,0.1967],"P1":[0.9618,0.0024]},"runs":50,"lf":{"e2e":57.809,"fe":49.854,"lat":2599.2}},{"id":"mlp-r2-h64-fp32","fam":"mlp","rep":"r2","prec":"fp32","ram":10752,"flash":8876,"e2e":65.31,"fe":54.299,"inf":10.935,"lat":2948.2,"est":24.368,"cv":0.0018,"ok":true,"f1":{"P3":[0.539,0.1063],"P4":[0.4067,0.0199],"P2":[0.8193,0.1659],"P1":[0.9599,0.0037]},"runs":50,"lf":{"e2e":60.978,"fe":49.862,"lat":2703.0}},{"id":"mlp-r2-h64-int8","fam":"mlp","rep":"r2","prec":"int8","ram":11632,"flash":5576,"e2e":61.326,"fe":54.102,"inf":7.198,"lat":2811.8,"est":23.47,"cv":0.0008,"ok":true,"f1":{"P3":[0.5368,0.1083],"P4":[0.4077,0.0204],"P2":[0.8161,0.1648],"P1":[0.9607,0.0033]},"runs":50,"lf":{"e2e":57.12,"fe":49.821,"lat":2570.9}},{"id":"mlp-r2-h64x64-fp32","fam":"mlp","rep":"r2","prec":"fp32","ram":11088,"flash":25908,"e2e":84.362,"fe":55.737,"inf":28.427,"lat":3761.6,"est":31.883,"cv":0.0021,"ok":true,"f1":{"P3":[0.5484,0.0961],"P4":[0.4238,0.0279],"P2":[0.8057,0.1903],"P1":[0.9668,0.0002]},"runs":50,"lf":{"e2e":78.815,"fe":49.336,"lat":3470.3}},{"id":"mlp-r2-h64x64-int8","fam":"mlp","rep":"r2","prec":"int8","ram":12352,"flash":11912,"e2e":72.349,"fe":55.591,"inf":16.696,"lat":3287.3,"est":27.608,"cv":0.0003,"ok":true,"f1":{"P3":[0.5485,0.0966],"P4":[0.4244,0.028],"P2":[0.804,0.1911],"P1":[0.9657,0.0013]},"runs":50,"lf":{"e2e":65.948,"fe":49.255,"lat":2997.5}},{"id":"mlp-r3-h128-fp32","fam":"mlp","rep":"r3","prec":"fp32","ram":12864,"flash":134828,"e2e":303.626,"fe":158.736,"inf":144.803,"lat":13303.7,"est":82.965,"cv":0.0007,"ok":true,"f1":{"P3":[0.5831,0.0998],"P4":[0.4794,0.0073],"P2":[0.798,0.1662],"P1":[0.9031,0.0042]},"runs":50,"lf":{"e2e":191.016,"fe":49.193,"lat":8388.3}},{"id":"mlp-r3-h128-int8","fam":"mlp","rep":"r3","prec":"int8","ram":13360,"flash":38792,"e2e":225.718,"fe":153.98,"inf":71.335,"lat":10422.1,"est":54.867,"cv":0.0029,"ok":true,"f1":{"P3":[0.5841,0.0995],"P4":[0.4788,0.0065],"P2":[0.7973,0.1658],"P1":[0.9023,0.0041]},"runs":50,"lf":{"e2e":121.58,"fe":49.254,"lat":5554.8}},{"id":"mlp-r3-h32-fp32","fam":"mlp","rep":"r3","prec":"fp32","ram":12480,"flash":34988,"e2e":197.647,"fe":159.547,"inf":37.372,"lat":8945.2,"est":38.636,"cv":0.0017,"ok":true,"f1":{"P3":[0.5763,0.0951],"P4":[0.4724,0.0088],"P2":[0.7954,0.163],"P1":[0.898,0.0059]},"runs":50,"lf":{"e2e":88.59,"fe":50.408,"lat":3926.5}},{"id":"mlp-r3-h32-int8","fam":"mlp","rep":"r3","prec":"int8","ram":12496,"flash":11240,"e2e":178.428,"fe":155.119,"inf":23.295,"lat":8251.1,"est":33.396,"cv":0.0012,"ok":true,"f1":{"P3":[0.5767,0.0948],"P4":[0.4725,0.0098],"P2":[0.7938,0.1623],"P1":[0.897,0.0064]},"runs":50,"lf":{"e2e":73.117,"fe":50.598,"lat":3363.6}},{"id":"mlp-r3-h64-fp32","fam":"mlp","rep":"r3","prec":"fp32","ram":12608,"flash":68268,"e2e":231.747,"fe":159.455,"inf":71.552,"lat":10423.9,"est":53.413,"cv":0.0009,"ok":true,"f1":{"P3":[0.5836,0.1015],"P4":[0.4724,0.0083],"P2":[0.7954,0.1655],"P1":[0.9025,0.0062]},"runs":50,"lf":{"e2e":123.829,"fe":50.478,"lat":5400.5}},{"id":"mlp-r3-h64-int8","fam":"mlp","rep":"r3","prec":"int8","ram":12784,"flash":20424,"e2e":194.728,"fe":155.342,"inf":39.363,"lat":8985.9,"est":40.556,"cv":0.0004,"ok":true,"f1":{"P3":[0.5831,0.1006],"P4":[0.4711,0.008],"P2":[0.7953,0.1654],"P1":[0.9015,0.0057]},"runs":50,"lf":{"e2e":89.177,"fe":50.451,"lat":4107.7}},{"id":"mlp-r4-h16-fp32","fam":"mlp","rep":"r4","prec":"fp32","ram":10724,"flash":4588,"e2e":90.138,"fe":84.299,"inf":5.832,"lat":4107.8,"est":30.926,"cv":0.0021,"ok":true,"f1":{"P3":[0.5929,0.0958],"P4":[0.4022,0.0154],"P2":[0.6774,0.1622],"P1":[0.7727,0.0061]},"runs":50,"lf":{"e2e":76.041,"fe":70.121,"lat":3479.6}},{"id":"mlp-r4-h16-int8","fam":"mlp","rep":"r4","prec":"int8","ram":11284,"flash":3208,"e2e":88.95,"fe":84.272,"inf":4.54,"lat":4064.5,"est":30.821,"cv":0.0016,"ok":true,"f1":{"P3":[0.5915,0.0865],"P4":[0.3998,0.0133],"P2":[0.6722,0.1613],"P1":[0.767,0.0033]},"runs":50,"lf":{"e2e":74.451,"fe":69.689,"lat":3425.1}},{"id":"mlp-r4-h32-fp32","fam":"mlp","rep":"r4","prec":"fp32","ram":10788,"flash":7468,"e2e":93.261,"fe":84.269,"inf":9.054,"lat":4243.1,"est":32.411,"cv":0.0026,"ok":true,"f1":{"P3":[0.5991,0.083],"P4":[0.4005,0.0103],"P2":[0.6712,0.1809],"P1":[0.7771,0.0051]},"runs":50,"lf":{"e2e":79.422,"fe":70.218,"lat":3615.4}},{"id":"mlp-r4-h32-int8","fam":"mlp","rep":"r4","prec":"int8","ram":11428,"flash":4360,"e2e":90.608,"fe":84.128,"inf":6.431,"lat":4151.0,"est":31.508,"cv":0.0009,"ok":true,"f1":{"P3":[0.5974,0.077],"P4":[0.3974,0.0099],"P2":[0.6634,0.1785],"P1":[0.7698,0.0042]},"runs":50,"lf":{"e2e":76.631,"fe":70.117,"lat":3520.1}},{"id":"mlp-r4-h32x32-fp32","fam":"mlp","rep":"r4","prec":"fp32","ram":10964,"flash":12084,"e2e":96.622,"fe":82.637,"inf":13.789,"lat":4443.3,"est":34.485,"cv":0.0018,"ok":true,"f1":{"P3":[0.5627,0.1101],"P4":[0.378,0.0051],"P2":[0.6494,0.1876],"P1":[0.773,0.0134]},"runs":50,"lf":{"e2e":84.873,"fe":70.614,"lat":3843.4}},{"id":"mlp-r4-h32x32-int8","fam":"mlp","rep":"r4","prec":"int8","ram":11860,"flash":6728,"e2e":93.3,"fe":83.939,"inf":9.334,"lat":4288.4,"est":32.913,"cv":0.0012,"ok":true,"f1":{"P3":[0.5584,0.1078],"P4":[0.3744,0.0066],"P2":[0.6458,0.1877],"P1":[0.7664,0.0086]},"runs":50,"lf":{"e2e":79.638,"fe":70.115,"lat":3660.0}},{"id":"mlp-r4-h64-fp32","fam":"mlp","rep":"r4","prec":"fp32","ram":10916,"flash":13228,"e2e":100.046,"fe":84.441,"inf":15.587,"lat":4511.0,"est":35.382,"cv":0.0012,"ok":true,"f1":{"P3":[0.5916,0.1015],"P4":[0.4106,0.0071],"P2":[0.6522,0.1852],"P1":[0.7603,0.0042]},"runs":50,"lf":{"e2e":84.658,"fe":69.484,"lat":3872.0}},{"id":"mlp-r4-h64-int8","fam":"mlp","rep":"r4","prec":"int8","ram":11716,"flash":6664,"e2e":94.282,"fe":84.187,"inf":10.089,"lat":4321.8,"est":33.598,"cv":0.0008,"ok":true,"f1":{"P3":[0.5881,0.0997],"P4":[0.4087,0.0077],"P2":[0.6479,0.186],"P1":[0.7557,0.0063]},"runs":50,"lf":{"e2e":80.403,"fe":70.21,"lat":3691.4}},{"id":"mlp-r4-h64x64-fp32","fam":"mlp","rep":"r4","prec":"fp32","ram":11172,"flash":30260,"e2e":115.687,"fe":82.592,"inf":32.924,"lat":5271.3,"est":42.897,"cv":0.0017,"ok":true,"f1":{"P3":[0.5455,0.1278],"P4":[0.403,0.0103],"P2":[0.6324,0.1804],"P1":[0.7441,0.0048]},"runs":50,"lf":{"e2e":104.665,"fe":70.64,"lat":4672.1}},{"id":"mlp-r4-h64x64-int8","fam":"mlp","rep":"r4","prec":"int8","ram":12420,"flash":13000,"e2e":101.903,"fe":82.379,"inf":19.521,"lat":4727.0,"est":37.642,"cv":0.0004,"ok":true,"f1":{"P3":[0.5457,0.1231],"P4":[0.4,0.0092],"P2":[0.6303,0.182],"P1":[0.7421,0.0061]},"runs":50,"lf":{"e2e":89.935,"fe":70.638,"lat":4135.8}},{"id":"rf-r1-t10d10-fp32","fam":"rf","rep":"r1","prec":"fp32","ram":128,"flash":52768,"e2e":12.733,"fe":12.091,"inf":0.572,"lat":646.8,"est":5.492,"cv":0.0011,"ok":true,"f1":{"P3":[0.5093,0.0715],"P4":[0.3625,0.0122],"P2":[0.685,0.1558],"P1":[0.8301,0.0067]},"runs":50},{"id":"rf-r1-t10d6-fp32","fam":"rf","rep":"r1","prec":"fp32","ram":128,"flash":7828,"e2e":14.687,"fe":13.593,"inf":0.381,"lat":660.5,"est":5.493,"cv":0.0027,"ok":true,"f1":{"P3":[0.5119,0.0432],"P4":[0.3627,0.008],"P2":[0.6619,0.1181],"P1":[0.7756,0.0077]},"runs":50},{"id":"rf-r1-t25d10-fp32","fam":"rf","rep":"r1","prec":"fp32","ram":128,"flash":140296,"e2e":13.619,"fe":12.022,"inf":1.544,"lat":680.7,"est":5.617,"cv":0.0025,"ok":true,"f1":{"P3":[0.5121,0.0755],"P4":[0.3608,0.0104],"P2":[0.7001,0.1559],"P1":[0.8407,0.0048]},"runs":50,"lf":{"e2e":16.68,"fe":13.917,"lat":710.2}},{"id":"rf-r1-t25d6-fp32","fam":"rf","rep":"r1","prec":"fp32","ram":128,"flash":20334,"e2e":16.309,"fe":13.614,"inf":1.113,"lat":695.0,"est":5.608,"cv":0.0018,"ok":true,"f1":{"P3":[0.5132,0.0393],"P4":[0.3569,0.0214],"P2":[0.6743,0.1183],"P1":[0.7816,0.0033]},"runs":50},{"id":"rf-r1-t5d10-fp32","fam":"rf","rep":"r1","prec":"fp32","ram":128,"flash":30236,"e2e":12.444,"fe":12.064,"inf":0.285,"lat":636.4,"est":5.448,"cv":0.0019,"ok":true,"f1":{"P3":[0.4912,0.0693],"P4":[0.3885,0.0405],"P2":[0.682,0.1462],"P1":[0.8205,0.0097]},"runs":50,"lf":{"e2e":14.421,"fe":13.831,"lat":654.6}},{"id":"rf-r1-t5d6-fp32","fam":"rf","rep":"r1","prec":"fp32","ram":128,"flash":4302,"e2e":14.199,"fe":13.602,"inf":0.185,"lat":649.4,"est":5.448,"cv":0.0005,"ok":true,"f1":{"P3":[0.4774,0.0518],"P4":[0.368,0.022],"P2":[0.6534,0.1111],"P1":[0.7587,0.0196]},"runs":50},{"id":"rf-r2-t10d10-fp32","fam":"rf","rep":"r2","prec":"fp32","ram":9704,"flash":47184,"e2e":55.456,"fe":55.18,"inf":0.586,"lat":2511.8,"est":19.472,"cv":0.0012,"ok":true,"f1":{"P3":[0.558,0.0553],"P4":[0.3662,0.0164],"P2":[0.7799,0.1836],"P1":[0.9303,0.0039]},"runs":50,"lf":{"e2e":52.496,"fe":51.028,"lat":2268.3}},{"id":"rf-r2-t10d6-fp32","fam":"rf","rep":"r2","prec":"fp32","ram":9704,"flash":8620,"e2e":57.304,"fe":56.594,"inf":0.444,"lat":2524.4,"est":19.463,"cv":0.0018,"ok":true,"f1":{"P3":[0.5698,0.0439],"P4":[0.3758,0.03],"P2":[0.7435,0.1482],"P1":[0.8745,0.0082]},"runs":50,"lf":{"e2e":50.603,"fe":50.04,"lat":2256.4}},{"id":"rf-r2-t25d10-fp32","fam":"rf","rep":"r2","prec":"fp32","ram":9704,"flash":116042,"e2e":56.528,"fe":55.249,"inf":1.584,"lat":2547.2,"est":19.586,"cv":0.0011,"ok":true,"f1":{"P3":[0.5643,0.0466],"P4":[0.3687,0.0073],"P2":[0.7812,0.2001],"P1":[0.9387,0.0026]},"runs":50,"lf":{"e2e":53.246,"fe":50.869,"lat":2301.5}},{"id":"rf-r2-t25d6-fp32","fam":"rf","rep":"r2","prec":"fp32","ram":9704,"flash":21726,"e2e":58.033,"fe":56.58,"inf":1.189,"lat":2549.8,"est":19.573,"cv":0.002,"ok":true,"f1":{"P3":[0.5733,0.0438],"P4":[0.3839,0.0208],"P2":[0.7596,0.1617],"P1":[0.8878,0.0069]},"runs":50,"lf":{"e2e":51.229,"fe":49.918,"lat":2282.5}},{"id":"rf-r2-t5d10-fp32","fam":"rf","rep":"r2","prec":"fp32","ram":9704,"flash":22086,"e2e":57.075,"fe":56.632,"inf":0.276,"lat":2516.6,"est":19.428,"cv":0.0006,"ok":true,"f1":{"P3":[0.5375,0.0641],"P4":[0.3646,0.0226],"P2":[0.76,0.1936],"P1":[0.9198,0.0046]},"runs":50,"lf":{"e2e":50.402,"fe":50.071,"lat":2249.1}},{"id":"rf-r2-t5d6-fp32","fam":"rf","rep":"r2","prec":"fp32","ram":9704,"flash":3990,"e2e":55.492,"fe":55.286,"inf":0.208,"lat":2499.9,"est":19.423,"cv":0.0011,"ok":true,"f1":{"P3":[0.5564,0.0705],"P4":[0.3605,0.0237],"P2":[0.7317,0.1491],"P1":[0.8499,0.0067]},"runs":50,"lf":{"e2e":52.246,"fe":51.511,"lat":2254.8}},{"id":"rf-r4-t10d10-fp32","fam":"rf","rep":"r4","prec":"fp32","ram":9812,"flash":87818,"e2e":86.746,"fe":85.985,"inf":0.677,"lat":3928.3,"est":28.607,"cv":0.0011,"ok":true,"f1":{"P3":[0.5049,0.1131],"P4":[0.3999,0.0152],"P2":[0.5999,0.1971],"P1":[0.7555,0.0127]},"runs":50,"lf":{"e2e":77.884,"fe":77.068,"lat":3366.3}},{"id":"rf-r4-t10d6-fp32","fam":"rf","rep":"r4","prec":"fp32","ram":9812,"flash":10554,"e2e":89.395,"fe":88.775,"inf":0.447,"lat":3969.9,"est":28.604,"cv":0.0014,"ok":true,"f1":{"P3":[0.4921,0.1068],"P4":[0.4297,0.012],"P2":[0.5518,0.169],"P1":[0.684,0.0152]},"runs":50,"lf":{"e2e":72.887,"fe":72.357,"lat":3321.6}},{"id":"rf-r4-t25d10-fp32","fam":"rf","rep":"r4","prec":"fp32","ram":9812,"flash":213508,"e2e":87.755,"fe":86.0,"inf":1.734,"lat":3949.8,"est":28.734,"cv":0.0011,"ok":true,"f1":{"P3":[0.5128,0.1137],"P4":[0.4082,0.0055],"P2":[0.6077,0.197],"P1":[0.768,0.0071]},"runs":50,"lf":{"e2e":79.664,"fe":77.903,"lat":3417.1}},{"id":"rf-r4-t25d6-fp32","fam":"rf","rep":"r4","prec":"fp32","ram":9812,"flash":25256,"e2e":87.14,"fe":85.913,"inf":1.174,"lat":3930.7,"est":28.73,"cv":0.0024,"ok":true,"f1":{"P3":[0.5083,0.1121],"P4":[0.4324,0.0187],"P2":[0.5565,0.1703],"P1":[0.6951,0.0145]},"runs":50,"lf":{"e2e":79.196,"fe":77.934,"lat":3398.7}},{"id":"rf-r4-t5d10-fp32","fam":"rf","rep":"r4","prec":"fp32","ram":9812,"flash":44182,"e2e":86.279,"fe":85.889,"inf":0.305,"lat":3915.4,"est":28.562,"cv":0.0029,"ok":true,"f1":{"P3":[0.4945,0.11],"P4":[0.391,0.0208],"P2":[0.5824,0.1971],"P1":[0.7398,0.0216]},"runs":50,"lf":{"e2e":77.507,"fe":77.084,"lat":3353.5}},{"id":"rf-r4-t5d6-fp32","fam":"rf","rep":"r4","prec":"fp32","ram":9812,"flash":5362,"e2e":89.09,"fe":88.772,"inf":0.211,"lat":3960.3,"est":28.564,"cv":0.0015,"ok":true,"f1":{"P3":[0.4818,0.1051],"P4":[0.4199,0.0164],"P2":[0.5449,0.1721],"P1":[0.6685,0.0227]},"runs":50,"lf":{"e2e":72.767,"fe":72.485,"lat":3312.7}}],"windows":7581,"idle_mW":18.78,"sleep_mW":17.68,"cv_med":0.0014,"gate":{"name":"G6 selfcal_r2","E1":53.254,"tpr":0.989,"fpr":0.012,"reuse":{"r1":11.78,"r4":11.78,"r2":54.66},"split":"Paderborn P3 fold 0 (unseen bearings)"}}},"chip_sleep_uW":9.479999999999999,"windows":15108};
+const FAM = { dt: "Decision tree", rf: "Random forest", mlp: "MLP", cnn: "1-D CNN" };
+const REP = { r0: "raw window", r1: "10 statistics", r2: "statistics + 14 bands", r3: "256-bin spectrum", r4: "statistics + envelope spectrum" };
+const PREC = { fp32: "float32", int8: "int8 PTQ", int8qat: "int8 QAT" };
+const YEAR = 365.25 * 86400;
+const $ = (id) => document.getElementById(id);
+let ds = "cwru", lens = "P3";
+const D = () => DATA.datasets[ds];
 
-<section class="block"><h2>What TrueJoule found</h2><ul>
-<li><b>Unseen bearings change the answer.</b> Holding out whole bearings reverses the model ranking (Kendall τ
-−0.21 on CWRU) and leaves 2 of 9 Pareto-optimal models standing.
-The CNN that wins on random splits costs 44–4,729× the cheapest tree; on unseen
-bearings a forest (CWRU) or an envelope-feature MLP (Paderborn) is best.</li>
-<li><b>The front end is the cost.</b> 99.8&nbsp;% of a decision tree's energy is feature extraction; a
-float-only logarithm made the log-spectrum front end 3.18× cheaper.</li>
-<li><b>Estimates are rankings, not budgets.</b> Chip-level estimates miss the measured energy by
-0.31–5.35× and move models on and off the Pareto front.</li>
-<li><b>Verify before you measure.</b> The board check exposed an int8 kernel fault in the Arduino TFLM port that left
-energy unchanged and predictions wrong; after the fix 50 of 50 TFLM models are bit-exact.</li>
-<li><b>Calibrate on the machine.</b> A gate that re-fits itself from 1.4&nbsp;s of healthy vibration cut
-false alarms at an unseen load from 1.00 to 0.023.</li>
-</ul></section>
+function fill(sel, opts, def) { sel.innerHTML = opts.map(([v, t]) => `<option value="${v}"${v === def ? " selected" : ""}>${t}</option>`).join(""); }
+function fmt(x, d = 2) { return Number(x).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d }); }
+function sig(x) { if (x >= 100) return fmt(x, 0); if (x >= 10) return fmt(x, 1); if (x >= 1) return fmt(x, 2); return fmt(x, 3); }
+function kb(b) { return b >= 1024 ? `${sig(b / 1024)} KB` : `${b} B`; }
+function period(r) { const s = 1 / r; if (s >= 3600) return `${sig(s / 3600)} h`; if (s >= 60) return `${sig(s / 60)} min`; if (s >= 1) return `${sig(s)} s`; return `${sig(s * 1000)} ms`; }
+function years(y) { return !isFinite(y) || y > 20 ? "> 20 y" : y >= 1 ? `${fmt(y, 1)} y` : y * 12 >= 1 ? `${fmt(y * 12, 1)} mo` : `${fmt(y * 365.25, 1)} d`; }
 
-<section class="block"><h2>Project documents</h2><ul>
-<li><a href="https://github.com/agnibha11/TinyML-Pareto/blob/main/docs/energy_rig_bringup.md">Energy rig bring-up</a> — wiring, calibration and acceptance rules</li>
-<li><a href="https://github.com/agnibha11/TinyML-Pareto/blob/main/docs/cascade_preregistration.md">Cascade pre-registration</a> — hypotheses fixed before the first cascade window, with every deviation</li>
-<li><a href="https://github.com/agnibha11/TinyML-Pareto/blob/main/CONTRACT.md">Interface contract</a> — model IDs, file formats, firmware commands</li>
-<li><a href="https://github.com/agnibha11/TinyML-Pareto/blob/main/docs/midsem/README.md">Mid-semester</a> and <a href="https://github.com/agnibha11/TinyML-Pareto/blob/main/docs/sprint2/README.md">sprint 2</a> status pages (pre-hardware)</li>
-</ul></section>
-<footer>Built 2026-11-22 from the measured results in the repository ·
-<a href="https://github.com/agnibha11/TinyML-Pareto">github.com/agnibha11/TinyML-Pareto</a></footer></div></body></html>
+fill($("ram"), [2, 4, 8, 16, 32, 64, 128, 256].map((k) => [String(k * 1024), `${k} KB`]), String(64 * 1024));
+fill($("flash"), [4, 16, 64, 256, 960].map((k) => [String(k * 1024), k === 960 ? "960 KB (all)" : `${k} KB`]), String(256 * 1024));
+function fillSleep() {
+  const o = [[String(DATA.chip_sleep_uW * 1e-6), `Chip sleep (datasheet) · ${fmt(DATA.chip_sleep_uW, 1)} µW`]];
+  if (D().sleep_mW) o.push([String(D().sleep_mW * 1e-3), `Board sleep (measured) · ${fmt(D().sleep_mW, 2)} mW`]);
+  o.push([String(D().idle_mW * 1e-3), `Board idle (measured) · ${fmt(D().idle_mW, 2)} mW`]);
+  const cur = $("sleep").value; fill($("sleep"), o, o.some(([v]) => v === cur) ? cur : o[0][0]);
+}
+
+const SHAPE = { dt: "circle", rf: "square", mlp: "triangle", cnn: "diamond" };
+function marker(fam, prec, cx, cy, s, cls, extra = "") {
+  const solid = prec === "fp32";
+  const a = `style="stroke:${cls};fill:${solid ? cls : "var(--bg)"}" stroke-width="1.4" ${extra}`;
+  switch (SHAPE[fam]) {
+    case "circle": return `<circle cx="${cx}" cy="${cy}" r="${s}" ${a}`;
+    case "square": return `<rect x="${cx - s * .9}" y="${cy - s * .9}" width="${s * 1.8}" height="${s * 1.8}" ${a}`;
+    case "triangle": return `<path d="M${cx} ${cy - s * 1.15} L${cx + s * 1.1} ${cy + s * .8} L${cx - s * 1.1} ${cy + s * .8} Z" ${a}`;
+    default: return `<path d="M${cx} ${cy - s * 1.2} L${cx + s * 1.1} ${cy} L${cx} ${cy + s * 1.2} L${cx - s * 1.1} ${cy} Z" ${a}`;
+  }
+}
+const GLYPH = { dt: "●", rf: "■", mlp: "▲", cnn: "◆" };
+
+function state() {
+  const r = Math.pow(10, +$("rate").value);
+  return { r, ram: +$("ram").value, flash: +$("flash").value, batt: +$("batt").value, life: +$("life").value, ps: +$("sleep").value,
+           gate: $("gate").checked, pi: Math.pow(10, +$("pi").value), flog: $("flog").checked, est: false };
+}
+
+// Behind the gate: every window pays the measured gate energy E1; an alarm runs the model, which reuses the gate's
+// features where its representation contains them (measured saving). Detection rates: gate on the deployed split.
+// Measured cost of one window for the selected firmware build (float-only log10 where that build was measured).
+function cost(m, s) {
+  if (s.est) return { e2e: m.est, fe: m.fe * m.est / m.e2e, lat: m.lat, lf: false };
+  if (s.flog && m.lf) return { e2e: m.lf.e2e, fe: Math.min(m.lf.fe, m.lf.e2e), lat: m.lf.lat, lf: true };
+  return { e2e: m.e2e, fe: Math.min(m.fe, m.e2e), lat: m.lat, lf: false };
+}
+function deployed(m, s) {
+  const c = cost(m, s);
+  if (!s.gate) return { e: c.e2e, esc: 1, c, parts: [0, c.fe, c.e2e - c.fe] };
+  const g = D().gate, esc = s.pi * g.tpr + (1 - s.pi) * g.fpr, reuse = Math.min(g.reuse[m.rep] || 0, c.fe);
+  return { e: g.E1 + esc * Math.max(c.e2e - reuse, 0), esc, c, parts: [g.E1, esc * (c.fe - reuse), esc * (c.e2e - c.fe)] };
+}
+
+function evaluate(s) {
+  const Emax = ((s.batt / (s.life * YEAR)) - s.ps) / s.r * 1e6;
+  const rows = D().models.map((m) => {
+    const why = [];
+    if (m.ram > s.ram) why.push("RAM");
+    if (m.flash > s.flash) why.push("flash");
+    const d = deployed(m, s);
+    if (d.c.lat * 1e-6 > 1 / s.r) why.push("rate");
+    if (!(d.e <= Emax)) why.push("energy");
+    const lifeY = s.batt / (s.r * d.e * 1e-6 + s.ps) / YEAR;
+    return { m, why, lifeY, f1: m.f1[lens][0], sd: m.f1[lens][1], e: d.e, esc: d.esc, c: d.c, parts: d.parts };
+  });
+  rows.sort((a, b) => (a.why.length > 0) - (b.why.length > 0) || b.f1 - a.f1 || a.e - b.e);
+  return { rows, Emax, best: rows.find((x) => x.why.length === 0) || null };
+}
+
+function renderPick(s, ev) {
+  const b = ev.best, el = $("pick");
+  if (!b) {
+    const sleepOnly = s.batt / s.ps / YEAR;
+    const msg = ev.Emax <= 0
+      ? `The power between windows alone empties this battery in ${years(sleepOnly)}. Choose chip sleep, a larger battery or a shorter life.`
+      : `Binding constraint: ${tightest(ev.rows)}.`;
+    el.innerHTML = `<div><p class="none">No configuration fits.</p><p class="why">${msg}</p></div>
+      <div class="kv"><div><span>Energy budget / window</span><b class="warn">${ev.Emax > 0 ? sig(ev.Emax) + " µJ" : "none"}</b></div>
+      <div><span>Window period</span><b>${period(s.r)}</b></div></div>`;
+    return;
+  }
+  const m = b.m, p1 = m.f1.P1[0];
+  const gap = lens !== "P1" && p1 - b.f1 > 0.05 ? ` Its random-split score would have been ${fmt(p1, 3)}.` : "";
+  el.innerHTML = `<div>
+      <div class="mid">${m.id}${m.ok ? '<span class="badge">verified on board</span>' : ""}</div>
+      <p class="desc">${FAM[m.fam]} · ${REP[m.rep]} · ${PREC[m.prec]}</p>
+      <p class="why">Best of ${ev.rows.filter((x) => !x.why.length).length} fitting configurations on ${D().name}.${gap}</p>
+    </div>
+    <div class="kv">
+      <div><span>Macro-F1</span><b>${fmt(b.f1, 3)} ± ${fmt(b.sd, 3)}</b></div>
+      <div><span>Battery life</span><b>${years(b.lifeY)}</b></div>
+      <div><span>Energy / window</span><b>${sig(b.e)} µJ</b></div>
+      <div><span>Latency</span><b>${sig(b.c.lat / 1000)} ms</b></div>
+      <div><span>Peak RAM</span><b>${kb(m.ram)}</b></div>
+      <div><span>Flash</span><b>${kb(m.flash)}</b></div>
+      ${s.gate ? `<div><span>Model duty</span><b>${fmt(100 * b.esc, 1)} %</b></div><div><span>Without gate</span><b>${sig(m.e2e)} µJ</b></div>`
+               : `<div><span>Front-end share</span><b>${fmt(100 * b.c.fe / b.c.e2e, 0)} %</b></div><div><span>Measured / estimate</span><b>${fmt(b.c.e2e / m.est, 2)}×</b></div>`}
+      <div><span>Repeat spread</span><b>${fmt(100 * m.cv, 2)} %</b></div>
+      <div><span>Energy budget</span><b>${ev.Emax > 0 ? sig(ev.Emax) + " µJ" : "none"}</b></div>
+    </div>
+    <div style="grid-column:1/-1">${breakdown(b)}${estimateNote(s, ev)}</div>`;
+}
+// Where the measured energy of one window goes.
+function breakdown(b) {
+  const lab = ["wake-up gate", "feature front end", "classifier"], col = ["var(--mlp)", "var(--dt)", "var(--rf)"];
+  const tot = b.parts.reduce((a, x) => a + Math.max(x, 0), 0) || 1;
+  const segs = b.parts.map((x, i) => x > 0 ? `<i style="width:${100 * x / tot}%;background:${col[i]}" title="${lab[i]}: ${sig(x)} µJ"></i>` : "").join("");
+  const key = b.parts.map((x, i) => x > 0 ? `<span style="--c:${col[i]}">${lab[i]} ${sig(x)} µJ (${fmt(100 * x / tot, 0)} %)</span>` : "").join("");
+  return `<div class="bar" role="img" aria-label="Energy per window by stage">${segs}</div><div class="barkey">${key}</div>`;
+}
+// What the same constraints would have chosen with the pre-hardware (cycle-model x datasheet) energy.
+function estimateNote(s, ev) {
+  if (s.gate || !ev.best) return "";
+  const e = evaluate(Object.assign({}, s, { est: true })), pe = e.best;
+  if (!pe) return `<p class="note">With the pre-hardware energy estimate, no configuration would have looked feasible.</p>`;
+  if (pe.m.id === ev.best.m.id) return `<p class="note">The pre-hardware energy estimate gives the same choice; on the board it draws <b>${fmt(ev.best.c.e2e / ev.best.m.est, 2)}×</b> the estimate.</p>`;
+  const real = ev.rows.find((r) => r.m.id === pe.m.id);
+  const fits = real && real.why.length === 0;
+  return `<p class="note">With the pre-hardware energy estimate this tool would have picked <b>${pe.m.id}</b>; measured on the board it draws
+    <b>${sig(real.e)} µJ</b> (${fmt(real.e / pe.m.est, 2)}× the estimate)${fits ? `, lasting ${years(real.lifeY)}` : `, so it <b>misses ${real.why.join(" and ")}</b> for this setup`}.</p>`;
+}
+function tightest(rows) {
+  const c = {}; rows.forEach((x) => x.why.forEach((w) => (c[w] = (c[w] || 0) + 1)));
+  const k = Object.keys(c).sort((a, b) => c[b] - c[a])[0];
+  return { RAM: "RAM budget", flash: "flash budget", rate: "inference rate", energy: "energy budget (battery and target life)" }[k] || "a budget";
+}
+
+function renderPlot(s, ev) {
+  const W = 760, H = 330, L = 50, R = 14, T = 12, B = 40;
+  const xs = ev.rows.map((r) => r.e).concat(D().models.map((m) => m.e2e));
+  const x0 = Math.floor(Math.log10(Math.min(...xs))), x1 = Math.ceil(Math.log10(Math.max(...xs)));
+  const f1s = ev.rows.map((r) => r.f1);
+  const yLo = Math.max(0, Math.floor((Math.min(...f1s) - 0.02) * 10) / 10), yHi = 1;
+  const X = (e) => L + (Math.log10(e) - x0) / (x1 - x0) * (W - L - R);
+  const Y = (f) => T + (yHi - f) / (yHi - yLo) * (H - T - B);
+  let g = `<rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" style="fill:none;stroke:var(--rule)" stroke-width="1" rx="6"/>`;
+  for (let d = x0; d <= x1; d++) {
+    const x = X(Math.pow(10, d));
+    if (d > x0 && d < x1) g += `<line x1="${x}" x2="${x}" y1="${T}" y2="${H - B}" style="stroke:var(--line)" stroke-width="1"/>`;
+    g += `<text x="${x}" y="${H - B + 15}" text-anchor="middle">${d >= 3 ? fmt(Math.pow(10, d), 0) : Math.pow(10, d)}</text>`;
+  }
+  const step = yHi - yLo > 0.5 ? 0.2 : 0.1;
+  for (let v = yLo; v <= yHi + 1e-9; v += step) {
+    const y = Y(v);
+    if (v > yLo + 1e-9 && v < yHi - 1e-9) g += `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" style="stroke:var(--line)" stroke-width="1"/>`;
+    g += `<text x="${L - 7}" y="${y + 4}" text-anchor="end">${fmt(v, 1)}</text>`;
+  }
+  g += `<text x="${(L + W - R) / 2}" y="${H - 4}" text-anchor="middle">measured energy per window, µJ (log)</text>`;
+  g += `<text transform="translate(12 ${(T + H - B) / 2}) rotate(-90)" text-anchor="middle">macro-F1 (${D().name} ${lens})</text>`;
+  if (ev.Emax > 0 && Math.log10(ev.Emax) > x0 && Math.log10(ev.Emax) < x1) {
+    const x = X(ev.Emax);
+    g += `<rect x="${x}" y="${T}" width="${W - R - x}" height="${H - T - B}" style="fill:var(--soft)"/>`;
+    g += `<line x1="${x}" x2="${x}" y1="${T}" y2="${H - B}" style="stroke:var(--ink)" stroke-dasharray="4 3" stroke-width="1.2"/>`;
+    g += `<text x="${x + 6}" y="${T + 13}" style="fill:var(--ink)">budget ${sig(ev.Emax)} µJ</text>`;
+  }
+  for (const r of ev.rows.slice().reverse()) {
+    const m = r.m, col = `var(--${m.fam})`, op = r.why.length ? 0.2 : 0.95;
+    const t = `<title>${m.id} · F1 ${fmt(r.f1, 3)} · ${sig(r.e)} µJ measured · ${kb(m.ram)} RAM${r.why.length ? " · exceeds: " + r.why.join(", ") : ""}</title>`;
+    g += marker(m.fam, m.prec, X(r.e), Y(r.f1), 4.2, col, `opacity="${op}"`) + `>${t}</${SHAPE[m.fam] === "circle" ? "circle" : SHAPE[m.fam] === "square" ? "rect" : "path"}>`;
+  }
+  // Pareto front (higher F1, lower energy) of all configurations under the current settings
+  const fr = ev.rows.slice().sort((a, b) => a.e - b.e || b.f1 - a.f1);
+  let bestF = -1, pts = [];
+  for (const r of fr) if (r.f1 > bestF + 1e-9) { pts.push([X(r.e), Y(r.f1)]); bestF = r.f1; }
+  if (pts.length) {
+    let d = `M${pts[0][0]} ${pts[0][1]}`;
+    for (let i = 1; i < pts.length; i++) d += ` H${pts[i][0]} V${pts[i][1]}`;
+    d += ` H${W - R}`;
+    g += `<path d="${d}" fill="none" style="stroke:var(--ink)" stroke-width="1.1" opacity="0.55"/>`;
+  }
+  if (ev.best) {
+    const cx = X(ev.best.e), cy = Y(ev.best.f1);
+    g += `<circle cx="${cx}" cy="${cy}" r="10" fill="none" style="stroke:var(--ink)" stroke-width="1.6"/>`;
+    g += `<text x="${cx + 13}" y="${cy - 8}" style="fill:var(--ink);font-weight:500">selected</text>`;
+  }
+  $("plot").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Accuracy against measured energy per window for every configuration; configurations that fit are solid, the others faded">${g}</svg>`;
+}
+
+function renderLegend() {
+  const ico = (f, p) => `<svg viewBox="-6 -6 12 12">${marker(f, p, 0, 0, 4.2, `var(--${f})`)}/></svg>`;
+  $("legend").innerHTML = Object.keys(FAM).map((f) => `<span>${ico(f, "fp32")}${FAM[f]}</span>`).join("")
+    + `<span>solid float32 · hollow int8</span><span>faded: exceeds a constraint</span><span>line: Pareto front</span>`;
+}
+
+function renderTable(s, ev) {
+  const hide = $("hide").checked;
+  let h = `<thead><tr><th>#</th><th>Model</th><th>F1 ${lens}</th><th>F1 P1</th><th>µJ</th><th>Est. µJ</th><th>ms</th><th>RAM</th><th>Flash</th><th>Life</th><th>Exceeds</th></tr></thead><tbody>`;
+  ev.rows.forEach((r, i) => {
+    if (hide && r.why.length) return;
+    const m = r.m, cls = r.why.length ? "out" : (ev.best && r === ev.best ? "best" : "");
+    h += `<tr class="${cls}"><td>${i + 1}</td><td><span class="glyph" style="color:var(--${m.fam})">${GLYPH[m.fam]}</span>${m.id}</td>
+      <td>${fmt(r.f1, 3)} ± ${fmt(r.sd, 3)}</td><td>${fmt(m.f1.P1[0], 3)}</td><td>${sig(r.e)}</td><td>${sig(m.est)}</td><td>${sig(r.c.lat / 1000)}</td>
+      <td>${kb(m.ram)}</td><td>${kb(m.flash)}</td><td>${years(r.lifeY)}</td><td>${r.why.length ? r.why.join(", ") : "—"}</td></tr>`;
+  });
+  $("tbl").innerHTML = h + "</tbody>";
+}
+
+function renderLens() {
+  const P = D().protocols; if (!P.includes(lens)) lens = P[0];
+  $("lens").style.setProperty("--n", P.length);
+  $("lens").innerHTML = P.map((p) => `<button type="button" data-p="${p}" aria-pressed="${p === lens}">${D().label[p]}</button>`).join("");
+  $("lens").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { lens = b.dataset.p; renderLens(); render(); }));
+}
+
+function render() {
+  const s = state(), g = D().gate;
+  $("rate-out").textContent = `${s.r >= 1 ? fmt(s.r, s.r < 10 ? 1 : 0) : s.r.toPrecision(2)} /s · every ${period(s.r)}`;
+  $("lens-hint").textContent = D().lens[lens];
+  $("pi").disabled = !$("gate").checked;
+  const lfm = D().models.filter((m) => m.lf && m.rep === "r3");
+  if (lfm.length) {
+    const r = lfm.map((m) => m.fe / m.lf.fe).sort((a, b) => a - b)[Math.floor(lfm.length / 2)];
+    $("flog-hint").textContent = `Same models rebuilt with a single-precision logarithm and re-measured: the 256-bin spectrum front end is ${fmt(r, 1)}× cheaper. Off: the standard newlib build.`;
+  } else $("flog-hint").textContent = "Not measured for this dataset.";
+  $("flog").disabled = !lfm.length;
+  $("pi-out").textContent = !$("gate").checked ? "Off"
+    : `${s.pi < 0.01 ? fmt(100 * s.pi, 2) : fmt(100 * s.pi, 1)} % · ${g.name}, ${sig(g.E1)} µJ/window measured · recall ${fmt(100 * g.tpr, 1)} %, false alarms ${fmt(100 * g.fpr, 1)} % on ${g.split}`;
+  $("meta").textContent = `${D().models.length} configurations · ${D().windows.toLocaleString("en-US")} measured windows · repeat spread ${fmt(100 * D().cv_med, 2)} %`;
+  const ev = evaluate(s);
+  renderPick(s, ev); renderPlot(s, ev); renderTable(s, ev);
+}
+
+document.querySelectorAll("#dsseg button").forEach((b) => b.addEventListener("click", () => {
+  ds = b.dataset.d;
+  document.querySelectorAll("#dsseg button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  fillSleep(); renderLens(); render();
+}));
+["ram", "flash", "rate", "batt", "life", "sleep", "hide", "gate", "pi", "flog"].forEach((id) => $(id).addEventListener("input", render));
+// Shareable setup: every control is mirrored in the URL fragment.
+const KEYS = ["ram", "flash", "rate", "batt", "life", "sleep", "pi"], BOX = ["gate", "flog", "hide"];
+function toHash() {
+  const q = new URLSearchParams({ ds, p: lens });
+  KEYS.forEach((k) => q.set(k, $(k).value)); BOX.forEach((k) => q.set(k, $(k).checked ? 1 : 0));
+  return "#" + q.toString();
+}
+function fromHash() {
+  const q = new URLSearchParams(location.hash.slice(1));
+  if (q.get("ds") && DATA.datasets[q.get("ds")]) {
+    ds = q.get("ds");
+    document.querySelectorAll("#dsseg button").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.d === ds)));
+  }
+  if (q.get("p")) lens = q.get("p");
+  fillSleep();
+  KEYS.forEach((k) => { if (q.has(k)) $(k).value = q.get(k); });
+  BOX.forEach((k) => { if (q.has(k)) $(k).checked = q.get(k) === "1"; });
+}
+$("share").addEventListener("click", () => {
+  history.replaceState(null, "", toHash());
+  const done = () => { $("share").textContent = "Link copied"; setTimeout(() => ($("share").textContent = "Copy link to this setup"), 1500); };
+  (navigator.clipboard ? navigator.clipboard.writeText(location.href) : Promise.reject()).then(done, () => { $("share").textContent = "Link is in the address bar"; });
+});
+$("csv").addEventListener("click", () => {
+  const s = state(), ev = evaluate(s);
+  const head = ["model", "family", "representation", "precision", `macro_f1_${lens}`, "f1_sd", "macro_f1_P1", "energy_uJ_per_window",
+    "estimate_uJ", "latency_ms", "peak_ram_B", "flash_B", "battery_life_years", "exceeds"];
+  const lines = [head.join(",")].concat(ev.rows.map((r) => [r.m.id, r.m.fam, r.m.rep, r.m.prec, r.f1, r.sd, r.m.f1.P1[0],
+    r.e.toFixed(3), r.m.est, (r.c.lat / 1000).toFixed(3), r.m.ram, r.m.flash, r.lifeY.toFixed(3), r.why.join(" ")].join(",")));
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" }));
+  a.download = `bearing_models_${ds}_${lens}.csv`; a.click(); URL.revokeObjectURL(a.href);
+});
+$("form").addEventListener("submit", (e) => e.preventDefault());
+$("built").innerHTML = `Updated ${DATA.built} · <a href="https://github.com/agnibha11/TinyML-Pareto">github.com/agnibha11/TinyML-Pareto</a>`;
+fromHash(); renderLens(); renderLegend(); render();
+</script>
+</body>
+</html>
