@@ -6,21 +6,19 @@ compares the Pareto frontiers under leaky (P1) and leakage-free (P2, P3) evaluat
 
 Interfaces between the three workstreams are fixed in **[CONTRACT.md](CONTRACT.md)**. Read it before writing code.
 
-**Website:** <https://agnibha11.github.io/TinyML-Pareto/> (served by GitHub Pages from `docs/`):
-- [Model selector](https://agnibha11.github.io/TinyML-Pareto/selector/): pick CWRU or Paderborn and an evaluation
-  protocol, give it RAM and flash budgets, an inference rate, a battery and a target life; it returns the most accurate
-  model that fits, with **energy and latency measured on the board** (optionally behind the measured self-calibrating
-  wake-up gate).
-- [Hardware results](https://agnibha11.github.io/TinyML-Pareto/hardware/): the INA219/ESP32 rig, measured
-  accuracy-energy fronts, front-end energy, estimate vs. measurement, board verification and the measured cascade.
+**Model selector:** <https://agnibha11.github.io/TinyML-Pareto/> (GitHub Pages, `docs/index.html`). Pick CWRU or
+Paderborn and the evaluation protocol to trust, give it RAM and flash budgets, an inference rate, a battery and a target
+life; it drops every model that cannot meet them and recommends the most accurate one left. Every energy and latency is
+measured on the Nano 33 BLE (INA219/ESP32 rig, three repeats, outputs verified against the host). It also shows where a
+window's energy goes (gate, front end, classifier), the Pareto front, what the pre-hardware estimate would have chosen,
+the float-only `log10` firmware build and the measured self-calibrating wake-up gate; setups can be shared as links and
+the table downloaded as CSV.
 
-Rebuild the site after new measurements:
+Rebuild it after new measurements:
 
 ```bash
-python paper/latex/scripts/make_numbers.py   # every number (paper and site) from results/
-python paper/latex/scripts/make_figs.py      # data figures (PDF for the paper, SVG for the site)
-python tools/make_selector.py                # docs/selector/index.html
-python tools/make_site.py                    # docs/index.html, docs/hardware/index.html
+python paper/latex/scripts/make_numbers.py   # every number from results/ (shared measurement rule)
+python tools/make_selector.py                # docs/index.html (+ docs/selector/ redirect for the old link)
 ```
 
 **Paper:** `paper/latex/` (IEEEtran conference, upload the folder to Overleaf). The earlier pre-hardware draft stays
@@ -49,7 +47,7 @@ logger/                ESP32 INA219 logger firmware
 hardware/energy_rig/   KiCad project, BOM and wiring of the INA219/ESP32 energy rig
 results/               script-written outputs only: cwru/ and pu/ (same layout), vmcu/, vrig/, figs/, demo/;
                        index in results/README.md
-docs/                  website: index.html (home), selector/, hardware/ (measured results); related-work notes,
+docs/                  website: index.html (model selector), selector/ (redirect); related-work notes,
                        midsem/ and sprint2/ status pages, energy_rig_bringup.md, cascade_preregistration.md
 paper/latex/           TrueJoule paper (IEEEtran) with scripts/make_numbers.py and scripts/make_figs.py
 tests/                 host-side tests (pytest)
